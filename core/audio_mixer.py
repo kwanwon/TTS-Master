@@ -5,8 +5,11 @@ from pydub import AudioSegment
 class AudioMixer:
     def __init__(self, effect_dir="effects"):
         self.effect_dir = effect_dir
-        if not os.path.exists(self.effect_dir):
-            os.makedirs(self.effect_dir)
+        try:
+            if self.effect_dir and not os.path.exists(self.effect_dir):
+                os.makedirs(self.effect_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[AudioMixer] Warning: could not create effect dir: {e}")
             
     def parse_script(self, text):
         """

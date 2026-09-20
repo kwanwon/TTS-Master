@@ -7,7 +7,12 @@ class ProjectManager:
             self.save_path = os.path.join("projects", "last_session.json")
         else:
             self.save_path = save_path
-        os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
+        try:
+            parent_dir = os.path.dirname(self.save_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[ProjectManager] Warning: could not create directory: {e}")
         
     def save_state(self, api_key, playlist_items):
         """

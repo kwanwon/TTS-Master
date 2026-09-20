@@ -223,10 +223,34 @@ class SerialAuth:
                 
         return False, "서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.", None
 
+    def has_valid_cache(self) -> bool:
+        """로컬 캐시에 유효한 시리얼이 있는지 0.001초 만에 확인 (초기 실행 렉/멈춤 방지)"""
+        config = self.load_config()
+        serial = config.get("serial_number", "").strip()
+        if not serial:
+            return False
+        if config.get("status") in ["만료됨", "블랙리스트"]:
+            return False
+            
+        expiry_str = config.get("expiry_date", "")
+        if expiry_str:
+            try:
+                exp = datetime.strptime(expiry_str, "%Y-%m-%d")
+                if datetime.now() > exp:
+                    return False
+            except Exception:
+                pass
+        return True
+
     def is_serial_valid(self) -> Tuple[bool, str]:
         """Checks if a valid serial is already cached and still valid."""
         config = self.load_config()
         serial = config.get("serial_number", "").strip()
         if not serial:
             return False, "등록된 시리얼 번호가 없습니다."
+            
+        # 로컬 캐시가 정상이면 즉시 True 반환 (Render 슬립 대기시간 60초 블로킹 방지)
+        if self.has_valid_cache():
+            return True, "로컬 캐시 인증 유효"
+            
         return self.validate(serial)[:2]
