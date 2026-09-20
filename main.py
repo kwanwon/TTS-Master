@@ -1,23 +1,47 @@
 import sys
 import os
 import signal
+import socket
+import multiprocessing
 
 # 현재 디렉토리를 경로에 추가하여 모듈 임포트가 가능하게 함
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from PyQt6.QtWidgets import QApplication, QDialog
+from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
+from PyQt6.QtCore import Qt
 from ui.layout import MainWindow
 from core.serial_auth import SerialAuth
 from ui.serial_auth_dialog import SerialAuthDialog
 from utils.auto_updater import AutoUpdater
 
+SINGLE_INSTANCE_PORT = 49281
+_instance_socket = None
+
+def ensure_single_instance() -> bool:
+    """프로그램 중복 실행 방지 (Local Socket Guard)"""
+    global _instance_socket
+    try:
+        _instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _instance_socket.bind(('127.0.0.1', SINGLE_INSTANCE_PORT))
+        _instance_socket.listen(1)
+        return True
+    except OSError:
+        return False
+
 def main():
+    # 0. PyInstaller 서브프로세스 재실행 방지 (가장 중요)
+    multiprocessing.freeze_support()
+
     # 터미널에서 Ctrl+C를 눌렀을 때 macOS 에러창(예기치 않게 종료)이 뜨지 않도록 안전한 종료 처리
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     
     app = QApplication(sys.argv)
     
-    from PyQt6.QtCore import Qt
+    # 중복 실행 방지: 이미 실행 중인 경우 즉시 종료
+    if not ensure_single_instance():
+        QMessageBox.warning(None, "중복 실행 방지", "AI 마스터 (TTS 컨트롤러)가 이미 실행 중입니다.\n기존에 열려 있는 창을 확인해 주세요.")
+        sys.exit(0)
+
     # 야간 모드일 때 리스트와 버튼 글씨가 검정색으로 나오는 macOS 버그 방지
     if app.styleHints().colorScheme() == Qt.ColorScheme.Dark:
         app.setStyleSheet("""
