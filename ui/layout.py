@@ -131,12 +131,47 @@ class MainWindow(QMainWindow):
             pass
             
     def init_ui(self):
+        # 상단 메뉴바 구성 (도움말 -> 업데이트 확인)
+        menubar = self.menuBar()
+        help_menu = menubar.addMenu("도움말(&H)")
+        act_update = help_menu.addAction("🔄 최신 업데이트 확인")
+        act_update.triggered.connect(self.manual_check_update)
+        act_about = help_menu.addAction("ℹ️ 프로그램 정보")
+        act_about.triggered.connect(self.show_about_dialog)
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
         
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
+        
+        # 최상단 헤더 바 (앱 타이틀 및 업데이트 확인 버튼)
+        top_bar = QHBoxLayout()
+        from utils.auto_updater import AutoUpdater
+        cur_v = AutoUpdater().current_version
+        title_lbl = QLabel(f"🎙️ AI 마스터 TTS 컨트롤러 (v{cur_v})")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #2563eb;")
+        top_bar.addWidget(title_lbl)
+        top_bar.addStretch()
+        
+        self.btn_check_update = QPushButton("🔄 최신 업데이트 확인")
+        self.btn_check_update.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                font-weight: bold;
+                padding: 4px 12px;
+                border-radius: 4px;
+                border: 1px solid #1d4ed8;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        self.btn_check_update.clicked.connect(self.manual_check_update)
+        top_bar.addWidget(self.btn_check_update)
+        left_layout.addLayout(top_bar)
         
         self.tabs = QTabWidget()
         
@@ -870,6 +905,23 @@ class MainWindow(QMainWindow):
                 
             QMessageBox.information(self, "성공", f"{title} 목소리가 등록되었습니다!\nQwen3 엔진이 이 파일의 특징을 캐싱(추출)하여 복제합니다.")
             self.refresh_voice_status()
+
+    def manual_check_update(self):
+        from utils.auto_updater import AutoUpdater
+        updater = AutoUpdater(parent_widget=self)
+        updater.check_for_updates_async(show_no_update_dialog=True)
+        
+    def show_about_dialog(self):
+        from utils.auto_updater import AutoUpdater
+        v = AutoUpdater().current_version
+        QMessageBox.information(
+            self,
+            "프로그램 정보",
+            f"🎙️ AI 마스터 (TTS 컨트롤러)\n\n"
+            f"• 현재 버전: v{v}\n"
+            f"• 개발 및 관리: 라이온 체육관 솔루션\n"
+            f"• 최신 배포: GitHub Releases 연동\n"
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
