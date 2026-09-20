@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QSlider, QInputDialog, QSizePolicy, QRadioButton
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 
 # 코어 모듈 임포트
 from core.tts_engine import TTSEngine
@@ -51,6 +52,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("TTS 컨트롤 및 AI 마스터 운동 스케줄러 (Qwen3-TTS 탑재)")
         self.resize(1100, 850)
+        
+        # 앱 창 아이콘 설정
+        for icon_path in [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "icon.png"),
+            os.path.join(getattr(sys, '_MEIPASS', ''), "assets", "icon.png") if hasattr(sys, '_MEIPASS') else "",
+            os.path.join(os.path.expanduser("~"), ".aimaster_tts", "assets", "icon.png"),
+            "assets/icon.png"
+        ]:
+            if icon_path and os.path.exists(icon_path):
+                self.setWindowIcon(QIcon(icon_path))
+                break
         
         self.tts_engine = TTSEngine()
         self.project_manager = ProjectManager()

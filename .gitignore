@@ -28,7 +28,6 @@ ENV/
 
 # PyInstaller
 *.manifest
-*.spec
 
 # OS Specific
 .DS_Store

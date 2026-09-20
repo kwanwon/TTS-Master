@@ -29,6 +29,7 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
 
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 from ui.layout import MainWindow
 from core.serial_auth import SerialAuth
 from ui.serial_auth_dialog import SerialAuthDialog
@@ -77,6 +78,17 @@ def main():
     
     app = QApplication(sys.argv)
     app.aboutToQuit.connect(cleanup_lock)
+    
+    # 앱 전체 아이콘 설정 (은색 사자 엠블럼)
+    for icon_path in [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png"),
+        os.path.join(getattr(sys, '_MEIPASS', ''), "assets", "icon.png") if hasattr(sys, '_MEIPASS') else "",
+        os.path.join(os.path.expanduser("~"), ".aimaster_tts", "assets", "icon.png"),
+        "assets/icon.png"
+    ]:
+        if icon_path and os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+            break
     
     # 중복 실행 방지: 이미 실행 중인 경우 알림 후 종료
     if not ensure_single_instance():
