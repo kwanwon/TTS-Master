@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "release_date": "2026-09-15",
+  "version": "1.0.1",
+  "release_date": "2026-09-20",
   "app_name": "AIMaster_TTS",
-  "description": "AI 마스터 및 TTS 컨트롤 통합 솔루션"
+  "description": "AI 마스터 및 TTS 컨트롤 통합 솔루션 (안정화 빌드)"
 }

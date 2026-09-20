@@ -25,19 +25,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt6 pygame pydub requests psutil
+          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy openai
 
       - name: Build Windows Executable
         run: |
-          pyinstaller main.py --name AIMaster_TTS_Windows --windowed --onedir --clean --collect-all PyQt6 --collect-all pygame --collect-all pydub --collect-all requests --noconfirm
+          pyinstaller main.py --name AIMaster_TTS_Windows --windowed --onedir --clean --add-data "version.json;." --add-data "core;core" --add-data "ui;ui" --add-data "utils;utils" --hidden-import PyQt6 --hidden-import pygame --hidden-import pydub --hidden-import requests --hidden-import numpy --hidden-import openai --noconfirm
         shell: cmd
 
-      - name: Copy Resources to dist folder
+      - name: Copy Extra Resources if exist
         run: |
-          copy version.json dist\AIMaster_TTS_Windows\
-          xcopy /E /I core dist\AIMaster_TTS_Windows\core
-          xcopy /E /I ui dist\AIMaster_TTS_Windows\ui
-          xcopy /E /I utils dist\AIMaster_TTS_Windows\utils
           if exist voice_samples xcopy /E /I voice_samples dist\AIMaster_TTS_Windows\voice_samples
         shell: cmd
 
@@ -68,21 +64,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt6 pygame pydub requests psutil
+          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy openai
 
       - name: Build macOS App
         run: |
-          pyinstaller main.py --name AIMaster_TTS_Mac --windowed --onedir --clean --collect-all PyQt6 --collect-all pygame --collect-all pydub --collect-all requests --noconfirm
-
-      - name: Copy Resources to macOS App Bundle
-        run: |
-          APP_RESOURCES="dist/AIMaster_TTS_Mac.app/Contents/Resources"
-          mkdir -p "$APP_RESOURCES"
-          cp version.json "$APP_RESOURCES/"
-          cp -R core "$APP_RESOURCES/"
-          cp -R ui "$APP_RESOURCES/"
-          cp -R utils "$APP_RESOURCES/"
-          if [ -d "voice_samples" ]; then cp -R voice_samples "$APP_RESOURCES/"; fi
+          pyinstaller main.py --name AIMaster_TTS_Mac --windowed --clean --add-data "version.json:." --add-data "core:core" --add-data "ui:ui" --add-data "utils:utils" --hidden-import PyQt6 --hidden-import pygame --hidden-import pydub --hidden-import requests --hidden-import numpy --hidden-import openai --noconfirm
 
       - name: Create macOS ZIP
         run: |
