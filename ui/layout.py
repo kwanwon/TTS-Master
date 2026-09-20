@@ -69,6 +69,7 @@ class MainWindow(QMainWindow):
         
         self.last_dir = ""
         self.installer_thread = None
+        self.updater = None
         self.temp_playback_file = ""
         self.playback_state = "STOPPED"
         
@@ -920,8 +921,9 @@ class MainWindow(QMainWindow):
 
     def manual_check_update(self):
         from utils.auto_updater import AutoUpdater
-        updater = AutoUpdater(parent_widget=self)
-        updater.check_for_updates_async(show_no_update_dialog=True)
+        if not hasattr(self, 'updater') or self.updater is None:
+            self.updater = AutoUpdater(parent_widget=self)
+        self.updater.check_for_updates_async(show_no_update_dialog=True)
         
     def show_about_dialog(self):
         from utils.auto_updater import AutoUpdater

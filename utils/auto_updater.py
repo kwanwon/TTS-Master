@@ -19,15 +19,15 @@ import requests
 import subprocess
 import time
 from typing import Optional, Dict, Any, Tuple
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
 
 class UpdateCheckThread(QThread):
     update_available = pyqtSignal(dict)  # Emits release info dict if newer
     check_finished = pyqtSignal(bool, str) # has_update, current_or_error
     
-    def __init__(self, current_version: str, repo_owner: str, repo_name: str):
-        super().__init__()
+    def __init__(self, current_version: str, repo_owner: str, repo_name: str, parent=None):
+        super().__init__(parent)
         self.current_version = current_version
         self.repo_owner = repo_owner
         self.repo_name = repo_name
@@ -78,8 +78,8 @@ class DownloadWorker(QThread):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
     
-    def __init__(self, download_url: str, dest_path: str):
-        super().__init__()
+    def __init__(self, download_url: str, dest_path: str, parent=None):
+        super().__init__(parent)
         self.download_url = download_url
         self.dest_path = dest_path
         self.is_cancelled = False
@@ -116,13 +116,14 @@ class DownloadWorker(QThread):
     def cancel(self):
         self.is_cancelled = True
 
-class AutoUpdater:
+class AutoUpdater(QObject):
     """Handles update check, automatic downloading, in-place replacement, and app relaunch."""
     
     DEFAULT_OWNER = "kwanwon"
     DEFAULT_REPO = "TTS-Master"
     
     def __init__(self, parent_widget=None, repo_owner: str = None, repo_name: str = None):
+        super().__init__(parent_widget)
         self.parent = parent_widget
         self.repo_owner = repo_owner or self.DEFAULT_OWNER
         self.repo_name = repo_name or self.DEFAULT_REPO
@@ -144,7 +145,10 @@ class AutoUpdater:
         
     def check_for_updates_async(self, show_no_update_dialog: bool = False):
         """Non-blocking check on program startup or manual button click."""
-        self.thread = UpdateCheckThread(self.current_version, self.repo_owner, self.repo_name)
+        if self.thread is not None and self.thread.isRunning():
+            return
+            
+        self.thread = UpdateCheckThread(self.current_version, self.repo_owner, self.repo_name, parent=self)
         self.thread.update_available.connect(self._on_update_available)
         if show_no_update_dialog:
             self.thread.check_finished.connect(self._on_check_finished)
@@ -215,7 +219,7 @@ class AutoUpdater:
         self.progress_dlg.setMinimumDuration(0)
         self.progress_dlg.setValue(0)
         
-        self.download_thread = DownloadWorker(download_url, dest_zip)
+        self.download_thread = DownloadWorker(download_url, dest_zip, parent=self)
         self.download_thread.progress.connect(self.progress_dlg.setValue)
         self.download_thread.finished.connect(lambda path: self._on_download_complete(path, temp_dir, new_version))
         self.download_thread.failed.connect(self._on_download_failed)
@@ -378,4 +382,7 @@ exit
 
     def _on_check_finished(self, has_update: bool, msg: str):
         if not has_update and self.parent:
-            QMessageBox.information(self.parent, "업데이트 확인", f"현재 최신 버전(v{self.current_version})을 사용 중입니다.")
+            if "최신 버전" in msg or "등록된 릴리즈" in msg:
+                QMessageBox.information(self.parent, "최신 버전", f"현재 최신 버전(v{self.current_version})을 사용 중입니다.\n새로운 업데이트가 없습니다.")
+            else:
+                QMessageBox.warning(self.parent, "업데이트 확인", f"업데이트 확인 결과:\n{msg}")

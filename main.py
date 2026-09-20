@@ -122,8 +122,8 @@ def main():
     
     # 3. 비동기 자동 업데이트 확인 (네이버 자동화 방식 적용)
     try:
-        updater = AutoUpdater(parent_widget=window)
-        updater.check_for_updates_async(show_no_update_dialog=False)
+        window.updater = AutoUpdater(parent_widget=window)
+        window.updater.check_for_updates_async(show_no_update_dialog=False)
     except Exception as e:
         print(f"[Updater] Update check skipped: {e}")
     
