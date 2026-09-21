@@ -201,9 +201,10 @@ class MainWindow(QMainWindow):
         h_engine = QHBoxLayout()
         self.engine_combo = QComboBox()
         self.engine_combo.addItems([
-            "Coqui XTTS v2",
+            "Edge-TTS (초고음질 온라인)",
             "Qwen3-TTS (0.6B)",
-            "Qwen3-TTS (1.7B)"
+            "Qwen3-TTS (1.7B)",
+            "Coqui XTTS v2"
         ])
         h_engine.addWidget(QLabel("사용할 엔진:"))
         h_engine.addWidget(self.engine_combo)
@@ -232,6 +233,12 @@ class MainWindow(QMainWindow):
         h_voice.addWidget(QLabel("음성 선택:"))
         h_voice.addWidget(self.voice_combo)
         voice_layout.addLayout(h_voice)
+
+        # 모델 특성 및 사용 안내 레이블
+        self.voice_desc_lbl = QLabel("")
+        self.voice_desc_lbl.setStyleSheet("color: #3498db; font-size: 12px; padding: 2px 4px;")
+        self.voice_desc_lbl.setWordWrap(True)
+        voice_layout.addWidget(self.voice_desc_lbl)
         
         h_speed = QHBoxLayout()
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
@@ -305,10 +312,12 @@ class MainWindow(QMainWindow):
             "  \\n (줄바꿈/엔터): 약 0.25초 쉬어갑니다. 동작 교체 시 유용\n"
             "  [딜레이 3초]: 정확히 3초 무음. 음악 비트에 맞출 때 핵심!\n"
             "    예) '준비, [딜레이 2초] 시작!!'\n\n"
-            "▶ [3] 주의사항\n"
-            "  ⚠️ 문장이 길면 끝 말투가 바뀜! → 한 문장에 20자 이내 권장\n"
-            "  ✅ 숫자는 한글로: 1,2 → '하나,둘' / 10 → '열'\n"
-            "  ✅ 영어+한글 혼용 시 발음이 어색할 수 있음 → $...$ 태그 사용"
+            "▶ [3] 한/영 혼용 및 본토 발음 팁\n"
+            "  ✅ '현수' 화자: 태그 없이도 영어를 유창한 원어민 발음으로 읽어줍니다!\n"
+            "  ✅ '선히'/'인준' 화자: 영어 문장을 $...$ 로 감싸면(예: $Let's go!$) 100% 미국 원어민으로 자동 전환!\n\n"
+            "▶ [4] 주의사항\n"
+            "  ⚠️ 한 문장이 너무 길면 호흡이 부자연스러울 수 있으니 쉼표(,)를 적극 활용하세요.\n"
+            "  ✅ 숫자는 한글로: 1, 2 → '하나, 둘' / 10 → '열'"
         )
         local_layout.addWidget(guide_box)
 
@@ -346,10 +355,10 @@ class MainWindow(QMainWindow):
         split_layout.addWidget(local_group, stretch=1)
 
         # ==========================================
-        # 3-2. 우측: API 모드 그룹
+        # 3-2. 우측: 실시간 즉시 방송 그룹 (무료 Edge-TTS / 유료 API 겸용)
         # ==========================================
-        api_group = QGroupBox("⚡ API 모드 (수업 중 실시간 대화)")
-        api_group.setStyleSheet("QGroupBox { border: 2px solid #e74c3c; border-radius: 5px; margin-top: 1ex; } QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; color: #e74c3c; font-weight: bold; }")
+        api_group = QGroupBox("⚡ 실시간 즉시 방송 (수업 중 원클릭 송출)")
+        api_group.setStyleSheet("QGroupBox { border: 2px solid #e67e22; border-radius: 5px; margin-top: 1ex; } QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; color: #e67e22; font-weight: bold; }")
         api_layout = QVBoxLayout()
 
         api_top_layout = QHBoxLayout()
@@ -358,17 +367,17 @@ class MainWindow(QMainWindow):
         
         self.api_voice_combo.currentIndexChanged.connect(self.on_api_voice_changed)
         
-        self.api_key_btn = QPushButton("🔑 API Key 설정")
+        self.api_key_btn = QPushButton("🔑 유료 API Key 설정")
         self.api_key_btn.setStyleSheet("background-color: #f39c12; color: white; font-weight: bold;")
         self.api_key_btn.clicked.connect(self.setup_api_key)
         
-        api_top_layout.addWidget(QLabel("API 화자:"))
+        api_top_layout.addWidget(QLabel("화자 선택:"))
         api_top_layout.addWidget(self.api_voice_combo)
         api_top_layout.addWidget(self.api_key_btn)
         api_layout.addLayout(api_top_layout)
 
-        api_guide = QLabel("※ 주의: 이 창에서 엔터를 치면 즉시 API(과금)가 호출되어 말합니다.")
-        api_guide.setStyleSheet("color: #c0392b; font-weight: bold;")
+        api_guide = QLabel("※ [무료] 화자는 키 없이 무제한 즉시 송출되며, [유료 API] 화자는 API Key가 필요합니다.")
+        api_guide.setStyleSheet("color: #27ae60; font-weight: bold;")
         api_layout.addWidget(api_guide)
 
         self.api_input_text = CustomTextEdit(layout_ref=self, is_api=True)
@@ -453,38 +462,102 @@ class MainWindow(QMainWindow):
         self.voice_combo.blockSignals(True)
         self.voice_combo.clear()
         
-        custom_items = [f"{self.custom_voice_names.get(f'user{i}', f'내 목소리 {i}')} (voice_samples/user{i}.wav)" for i in range(1, 11)]
-        self.voice_combo.addItems(custom_items + [
-            "기본 남자 1 (voice_samples/male.wav)",
-            "기본 여자 1 (voice_samples/female.wav)",
-            "--- Qwen3 내장 기본 목소리 ---",
-            "소희 (차분한 여성)",
-            "라이언 (중후한 남성)",
-            "에이든 (밝은 남성)",
-            "오노_안나 (귀여운 여성)",
-            "비비안 (활발한 여성)",
-            "세레나 (친절한 여성)",
-            "Uncle_Fu (엄격한 남성)",
-            "딜런 (진지한 남성)",
-            "에릭 (차분한 남성)"
-        ])
+        engine_name = self.engine_combo.currentText()
+        if "Edge-TTS" in engine_name:
+            items = [
+                "선히 (한국어 여성, 기본 추천)",
+                "인준 (한국어 남성, 기본 추천)",
+                "현수 (한국어 남성, 다국어)",
+                "Jenny (미국 영어 여성)",
+                "Guy (미국 영어 남성)",
+                "Nanami (일본어 여성)",
+                "Xiaoxiao (중국어 여성)",
+            ]
+            self.voice_combo.addItems(items)
+        else:
+            custom_items = [f"{self.custom_voice_names.get(f'user{i}', f'내 목소리 {i}')} (voice_samples/user{i}.wav)" for i in range(1, 11)]
+            self.voice_combo.addItems(custom_items + [
+                "기본 남자 1 (voice_samples/male.wav)",
+                "기본 여자 1 (voice_samples/female.wav)",
+                "--- Qwen3 내장 기본 목소리 ---",
+                "소희 (차분한 여성)",
+                "라이언 (중후한 남성)",
+                "에이든 (밝은 남성)",
+                "오노_안나 (귀여운 여성)",
+                "비비안 (활발한 여성)",
+                "세레나 (친절한 여성)",
+                "Uncle_Fu (엄격한 남성)",
+                "딜런 (진지한 남성)",
+                "에릭 (차분한 남성)"
+            ])
         
         if current:
             idx = self.voice_combo.findText(current)
             if idx >= 0:
                 self.voice_combo.setCurrentIndex(idx)
+            else:
+                self.voice_combo.setCurrentIndex(0)
+        else:
+            self.voice_combo.setCurrentIndex(0)
         self.voice_combo.blockSignals(False)
+        self.update_voice_desc(self.voice_combo.currentText())
+
+    def update_voice_desc(self, voice_name: str):
+        """선택된 화자 및 모델에 대한 상세 설명 및 팁을 실시간 표시"""
+        vn = (voice_name or "").lower()
+        if "현수" in vn:
+            desc = "💡 [현수 - 다국어 특화] 한국어+영어 혼용 문장에 가장 추천! 태그 없이도 영어를 유창한 원어민 발음으로 읽어줍니다."
+            color = "#27ae60"
+        elif "선히" in vn:
+            desc = "💡 [선히 - 한국어 여성] 맑고 친절한 표준 아나운서 톤. 체육관 일반 공지, 준비운동 및 수련 안내에 가장 적합합니다."
+            color = "#3498db"
+        elif "인준" in vn:
+            desc = "💡 [인준 - 한국어 남성] 또렷하고 신뢰감 있는 표준 남성 톤. 절도 있는 구령 및 공식 수련 방송에 추천합니다."
+            color = "#3498db"
+        elif "jenny" in vn or "guy" in vn:
+            desc = "💡 [미국 영어 원어민] 100% 미국 본토 발음의 영문 전용 나레이션 보이스입니다."
+            color = "#9b59b6"
+        elif "소희" in vn:
+            desc = "💡 [소희 - Qwen3 로컬 AI] 내 컴퓨터 자체 AI 모델. 인터넷 없이 동작하는 차분한 여성 보이스입니다."
+            color = "#e67e22"
+        elif "라이언" in vn:
+            desc = "💡 [라이언 - Qwen3 로컬 AI] 내 컴퓨터 자체 AI 모델. 묵직하고 중후한 남성 보이스입니다."
+            color = "#e67e22"
+        elif "user" in vn or "내 목소리" in vn:
+            desc = "💡 [내 목소리 복제] 1번 탭 우측 [🎤 등록] 버튼으로 등록하신 관장님의 실제 목소리 톤을 복제하여 송출합니다."
+            color = "#e74c3c"
+        elif "nanami" in vn:
+            desc = "💡 [Nanami - 일본어] 자연스러운 일본어 원어민 음성입니다."
+            color = "#1abc9c"
+        elif "xiaoxiao" in vn:
+            desc = "💡 [Xiaoxiao - 중국어] 자연스러운 중국어(보통화) 원어민 음성입니다."
+            color = "#1abc9c"
+        else:
+            desc = "💡 선택하신 목소리의 고음질 음성 합성 파라미터가 적용되었습니다."
+            color = "#7f8c8d"
+
+        if hasattr(self, 'voice_desc_lbl'):
+            self.voice_desc_lbl.setText(desc)
+            self.voice_desc_lbl.setStyleSheet(f"color: {color}; font-size: 12px; font-weight: bold; padding: 2px 4px;")
 
     def update_api_voice_combo_items(self):
         current = self.api_voice_combo.currentText()
         self.api_voice_combo.blockSignals(True)
         self.api_voice_combo.clear()
         
+        # 1. 무료 Edge-TTS 화자 (API 키 불필요)
         self.api_voice_combo.addItems([
-            "아나운서 (여성) - 약 1.6원/100자",
-            "아나운서 (남성) - 약 1.6원/100자",
-            "어린이 (여성) - 약 1.6원/100자",
-            "어린이 (남성) - 약 1.6원/100자",
+            "[무료] 선히 (Edge-TTS 여성, 추천)",
+            "[무료] 인준 (Edge-TTS 남성, 추천)",
+            "[무료] 현수 (Edge-TTS 남성)",
+        ])
+        
+        # 2. 유료 알리바바 DashScope 화자
+        self.api_voice_combo.addItems([
+            "[유료 API] 아나운서 (여성) - 약 1.6원/100자",
+            "[유료 API] 아나운서 (남성) - 약 1.6원/100자",
+            "[유료 API] 어린이 (여성) - 약 1.6원/100자",
+            "[유료 API] 어린이 (남성) - 약 1.6원/100자",
         ])
         
         if hasattr(self, 'custom_api_voices') and self.custom_api_voices:
@@ -496,6 +569,10 @@ class MainWindow(QMainWindow):
             idx = self.api_voice_combo.findText(current)
             if idx >= 0:
                 self.api_voice_combo.setCurrentIndex(idx)
+            else:
+                self.api_voice_combo.setCurrentIndex(0)
+        else:
+            self.api_voice_combo.setCurrentIndex(0)
         self.api_voice_combo.blockSignals(False)
 
     def update_custom_voice_ui(self):
@@ -545,6 +622,7 @@ class MainWindow(QMainWindow):
         self.api_input_text.textChanged.connect(self.auto_save_state)
         
         self.engine_combo.currentTextChanged.connect(lambda _: self.auto_save_state())
+        self.voice_combo.currentTextChanged.connect(self.update_voice_desc)
         self.voice_combo.currentTextChanged.connect(lambda _: self.auto_save_state())
         self.speed_slider.valueChanged.connect(lambda _: self.auto_save_state())
 
@@ -592,7 +670,16 @@ class MainWindow(QMainWindow):
                 
         # TTS 엔진 프록시 변경
         self.tts_engine.switch_engine(engine_name)
+        self.update_voice_combo_items()
+        self.refresh_voice_status()
         
+        if "Edge-TTS" in engine_name:
+            self.dl_status.setText("Edge-TTS는 별도 다운로드 없이 즉시 고품질 음성을 합성합니다.")
+            self.dl_status.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.dl_progress.hide()
+            self._set_ui_locked(False)
+            return
+
         # 모델 설치가 필요한 Qwen 엔진의 경우 (의사코드)
         if "Qwen3" in engine_name:
             repo_id = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice" if "0.6B" in engine_name else "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
@@ -689,6 +776,8 @@ class MainWindow(QMainWindow):
             return
             
         speed_val = self.speed_slider.value() / 10.0
+        engine_name = self.engine_combo.currentText()
+        self.tts_engine.switch_engine(engine_name)
         self.tts_engine.set_voice(self.voice_combo.currentText())
         self.tts_engine.use_api = False
         self.tts_engine.api_key = self.api_key
@@ -722,34 +811,43 @@ class MainWindow(QMainWindow):
             self.last_rendered_voice = self.voice_combo.currentText()
         else:
             self.local_stream_btn.setText("⚙️ 로컬 렌더링 및 재생 (Enter)")
-            self.dl_status.setText("❌ 오류: 렌더링 실패.")
+            err_msg = getattr(self.tts_engine, 'last_error', '') or "오류: 렌더링 실패."
+            self.dl_status.setText(f"❌ {err_msg}")
 
     def api_stream_audio_logic(self):
         text = self.api_input_text.toPlainText().strip()
         if not text:
             return
-            
-        if not self.api_key:
-            QMessageBox.warning(self, "API Key 없음", "API Key를 먼저 설정해주세요.")
-            self.setup_api_key()
-            if not self.api_key:
-                return
 
-        speed_val = self.speed_slider.value() / 10.0
-        self.tts_engine.use_api = True
-        self.tts_engine.api_key = self.api_key
-        
         current_api_text = self.api_voice_combo.currentText()
-        if hasattr(self, 'custom_api_voices') and current_api_text in self.custom_api_voices:
-            self.tts_engine.api_voice_selection = "커스텀 보이스"
-            self.tts_engine.custom_api_voice_id = self.custom_api_voices[current_api_text]
+        speed_val = self.speed_slider.value() / 10.0
+
+        # [무료 모드] Edge-TTS 화자인 경우 API 키 없이 즉시 무료 말하기
+        if "[무료]" in current_api_text or "Edge-TTS" in current_api_text:
+            self.tts_engine.switch_engine("Edge-TTS (초고음질 온라인)")
+            self.tts_engine.set_voice(current_api_text)
+            self.tts_engine.use_api = False
+            self.dl_status.setText("⚡ [무료] 실시간 음성 생성 중...")
         else:
-            self.tts_engine.api_voice_selection = current_api_text
-            self.tts_engine.custom_api_voice_id = None
+            # [유료 모드] 알리바바 DashScope API
+            if not self.api_key:
+                QMessageBox.warning(self, "API Key 필요", "유료 음성을 사용하려면 DashScope API Key를 먼저 설정해주세요.\n무료 사용을 원하시면 '[무료]' 화자를 선택해 주세요.")
+                self.setup_api_key()
+                if not self.api_key:
+                    return
+
+            self.tts_engine.use_api = True
+            self.tts_engine.api_key = self.api_key
+            if hasattr(self, 'custom_api_voices') and current_api_text in self.custom_api_voices:
+                self.tts_engine.api_voice_selection = "커스텀 보이스"
+                self.tts_engine.custom_api_voice_id = self.custom_api_voices[current_api_text]
+            else:
+                self.tts_engine.api_voice_selection = current_api_text
+                self.tts_engine.custom_api_voice_id = None
+            self.dl_status.setText("⚡ [유료 API] 실시간 생성 중...")
 
         self.api_stream_btn.setDisabled(True)
         self.api_stop_btn.setDisabled(False)
-        self.dl_status.setText("⚡ API 실시간 생성 중...")
         QApplication.processEvents()
         
         self.stream_thread = GenerateAudioThread(self.tts_engine, text, speed_val)
@@ -856,8 +954,14 @@ class MainWindow(QMainWindow):
 
     # --- 기존 3번 탭 목소리 관리 로직 ---
     def refresh_voice_status(self):
+        engine_raw = self.engine_combo.currentText()
+        if "Edge-TTS" in engine_raw:
+            self.voice_status_lbl.setText("상태: 초고음질 온라인 클라우드 엔진 (별도 음성 등록 없이 즉시 사용 가능)")
+            self.voice_status_lbl.setStyleSheet("color: #27ae60; font-weight: bold;")
+            return
+
         status_text = []
-        engine_name = "Qwen3" if "Qwen3" in self.engine_combo.currentText() else "Coqui"
+        engine_name = "Qwen3" if "Qwen3" in engine_raw else "Coqui"
         
         for i in range(1, 11):
             if os.path.exists(os.path.join("voice_samples", engine_name, f"user{i}.wav")):
@@ -868,8 +972,8 @@ class MainWindow(QMainWindow):
             self.voice_status_lbl.setText("현재 선택된 엔진에 등록됨:\n" + "\n".join(status_text))
             self.voice_status_lbl.setStyleSheet("color: green;")
         else:
-            self.voice_status_lbl.setText("상태: 현재 엔진에 등록된 목소리가 전혀 없습니다.")
-            self.voice_status_lbl.setStyleSheet("color: red;")
+            self.voice_status_lbl.setText("상태: 현재 로컬 엔진에 등록된 목소리가 없습니다.\n즉시 생성을 원하시면 'Edge-TTS' 엔진을 선택하세요.")
+            self.voice_status_lbl.setStyleSheet("color: #e67e22;")
             
     def _register_speaker(self, title, dest_filename):
         file_path, _ = QFileDialog.getOpenFileName(self, f"{title} 파일 선택 (3~10초 분량)", self.last_dir, "Audio Files (*.wav *.m4a *.mp3 *.ogg)", options=QFileDialog.Option.DontUseNativeDialog)

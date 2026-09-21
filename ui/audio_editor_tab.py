@@ -88,12 +88,23 @@ class TTSAssetThread(QThread):
         
     def run(self):
         try:
+            # 1. 모델/엔진 사전 로드
+            if not self.tts_engine.load_model():
+                err_msg = getattr(self.tts_engine, 'last_error', '') or "TTS 엔진 로드에 실패했습니다."
+                self.finished.emit("error", err_msg, self.text)
+                return
+
+            # 2. 오디오 합성 실행
             audio_data = self.tts_engine.generate_audio(self.text, speed=self.speed)
             if audio_data:
+                os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
                 audio_data.export(self.save_path, format="wav")
                 self.finished.emit("success", self.save_path, self.text)
             else:
-                self.finished.emit("error", "오디오 생성에 실패했습니다.", self.text)
+                err_msg = getattr(self.tts_engine, 'last_error', '')
+                if not err_msg:
+                    err_msg = "오디오 생성에 실패했습니다.\n선택한 음성의 참조 파일이 없거나 엔진 설정 오류입니다.\n'Edge-TTS (초고음질 온라인)' 엔진을 선택해 보세요."
+                self.finished.emit("error", err_msg, self.text)
         except Exception as e:
             self.finished.emit("error", f"생성 중 에러 발생: {e}", self.text)
 

@@ -19,6 +19,7 @@ class Qwen3Engine:
 
         self.reference_wav = os.path.join("voice_samples", "instructor.wav")
         self.speaker_name = None  # CustomVoice 전용 (예: "Sohee")
+        self.last_error = ""
         
         # API 모드 설정
         self.use_api = False
@@ -104,6 +105,7 @@ class Qwen3Engine:
             print(f"[{model_id}] loaded successfully!")
             return True
         except Exception as e:
+            self.last_error = f"Qwen3-TTS 모델 로드 오류: {e}"
             print("Qwen3-TTS 모델 로드 중 오류 발생:", e)
             traceback.print_exc()
             return False
@@ -268,6 +270,7 @@ class Qwen3Engine:
                     )
                 else:
                     if not os.path.exists(self.reference_wav):
+                        self.last_error = f"참조 음성 파일({self.reference_wav})이 없습니다. 1번 탭에서 목소리를 먼저 등록하거나 내장 목소리(소희, 라이언 등) 또는 Edge-TTS를 선택해 주세요."
                         print(f"경고: 참조 오디오 파일({self.reference_wav})이 없습니다.")
                         return None
                     wavs, sr = self.model.generate_voice_clone(

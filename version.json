@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "release_date": "2026-09-20",
+  "version": "1.0.2",
+  "release_date": "2026-09-21",
   "app_name": "AIMaster_TTS",
-  "description": "AI 마스터 및 TTS 컨트롤 통합 솔루션 (안정화 빌드)"
+  "description": "AI 마스터 TTS 및 오디오 마스터링 (Edge-TTS 초고음질 및 다국어 지원 빌드)"
 }
