@@ -9,10 +9,12 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
     QGroupBox, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
     QFileDialog, QMessageBox, QProgressBar, QApplication, QSlider, QTextEdit,
-    QSizePolicy, QSplitter, QListWidgetItem
+    QSizePolicy, QSplitter, QListWidgetItem, QDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from ui.daw_timeline import DAWTimeline, AssetListWidget
+from utils.effects_generator import ensure_default_effects
+from ui.shuttle_run_dialog import ShuttleRunDialog
 
 class AudioProcessorThread(QThread):
     progress = pyqtSignal(int)
@@ -152,6 +154,21 @@ class AudioEditorTab(QWidget):
         self.bgm_lbl.setStyleSheet("font-weight: bold; color: #2980b9;")
         btn_bgm_load = QPushButton("🎵 오디오(BGM) 추가")
         btn_bgm_load.clicked.connect(self.add_bgm_track)
+
+        # 🏃‍♂️ 실내 셔틀런 음원 자동 생성 마법사 버튼
+        self.btn_shuttle_run = QPushButton("🏃‍♂️ 셔틀런 음원 자동 생성 마법사")
+        self.btn_shuttle_run.setStyleSheet("""
+            QPushButton {
+                background-color: #0284c7;
+                color: white;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+                border: 1px solid #0369a1;
+            }
+            QPushButton:hover { background-color: #0369a1; }
+        """)
+        self.btn_shuttle_run.clicked.connect(self.open_shuttle_run_wizard)
         
         self.time_lbl = QLabel("00:00.0 / 00:00.0")
         self.time_lbl.setFixedWidth(120)
@@ -168,6 +185,7 @@ class AudioEditorTab(QWidget):
         self.btn_stop.clicked.connect(self.stop_timeline)
         
         player_layout.addWidget(btn_bgm_load)
+        player_layout.addWidget(self.btn_shuttle_run)
         player_layout.addWidget(self.bgm_lbl)
         player_layout.addWidget(self.time_lbl)
         player_layout.addWidget(self.slider)
@@ -231,6 +249,9 @@ class AudioEditorTab(QWidget):
         btn_add_ext.clicked.connect(self.add_external_asset)
         lib_layout.addWidget(btn_add_ext)
         lib_group.setLayout(lib_layout)
+
+        # 기본 효과음 보관함 자동 적재
+        self.load_default_effects_to_library()
         
         # TTS 생성기
         gen_group = QGroupBox("✍️ 즉시 TTS 만들어서 보관함에 넣기")
@@ -707,3 +728,77 @@ class AudioEditorTab(QWidget):
                 QMessageBox.warning(self, "오류", f"재생 실패: {e}")
         else:
             QMessageBox.warning(self, "오류", msg)
+
+    def load_default_effects_to_library(self):
+        """기본 필수 효과음 에셋(비프음, 휘슬, 차임벨 등)을 자동 생성 및 보관함에 추가"""
+        try:
+            ensure_default_effects()
+            effects_dir = "effects"
+            if not os.path.exists(effects_dir):
+                return
+                
+            labels = {
+                "beep.wav": "🔔 [효과음] 880Hz 전자 비프음",
+                "whistle.wav": "📢 [효과음] 심판 호각(휘슬)",
+                "stage_bell.wav": "🎵 [효과음] 단계 상승 차임벨",
+                "countdown.wav": "⏱️ [효과음] 3-2-1 출발 카운트다운",
+                "drum.wav": "🥁 [효과음] 대북 타격음"
+            }
+            
+            # 중복 추가 방지: 이미 보관함에 있는지 확인
+            existing_paths = set()
+            for i in range(self.asset_list.count()):
+                it = self.asset_list.item(i)
+                if it:
+                    existing_paths.add(it.data(Qt.ItemDataRole.UserRole))
+
+            for fname, disp_name in labels.items():
+                fpath = os.path.join(effects_dir, fname)
+                if os.path.exists(fpath) and fpath not in existing_paths:
+                    self.add_asset_item(disp_name, fpath)
+        except Exception as e:
+            print(f"[AudioEditor] 기본 효과음 로드 경고: {e}")
+
+    def open_shuttle_run_wizard(self):
+        """🏃‍♂️ 실내 셔틀런 음원 자동 생성 마법사 열기 및 타임라인 로드"""
+        tts_eng = self.main_window.tts_engine if self.main_window else None
+        dlg = ShuttleRunDialog(parent=self, tts_engine=tts_eng)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
+            res = dlg.generated_result
+            clips = res.get("timeline_clips", [])
+            if not clips:
+                return
+
+            # 기존 타임라인 정리 여부 확인
+            if self.timeline_view.get_timeline_data():
+                r = QMessageBox.question(
+                    self, "타임라인 정리",
+                    "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 셔틀런 음원으로 교체하시겠습니까?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if r == QMessageBox.StandardButton.Yes:
+                    self.timeline_view.clear_all()
+
+            # 클립들을 타임라인에 배치
+            for c in clips:
+                self.timeline_view.add_clip(
+                    c["text"],
+                    c["file"],
+                    c["time"],
+                    c["track"],
+                    c["duration"]
+                )
+
+            # 플레이어 길이 및 믹싱 트리거
+            self.bgm_length = res.get("total_duration_sec", 60.0)
+            self.current_time = 0.0
+            self.update_ui_time()
+            self.trigger_auto_mix()
+            
+            QMessageBox.information(
+                self, "로드 완료",
+                f"🎉 {int(res['distance'])}m {res['target_stages']}단계 셔틀런 트랙이 타임라인에 완벽히 로드되었습니다!\n"
+                "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(비프/휘슬) | 트랙 3: 음성 안내 및 차임벨\n\n"
+                "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
+            )

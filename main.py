@@ -61,6 +61,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     sys.path.insert(0, sys._MEIPASS)
 
+# 기본 필수 효과음 에셋(비프, 휘슬, 차임벨, 카운트다운, 대북음) 자동 생성
+try:
+    from utils.effects_generator import ensure_default_effects
+    ensure_default_effects(os.path.join(APP_DATA_DIR, "effects"))
+except Exception as e:
+    print(f"[Init] Effects generation warning: {e}")
+
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "release_date": "2026-09-24",
   "app_name": "AIMaster_TTS",
-  "description": "AI 마스터 TTS 및 오디오 마스터링 (GUI 환경변수 PATH/FFmpeg 자동 보정, 세션 복원 및 크로스플랫폼 안정화)"
+  "description": "실내 셔틀런 음원 자동 생성 마법사 (거리별 인터벌 계산, BGM 오토덕킹, 턴 신호음 및 음성 안내) 탑재"
 }

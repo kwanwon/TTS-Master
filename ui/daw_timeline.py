@@ -247,8 +247,17 @@ class DAWTimeline(QGraphicsView):
 
     def clear_track(self, track_idx):
         changed = False
-        for item in self._scene.items():
+        for item in list(self._scene.items()):
             if isinstance(item, AudioClipItem) and item.track_idx == track_idx:
+                self._scene.removeItem(item)
+                changed = True
+        if changed:
+            self.timelineChanged.emit()
+
+    def clear_all(self):
+        changed = False
+        for item in list(self._scene.items()):
+            if isinstance(item, AudioClipItem):
                 self._scene.removeItem(item)
                 changed = True
         if changed:
