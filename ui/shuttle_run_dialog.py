@@ -190,26 +190,23 @@ class ShuttleRunWorker(QThread):
                 e_ms = s_ms + int(vc["duration"] * 1000)
                 duck_segments.append((s_ms, e_ms))
 
-            # 6. BGM 트랙 준비 및 길이 맞춤 (루핑)
+            # 6. BGM 트랙 준비 및 길이 맞춤 (다중 BGM 크로스페이드 & 루핑)
             self.progress.emit(75, "배경음악(BGM) 믹싱 및 오토 덕킹 처리 중...")
             total_duration_sec = schedule[-1]["stage_end_sec"] + 5.0
             total_duration_ms = int(total_duration_sec * 1000)
 
             bgm_clip_path = ""
-            if bgm_path and os.path.exists(bgm_path):
-                bgm_raw = AudioSegment.from_file(bgm_path)
-                # BGM이 전체 셔틀런 시간보다 짧으면 자연스럽게 루핑
-                if len(bgm_raw) < total_duration_ms:
-                    loop_count = math.ceil(total_duration_ms / len(bgm_raw))
-                    looped_bgm = AudioSegment.empty()
-                    for _ in range(loop_count):
-                        looped_bgm += bgm_raw
-                    bgm_raw = looped_bgm[:total_duration_ms]
-                else:
-                    bgm_raw = bgm_raw[:total_duration_ms]
+            bgm_paths = self.config.get("bgm_paths", [])
+            if not bgm_paths and self.config.get("bgm_path"):
+                bgm_paths = [self.config["bgm_path"]]
 
-                # 페이드 아웃 3초 적용
-                bgm_raw = bgm_raw.fade_out(3000)
+            valid_bgm = [p for p in bgm_paths if os.path.exists(p)]
+            if valid_bgm:
+                bgm_raw = ShuttleRunEngine.build_seamless_bgm(
+                    valid_bgm,
+                    target_duration_ms=total_duration_ms,
+                    crossfade_ms=2000
+                )
 
                 # 오토 덕킹 적용 (-8dB)
                 if auto_ducking:
@@ -220,8 +217,9 @@ class ShuttleRunWorker(QThread):
                 bgm_raw.export(bgm_clip_path, format="wav")
 
                 # BGM 클립을 타임라인 트랙 0에 추가
+                bgm_label = f"[BGM {len(valid_bgm)}곡] {os.path.basename(valid_bgm[0])} 외" if len(valid_bgm) > 1 else f"[BGM] {os.path.basename(valid_bgm[0])}"
                 timeline_clips.insert(0, {
-                    "text": f"[BGM] {os.path.basename(bgm_path)} (오토덕킹)",
+                    "text": f"{bgm_label} (오토덕킹)",
                     "file": bgm_clip_path,
                     "time": 0.0,
                     "duration": total_duration_sec,
@@ -279,8 +277,8 @@ class ShuttleRunDialog(QDialog):
         super().__init__(parent)
         self.tts_engine = tts_engine
         self.setWindowTitle("🏃‍♂️ 실내 셔틀런 음원 자동 생성 마법사 (Shuttle Run Generator)")
-        self.resize(650, 680)
-        self.last_bgm_path = ""
+        self.resize(680, 700)
+        self.bgm_playlist: List[str] = []
         self.generated_result = None
 
         self.init_ui()
@@ -296,7 +294,7 @@ class ShuttleRunDialog(QDialog):
         title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #1e3a8a;")
         desc_lbl = QLabel(
             "도장 실내 규격(5m/10m)에 맞춰 정확한 물리학적 턴 감속 및 인터벌 시간을 자동 계산하고,\n"
-            "신나는 BGM과 신호음, 단계별 안내 멘트를 오토 덕킹(Auto-Ducking)으로 완벽하게 합성합니다."
+            "여러 곡의 BGM(크로스페이드)과 신호음, 단계별 안내 멘트를 오토 덕킹(Auto-Ducking)으로 완벽하게 합성합니다."
         )
         desc_lbl.setStyleSheet("color: #475569; font-size: 12px;")
         hb_layout.addWidget(title_lbl)
@@ -361,18 +359,23 @@ class ShuttleRunDialog(QDialog):
         stage_group.setLayout(stage_layout)
         content_layout.addWidget(stage_group)
 
-        # 4. 배경음악(BGM) 선택
-        bgm_group = QGroupBox("4. 배경음악 (BGM) 선택")
-        bgm_layout = QHBoxLayout()
-        self.bgm_label = QLabel("선택된 파일 없음 (효과음만 생성)")
-        self.bgm_label.setStyleSheet("color: #64748b; font-style: italic;")
-        btn_browse_bgm = QPushButton("📁 음악 파일 선택...")
+        # 4. 배경음악(BGM) 선택 (여러 곡 다중 선택 지원)
+        bgm_group = QGroupBox("4. 배경음악 (BGM) 선택 (여러 곡 선택 시 자동 크로스페이드 연결)")
+        bgm_layout = QVBoxLayout()
+        h_bgm_btns = QHBoxLayout()
+        btn_browse_bgm = QPushButton("📁 음악 파일 추가 (다중 선택 가능)...")
         btn_browse_bgm.clicked.connect(self.browse_bgm)
-        btn_clear_bgm = QPushButton("❌ 제거")
+        btn_clear_bgm = QPushButton("❌ 전체 제거")
         btn_clear_bgm.clicked.connect(self.clear_bgm)
-        bgm_layout.addWidget(btn_browse_bgm)
-        bgm_layout.addWidget(self.bgm_label, stretch=1)
-        bgm_layout.addWidget(btn_clear_bgm)
+        h_bgm_btns.addWidget(btn_browse_bgm)
+        h_bgm_btns.addWidget(btn_clear_bgm)
+        h_bgm_btns.addStretch()
+        bgm_layout.addLayout(h_bgm_btns)
+
+        self.bgm_label = QLabel("선택된 음악 없음 (효과음만 생성)")
+        self.bgm_label.setStyleSheet("color: #64748b; font-style: italic; padding: 4px;")
+        self.bgm_label.setWordWrap(True)
+        bgm_layout.addWidget(self.bgm_label)
         bgm_group.setLayout(bgm_layout)
         content_layout.addWidget(bgm_group)
 
@@ -457,20 +460,33 @@ class ShuttleRunDialog(QDialog):
         main_layout.addLayout(btn_box)
 
     def browse_bgm(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "배경음악(BGM) 선택", "",
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self, "배경음악(BGM) 다중 선택 (여러 곡 가능)", "",
             "Audio Files (*.mp3 *.wav *.ogg *.m4a)",
             options=QFileDialog.Option.DontUseNativeDialog
         )
-        if file_path:
-            self.last_bgm_path = file_path
-            self.bgm_label.setText(f"선택됨: {os.path.basename(file_path)}")
-            self.bgm_label.setStyleSheet("color: #16a34a; font-weight: bold;")
+        if file_paths:
+            for fp in file_paths:
+                if fp not in self.bgm_playlist:
+                    self.bgm_playlist.append(fp)
+            self._update_bgm_label()
+
+    def _update_bgm_label(self):
+        if not self.bgm_playlist:
+            self.bgm_label.setText("선택된 음악 없음 (효과음만 생성)")
+            self.bgm_label.setStyleSheet("color: #64748b; font-style: italic; padding: 4px;")
+        else:
+            names = [os.path.basename(p) for p in self.bgm_playlist]
+            if len(names) <= 3:
+                display_str = ", ".join(names)
+            else:
+                display_str = f"{names[0]}, {names[1]} 외 {len(names)-2}곡"
+            self.bgm_label.setText(f"🎶 총 {len(self.bgm_playlist)}곡 선택됨: {display_str} (자연스러운 크로스페이드 연결)")
+            self.bgm_label.setStyleSheet("color: #16a34a; font-weight: bold; padding: 4px;")
 
     def clear_bgm(self):
-        self.last_bgm_path = ""
-        self.bgm_label.setText("선택된 파일 없음 (효과음만 생성)")
-        self.bgm_label.setStyleSheet("color: #64748b; font-style: italic;")
+        self.bgm_playlist = []
+        self._update_bgm_label()
 
     def preview_signal_sound(self):
         sig_type = self.sig_combo.currentData()
@@ -496,7 +512,7 @@ class ShuttleRunDialog(QDialog):
             "distance": float(dist_val),
             "preset_key": preset_key,
             "target_stages": self.stage_spin.value(),
-            "bgm_path": self.last_bgm_path,
+            "bgm_paths": list(self.bgm_playlist),
             "signal_type": self.sig_combo.currentData(),
             "use_voice": self.cb_voice.isChecked(),
             "voice_speaker": self.voice_combo.currentText(),

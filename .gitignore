@@ -39,8 +39,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project temporary audio & output
-projects/temp_tts/
-projects/api_history/
+projects/
 effects/
 *.wav
 *.mp3

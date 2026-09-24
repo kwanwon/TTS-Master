@@ -165,3 +165,62 @@ class ShuttleRunEngine:
             result += ducked_bgm[curr_pos:]
 
         return result
+
+    @classmethod
+    def build_seamless_bgm(
+        cls,
+        bgm_paths: List[str],
+        target_duration_ms: int,
+        crossfade_ms: int = 2000
+    ) -> AudioSegment:
+        """
+        Loads multiple BGM files and crossfades them sequentially.
+        If total length is shorter than target_duration_ms, loops the playlist seamlessly.
+        """
+        valid_paths = [p for p in bgm_paths if os.path.exists(p)]
+        if not valid_paths:
+            return AudioSegment.silent(duration=target_duration_ms)
+
+        playlist = []
+        for p in valid_paths:
+            try:
+                seg = AudioSegment.from_file(p)
+                if len(seg) > 500:
+                    playlist.append(seg)
+            except Exception as e:
+                print(f"[ShuttleRunEngine] Failed to load BGM {p}: {e}")
+
+        if not playlist:
+            return AudioSegment.silent(duration=target_duration_ms)
+
+        # Merge playlist with crossfades
+        combined = AudioSegment.empty()
+        for idx, track in enumerate(playlist):
+            if idx == 0:
+                combined = track
+            else:
+                cf = min(crossfade_ms, len(combined) // 3, len(track) // 3)
+                if cf > 200:
+                    combined = combined.append(track, crossfade=cf)
+                else:
+                    combined = combined + track
+
+        # Loop if combined length is less than target duration
+        if len(combined) < target_duration_ms:
+            loop_count = math.ceil(target_duration_ms / max(len(combined), 1000))
+            full_loop = combined
+            for _ in range(loop_count):
+                cf = min(crossfade_ms, len(full_loop) // 3, len(combined) // 3)
+                if cf > 200:
+                    full_loop = full_loop.append(combined, crossfade=cf)
+                else:
+                    full_loop = full_loop + combined
+            combined = full_loop[:target_duration_ms]
+        else:
+            combined = combined[:target_duration_ms]
+
+        # 3 seconds fade out at the very end
+        if len(combined) > 3000:
+            combined = combined.fade_out(3000)
+
+        return combined

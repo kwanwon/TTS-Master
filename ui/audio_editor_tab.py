@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from ui.daw_timeline import DAWTimeline, AssetListWidget
 from utils.effects_generator import ensure_default_effects
 from ui.shuttle_run_dialog import ShuttleRunDialog
+from ui.sparring_dialog import SparringDialog
 
 class AudioProcessorThread(QThread):
     progress = pyqtSignal(int)
@@ -156,7 +157,7 @@ class AudioEditorTab(QWidget):
         btn_bgm_load.clicked.connect(self.add_bgm_track)
 
         # 🏃‍♂️ 실내 셔틀런 음원 자동 생성 마법사 버튼
-        self.btn_shuttle_run = QPushButton("🏃‍♂️ 셔틀런 음원 자동 생성 마법사")
+        self.btn_shuttle_run = QPushButton("🏃‍♂️ 셔틀런 음원 마법사")
         self.btn_shuttle_run.setStyleSheet("""
             QPushButton {
                 background-color: #0284c7;
@@ -169,6 +170,21 @@ class AudioEditorTab(QWidget):
             QPushButton:hover { background-color: #0369a1; }
         """)
         self.btn_shuttle_run.clicked.connect(self.open_shuttle_run_wizard)
+
+        # 🥋 겨루기 & 발차기 훈련 음원 마법사 버튼
+        self.btn_sparring = QPushButton("🥋 겨루기/발차기 훈련 마법사")
+        self.btn_sparring.setStyleSheet("""
+            QPushButton {
+                background-color: #be185d;
+                color: white;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+                border: 1px solid #9d174d;
+            }
+            QPushButton:hover { background-color: #9d174d; }
+        """)
+        self.btn_sparring.clicked.connect(self.open_sparring_wizard)
         
         self.time_lbl = QLabel("00:00.0 / 00:00.0")
         self.time_lbl.setFixedWidth(120)
@@ -186,6 +202,7 @@ class AudioEditorTab(QWidget):
         
         player_layout.addWidget(btn_bgm_load)
         player_layout.addWidget(self.btn_shuttle_run)
+        player_layout.addWidget(self.btn_sparring)
         player_layout.addWidget(self.bgm_lbl)
         player_layout.addWidget(self.time_lbl)
         player_layout.addWidget(self.slider)
@@ -802,3 +819,49 @@ class AudioEditorTab(QWidget):
                 "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(비프/휘슬) | 트랙 3: 음성 안내 및 차임벨\n\n"
                 "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
             )
+
+    def open_sparring_wizard(self):
+        """🥋 겨루기 & 발차기 훈련 음원 자동 생성 마법사 열기 및 타임라인 로드"""
+        tts_eng = self.main_window.tts_engine if self.main_window else None
+        dlg = SparringDialog(parent=self, tts_engine=tts_eng)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
+            res = dlg.generated_result
+            clips = res.get("timeline_clips", [])
+            if not clips:
+                return
+
+            # 기존 타임라인 정리 여부 확인
+            if self.timeline_view.get_timeline_data():
+                r = QMessageBox.question(
+                    self, "타임라인 정리",
+                    "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 훈련 음원으로 교체하시겠습니까?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if r == QMessageBox.StandardButton.Yes:
+                    self.timeline_view.clear_all()
+
+            # 클립들을 타임라인에 배치
+            for c in clips:
+                self.timeline_view.add_clip(
+                    c["text"],
+                    c["file"],
+                    c["time"],
+                    c["track"],
+                    c["duration"]
+                )
+
+            # 플레이어 길이 및 믹싱 트리거
+            self.bgm_length = res.get("total_duration_sec", 60.0)
+            self.current_time = 0.0
+            self.update_ui_time()
+            self.trigger_auto_mix()
+            
+            mode_name = res.get("mode_name", "겨루기/발차기 훈련")
+            QMessageBox.information(
+                self, "로드 완료",
+                f"🎉 [{mode_name}] 트랙이 타임라인에 완벽히 로드되었습니다!\n"
+                "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(호각/비프) | 트랙 3: 훈련 구령 음성\n\n"
+                "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
+            )
+
