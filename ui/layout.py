@@ -44,6 +44,8 @@ class GenerateAudioThread(QThread):
                 audio.export(file_path, format="wav")
         except Exception as e:
             print("오디오 생성 오류:", e)
+            if hasattr(self.tts_engine, 'last_error'):
+                self.tts_engine.last_error = f"오디오 생성 중 오류 발생: {str(e)}"
         finally:
             self.finished_signal.emit(file_path)
 
@@ -102,10 +104,11 @@ class MainWindow(QMainWindow):
             self.api_input_text.setText(state["api_input_text"])
         if state.get("last_dir"):
             self.last_dir = state["last_dir"]
-        if state.get("engine_combo"):
-            self.engine_combo.setCurrentText(state["engine_combo"])
-        if state.get("voice_combo"):
-            self.voice_combo.setCurrentText(state["voice_combo"])
+        saved_engine = state.get("engine_combo", "Edge-TTS (초고음질 온라인)")
+        saved_voice = state.get("voice_combo", None)
+        
+        if saved_engine:
+            self.engine_combo.setCurrentText(saved_engine)
         if state.get("speed_slider"):
             self.speed_slider.setValue(state["speed_slider"])
             self.on_speed_changed(state["speed_slider"])
@@ -117,8 +120,8 @@ class MainWindow(QMainWindow):
         self.voice_combo.blockSignals(False)
         self.speed_slider.blockSignals(False)
         
-        # 엔진 변경 처리는 수동으로 1회 호출
-        self.on_engine_changed(self.engine_combo.currentText())
+        # 엔진 변경 처리 수동 호출 시 저장된 화자 복원 보호
+        self.on_engine_changed(self.engine_combo.currentText(), restore_voice=saved_voice)
             
     def auto_save_state(self):
         state_dict = {
@@ -457,8 +460,8 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(scroll_area)
         
-    def update_voice_combo_items(self):
-        current = self.voice_combo.currentText()
+    def update_voice_combo_items(self, target_voice=None):
+        current = target_voice if target_voice else self.voice_combo.currentText()
         self.voice_combo.blockSignals(True)
         self.voice_combo.clear()
         
@@ -656,7 +659,7 @@ class MainWindow(QMainWindow):
             if isinstance(widget, QPushButton):
                 widget.setDisabled(locked)
         
-    def on_engine_changed(self, engine_name):
+    def on_engine_changed(self, engine_name, restore_voice=None):
         # 1.7B 선택시 RAM 체크
         if "1.7B" in engine_name:
             ram_gb = self.check_system_ram()
@@ -670,7 +673,7 @@ class MainWindow(QMainWindow):
                 
         # TTS 엔진 프록시 변경
         self.tts_engine.switch_engine(engine_name)
-        self.update_voice_combo_items()
+        self.update_voice_combo_items(target_voice=restore_voice)
         self.refresh_voice_status()
         
         if "Edge-TTS" in engine_name:
@@ -836,6 +839,7 @@ class MainWindow(QMainWindow):
                 if not self.api_key:
                     return
 
+            self.tts_engine.switch_engine("Qwen3-TTS (0.6B)")
             self.tts_engine.use_api = True
             self.tts_engine.api_key = self.api_key
             if hasattr(self, 'custom_api_voices') and current_api_text in self.custom_api_voices:
@@ -879,7 +883,8 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
         else:
             self.api_stream_btn.setText("⚡ 즉시 말하기 (Enter)")
-            self.dl_status.setText("❌ 오류: API 생성 실패.")
+            err_msg = getattr(self.tts_engine, 'last_error', '') or "오류: API 생성 실패."
+            self.dl_status.setText(f"❌ {err_msg}")
 
     def play_temp_audio(self):
         if not hasattr(self, 'temp_playback_file') or not self.temp_playback_file: return

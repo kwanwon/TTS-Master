@@ -14,10 +14,44 @@ if getattr(sys, 'frozen', False):
 else:
     APP_DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# macOS GUI 실행 시 PATH 누락 보정 (/opt/homebrew/bin 등 추가)
+extra_paths = [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+    os.path.join(APP_DATA_DIR, "bin")
+]
+current_path = os.environ.get("PATH", "")
+for p in extra_paths:
+    if os.path.exists(p) and p not in current_path:
+        current_path = f"{p}:{current_path}"
+os.environ["PATH"] = current_path
+
+# pydub ffmpeg / ffprobe 위치 자동 탐지 및 주입
+try:
+    import shutil
+    import pydub
+    from pydub.utils import which
+    ffmpeg_bin = shutil.which("ffmpeg") or which("ffmpeg")
+    ffprobe_bin = shutil.which("ffprobe") or which("ffprobe")
+    if ffmpeg_bin:
+        pydub.AudioSegment.converter = ffmpeg_bin
+        print(f"[Init] ffmpeg detected: {ffmpeg_bin}")
+    if ffprobe_bin:
+        pydub.AudioSegment.ffprobe = ffprobe_bin
+        print(f"[Init] ffprobe detected: {ffprobe_bin}")
+except Exception as e:
+    print(f"[Init] ffmpeg setup warning: {e}")
+
 try:
     os.makedirs(APP_DATA_DIR, exist_ok=True)
     os.makedirs(os.path.join(APP_DATA_DIR, "projects", "temp_tts"), exist_ok=True)
     os.makedirs(os.path.join(APP_DATA_DIR, "effects"), exist_ok=True)
+    os.makedirs(os.path.join(APP_DATA_DIR, "voice_samples"), exist_ok=True)
     os.chdir(APP_DATA_DIR)
 except Exception as e:
     print(f"[Init] Working directory setup error: {e}")

@@ -368,6 +368,46 @@ class TTSEngine:
     def set_voice(self, voice_name):
         for engine in self.engines.values():
             engine.set_voice(voice_name)
+
+    @property
+    def use_api(self):
+        return getattr(self.active_engine, 'use_api', False)
+
+    @use_api.setter
+    def use_api(self, val):
+        for engine in self.engines.values():
+            if hasattr(engine, 'use_api'):
+                engine.use_api = val
+
+    @property
+    def api_key(self):
+        return getattr(self.active_engine, 'api_key', None)
+
+    @api_key.setter
+    def api_key(self, val):
+        for engine in self.engines.values():
+            if hasattr(engine, 'api_key'):
+                engine.api_key = val
+
+    @property
+    def api_voice_selection(self):
+        return getattr(self.active_engine, 'api_voice_selection', "")
+
+    @api_voice_selection.setter
+    def api_voice_selection(self, val):
+        for engine in self.engines.values():
+            if hasattr(engine, 'api_voice_selection'):
+                engine.api_voice_selection = val
+
+    @property
+    def custom_api_voice_id(self):
+        return getattr(self.active_engine, 'custom_api_voice_id', None)
+
+    @custom_api_voice_id.setter
+    def custom_api_voice_id(self, val):
+        for engine in self.engines.values():
+            if hasattr(engine, 'custom_api_voice_id'):
+                engine.custom_api_voice_id = val
             
     def load_model(self):
         res = self.active_engine.load_model()
