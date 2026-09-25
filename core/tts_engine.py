@@ -226,34 +226,7 @@ class EdgeTTSEngine:
         return True
 
     def _split_text(self, text, max_len=150):
-        # 1. 다국어 화자(현수 등)는 자체적으로 한/영을 완벽하게 원어민 발음으로 구사하므로
-        # $ 태그만 깔끔히 제거하고 한 문맥으로 넘겨야 가장 자연스러움
-        is_multilingual = "hyunsu" in self.current_voice.lower() or "multilingual" in self.current_voice.lower()
-        if is_multilingual:
-            clean_text = re.sub(r'\$([^\$]+)\$', r' \1 ', text)
-            clean_text = clean_text.replace('$', ' ')
-            sub_chunks = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[.?!]+(?:\s+)|\n+)', clean_text)
-            chunks = []
-            current = ""
-            for c in sub_chunks:
-                if re.match(r'^\[딜레이\s*\d+(?:\.\d+)?\s*초\]$', c):
-                    if current.strip():
-                        chunks.append(current.strip())
-                        current = ""
-                    chunks.append(c.strip())
-                else:
-                    current += c
-                    if re.search(r'[.?!]+(?:\s+)|\n+', c):
-                        if current.strip():
-                            chunks.append(current.strip())
-                            current = ""
-            if current.strip():
-                chunks.append(current.strip())
-            return chunks
-
-        # 2. 한국어 전용 화자(선히, 인준): 태그($영어$)를 우선 분리하고,
-        # 태그가 없더라도 영단어/영문 구절이 섞여있으면 스마트하게 영문 모드로 분기
-        # 2-1. $영어$ 태그 우선 처리
+        # 1. $영어$ 태그를 최우선으로 확실하게 분리 (예: "안녕하세요$ hi$" -> ["안녕하세요", "$ hi$"])
         raw_chunks = re.split(r'(\$[^$]+\$)', text)
         tagged_chunks = []
         for raw in raw_chunks:
@@ -266,7 +239,7 @@ class EdgeTTSEngine:
             else:
                 tagged_chunks.append(raw)
 
-        # 2-2. 태그가 없는 일반 청크 중 영문 구절 스마트 자동 감지
+        # 2. 태그가 없는 일반 한국어 문장 중 영단어/영문장 스마트 감지
         final_chunks = []
         for chunk in tagged_chunks:
             if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
@@ -282,7 +255,7 @@ class EdgeTTSEngine:
                 if re.match(r'^\[딜레이\s*\d+(?:\.\d+)?\s*초\]$', tok):
                     final_chunks.append(tok.strip())
                 elif re.search(r'[A-Za-z]{2,}', tok) and not re.search(r'[\uAC00-\uD7A3]', tok):
-                    # 순수 영문(한글 미포함)인 경우 영문 화자 모드로 전환!
+                    # 순수 영문(한글 미포함)인 경우 100% 미국 원어민 모드로 전환!
                     final_chunks.append(f"[EN]{tok.strip()}[/EN]")
                 else:
                     # 한국어 문장 부호 단위 분할
@@ -311,7 +284,7 @@ class EdgeTTSEngine:
 
             chunks = self._split_text(text)
             combined_audio = AudioSegment.empty()
-            silence = AudioSegment.silent(duration=120)  # 자연스러운 호흡 간격 (120ms)
+            silence = AudioSegment.silent(duration=100)  # 자연스러운 호흡 간격 (100ms)
 
             rate_percent = int((speed - 1.0) * 100)
             rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
@@ -350,17 +323,14 @@ class EdgeTTSEngine:
                 voice = self.current_voice
                 if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
                     chunk = chunk[4:-5].strip()
-                    # 성별 일치(Gender-matched) 미국 원어민 화자 매칭
-                    if "injoon" in self.current_voice.lower() or "guy" in self.current_voice.lower():
-                        voice = "en-US-GuyNeural"          # 미국 남성 원어민
-                    elif "hyunsu" in self.current_voice.lower():
-                        voice = "ko-KR-HyunsuMultilingualNeural"  # 현수 자체 원어민 발음
-                    else:
-                        voice = "en-US-JennyNeural"        # 미국 여성 원어민
-                    print(f"[Edge-TTS] 🇺🇸 영문 원어민 발음 전환: '{chunk}' -> {voice}")
+                    # 콩글리시 원천 차단: 어떤 기본 화자이든 영어는 100% 미국 본토 원어민 화자로 발음!
+                    # 기본 화자가 남성이면 미국 남성 원어민(Guy), 여성이면 미국 여성 원어민(Jenny)
+                    is_male = any(k in self.current_voice.lower() for k in ["injoon", "hyunsu", "guy", "male"])
+                    voice = "en-US-GuyNeural" if is_male else "en-US-JennyNeural"
+                    print(f"[Edge-TTS] 🇺🇸 100% 미국 본토 원어민 보이스로 발음: '{chunk}' -> {voice}")
 
                 if not re.search(r'[.?!,;\"\']$', chunk):
-                    chunk += "."
+                    chunk += "!" if len(chunk) <= 6 else "."
 
                 try:
                     loop = asyncio.get_running_loop()
@@ -375,7 +345,7 @@ class EdgeTTSEngine:
                     seg = asyncio.run(_synthesize_chunk(chunk, voice))
 
                 if len(seg) > 50:
-                    seg = seg.fade_out(25)
+                    seg = seg.fade_out(20)
                 combined_audio += seg + silence
 
             if len(combined_audio) > 0:
