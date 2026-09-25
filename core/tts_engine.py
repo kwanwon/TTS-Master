@@ -226,31 +226,77 @@ class EdgeTTSEngine:
         return True
 
     def _split_text(self, text, max_len=150):
-        raw_chunks = re.split(r'(\$[^\$]+\$)', text)
-        final_chunks = []
-        for raw in raw_chunks:
-            if not raw.strip():
-                continue
-            is_en = raw.startswith('$') and raw.endswith('$')
-            if is_en:
-                raw = raw.strip('$').strip()
-            
-            sub_chunks = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[.?!]+(?:\s+)|\n+)', raw)
+        # 1. 다국어 화자(현수 등)는 자체적으로 한/영을 완벽하게 원어민 발음으로 구사하므로
+        # $ 태그만 깔끔히 제거하고 한 문맥으로 넘겨야 가장 자연스러움
+        is_multilingual = "hyunsu" in self.current_voice.lower() or "multilingual" in self.current_voice.lower()
+        if is_multilingual:
+            clean_text = re.sub(r'\$([^\$]+)\$', r' \1 ', text)
+            clean_text = clean_text.replace('$', ' ')
+            sub_chunks = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[.?!]+(?:\s+)|\n+)', clean_text)
+            chunks = []
             current = ""
             for c in sub_chunks:
                 if re.match(r'^\[딜레이\s*\d+(?:\.\d+)?\s*초\]$', c):
                     if current.strip():
-                        final_chunks.append(f"[EN]{current.strip()}[/EN]" if is_en else current.strip())
+                        chunks.append(current.strip())
                         current = ""
-                    final_chunks.append(c.strip())
+                    chunks.append(c.strip())
                 else:
                     current += c
                     if re.search(r'[.?!]+(?:\s+)|\n+', c):
                         if current.strip():
-                            final_chunks.append(f"[EN]{current.strip()}[/EN]" if is_en else current.strip())
+                            chunks.append(current.strip())
                             current = ""
             if current.strip():
-                final_chunks.append(f"[EN]{current.strip()}[/EN]" if is_en else current.strip())
+                chunks.append(current.strip())
+            return chunks
+
+        # 2. 한국어 전용 화자(선히, 인준): 태그($영어$)를 우선 분리하고,
+        # 태그가 없더라도 영단어/영문 구절이 섞여있으면 스마트하게 영문 모드로 분기
+        # 2-1. $영어$ 태그 우선 처리
+        raw_chunks = re.split(r'(\$[^$]+\$)', text)
+        tagged_chunks = []
+        for raw in raw_chunks:
+            if not raw.strip():
+                continue
+            if raw.startswith('$') and raw.endswith('$'):
+                en_val = raw.strip('$').strip()
+                if en_val:
+                    tagged_chunks.append(f"[EN]{en_val}[/EN]")
+            else:
+                tagged_chunks.append(raw)
+
+        # 2-2. 태그가 없는 일반 청크 중 영문 구절 스마트 자동 감지
+        final_chunks = []
+        for chunk in tagged_chunks:
+            if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
+                final_chunks.append(chunk)
+                continue
+
+            # 영문 어구(알파벳 2자 이상 포함된 영문 구) 자동 분할
+            # 예: "안녕하세요 hi my name is Ryan 반갑습니다" -> ["안녕하세요", "[EN]hi my name is Ryan[/EN]", "반갑습니다"]
+            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[A-Za-z][A-Za-z0-9\s,\'\"\?!]{1,}[A-Za-z0-9\?!])', chunk)
+            for tok in tokens:
+                if not tok.strip():
+                    continue
+                if re.match(r'^\[딜레이\s*\d+(?:\.\d+)?\s*초\]$', tok):
+                    final_chunks.append(tok.strip())
+                elif re.search(r'[A-Za-z]{2,}', tok) and not re.search(r'[\uAC00-\uD7A3]', tok):
+                    # 순수 영문(한글 미포함)인 경우 영문 화자 모드로 전환!
+                    final_chunks.append(f"[EN]{tok.strip()}[/EN]")
+                else:
+                    # 한국어 문장 부호 단위 분할
+                    sub_sents = re.split(r'([.?!]+(?:\s+)|\n+)', tok)
+                    cur_ko = ""
+                    for s in sub_sents:
+                        cur_ko += s
+                        if re.search(r'[.?!]+(?:\s+)|\n+', s):
+                            if cur_ko.strip():
+                                final_chunks.append(cur_ko.strip())
+                                cur_ko = ""
+                    if cur_ko.strip():
+                        final_chunks.append(cur_ko.strip())
+
         return final_chunks
 
     def generate_audio(self, text, language="ko", speed=1.0):
@@ -265,7 +311,7 @@ class EdgeTTSEngine:
 
             chunks = self._split_text(text)
             combined_audio = AudioSegment.empty()
-            silence = AudioSegment.silent(duration=200)
+            silence = AudioSegment.silent(duration=120)  # 자연스러운 호흡 간격 (120ms)
 
             rate_percent = int((speed - 1.0) * 100)
             rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
@@ -304,8 +350,14 @@ class EdgeTTSEngine:
                 voice = self.current_voice
                 if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
                     chunk = chunk[4:-5].strip()
-                    voice = "en-US-JennyNeural"
-                    print(f"[Edge-TTS] 🇺🇸 영문 모드 전환 ({voice})")
+                    # 성별 일치(Gender-matched) 미국 원어민 화자 매칭
+                    if "injoon" in self.current_voice.lower() or "guy" in self.current_voice.lower():
+                        voice = "en-US-GuyNeural"          # 미국 남성 원어민
+                    elif "hyunsu" in self.current_voice.lower():
+                        voice = "ko-KR-HyunsuMultilingualNeural"  # 현수 자체 원어민 발음
+                    else:
+                        voice = "en-US-JennyNeural"        # 미국 여성 원어민
+                    print(f"[Edge-TTS] 🇺🇸 영문 원어민 발음 전환: '{chunk}' -> {voice}")
 
                 if not re.search(r'[.?!,;\"\']$', chunk):
                     chunk += "."
@@ -323,7 +375,7 @@ class EdgeTTSEngine:
                     seg = asyncio.run(_synthesize_chunk(chunk, voice))
 
                 if len(seg) > 50:
-                    seg = seg.fade_out(30)
+                    seg = seg.fade_out(25)
                 combined_audio += seg + silence
 
             if len(combined_audio) > 0:

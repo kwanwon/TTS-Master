@@ -133,7 +133,7 @@ class Qwen3Engine:
 
     def _split_text(self, text, max_len=150):
         # 1. $영어$ 태그를 기준으로 먼저 분할
-        raw_chunks = re.split(r'(\$[^\$]+\$)', text)
+        raw_chunks = re.split(r'(\$[^$]+\$)', text)
         final_chunks = []
 
         for raw in raw_chunks:
