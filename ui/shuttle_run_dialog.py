@@ -7,11 +7,12 @@ stages, BGM, signal sound, auto-ducking, and stage transition voice cues.
 import os
 import uuid
 import asyncio
+import math
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QSpinBox, QCheckBox, QFileDialog, QMessageBox, QComboBox,
-    QProgressBar, QGroupBox, QScrollArea, QWidget, QApplication
+    QProgressBar, QGroupBox, QScrollArea, QWidget, QApplication, QSlider
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -19,6 +20,13 @@ from PyQt6.QtGui import QFont
 from core.shuttle_run_engine import ShuttleRunEngine
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
+
+
+def vol_pct_to_db(pct: int) -> float:
+    """선형 퍼센트(%) 볼륨을 데시벨(dB)로 변환 (0% -> -60dB 무음, 100% -> 0dB)"""
+    if pct <= 0:
+        return -60.0
+    return round(20.0 * math.log10(pct / 100.0), 2)
 
 
 class ShuttleRunWorker(QThread):
@@ -44,6 +52,16 @@ class ShuttleRunWorker(QThread):
             voice_speaker = self.config["voice_speaker"]
             auto_ducking = self.config["auto_ducking"]
             countdown_enabled = self.config.get("countdown_enabled", True)
+
+            # 볼륨 커스텀 설정 읽기 (선형 % -> dB 변환)
+            bgm_vol_pct = self.config.get("bgm_vol_pct", 70)
+            sig_vol_pct = self.config.get("sig_vol_pct", 120)
+            voice_vol_pct = self.config.get("voice_vol_pct", 130)
+            duck_db = self.config.get("duck_db", -8.0)
+
+            bgm_vol_db = vol_pct_to_db(bgm_vol_pct)
+            sig_vol_db = vol_pct_to_db(sig_vol_pct)
+            voice_vol_db = vol_pct_to_db(voice_vol_pct)
 
             # 1. 신호음 에셋 로드
             signal_file_map = {
@@ -124,7 +142,8 @@ class ShuttleRunWorker(QThread):
                             "file": v_path,
                             "time": cue_time,
                             "duration": v_dur,
-                            "track": 2
+                            "track": 2,
+                            "vol": voice_vol_db
                         })
 
             # 5. 타임라인 클립 데이터 구성 (트랙 분리: 0=BGM, 1=신호음, 2=음성/효과음)
@@ -140,7 +159,7 @@ class ShuttleRunWorker(QThread):
                     "time": max(0.0, start_delay - 3.6),
                     "duration": len(countdown_audio) / 1000.0,
                     "track": 2,
-                    "vol": 0.0
+                    "vol": sig_vol_db
                 })
                 duck_segments.append((int(max(0.0, start_delay - 3.6) * 1000), int(start_delay * 1000)))
 
@@ -157,7 +176,7 @@ class ShuttleRunWorker(QThread):
                             "time": bell_time,
                             "duration": len(stage_bell_audio) / 1000.0,
                             "track": 2,
-                            "vol": 0.0
+                            "vol": sig_vol_db
                         })
 
                 # 비프/휘슬 신호음들
@@ -169,7 +188,7 @@ class ShuttleRunWorker(QThread):
                         "time": b_time,
                         "duration": sig_dur,
                         "track": 1,
-                        "vol": 2.0  # 신호음 강조 (+2dB)
+                        "vol": sig_vol_db
                     })
                     # Ducking segment around beep
                     s_ms = int(b_time * 1000)
@@ -184,7 +203,7 @@ class ShuttleRunWorker(QThread):
                     "time": vc["time"],
                     "duration": vc["duration"],
                     "track": 2,
-                    "vol": 1.0
+                    "vol": voice_vol_db
                 })
                 s_ms = int(vc["time"] * 1000)
                 e_ms = s_ms + int(vc["duration"] * 1000)
@@ -208,9 +227,13 @@ class ShuttleRunWorker(QThread):
                     crossfade_ms=2000
                 )
 
-                # 오토 덕킹 적용 (-8dB)
-                if auto_ducking:
-                    bgm_raw = ShuttleRunEngine.apply_auto_ducking(bgm_raw, duck_segments, duck_db=-8.0)
+                # 사용자 지정 BGM 볼륨 적용
+                if bgm_vol_db != 0.0:
+                    bgm_raw = bgm_raw + bgm_vol_db
+
+                # 오토 덕킹 적용
+                if auto_ducking and duck_db != 0.0:
+                    bgm_raw = ShuttleRunEngine.apply_auto_ducking(bgm_raw, duck_segments, duck_db=duck_db)
 
                 # 덕킹된 BGM 임시 저장
                 bgm_clip_path = os.path.join("projects", "temp_tts", f"shuttle_bgm_{uuid.uuid4().hex[:6]}.wav")
@@ -219,7 +242,7 @@ class ShuttleRunWorker(QThread):
                 # BGM 클립을 타임라인 트랙 0에 추가
                 bgm_label = f"[BGM {len(valid_bgm)}곡] {os.path.basename(valid_bgm[0])} 외" if len(valid_bgm) > 1 else f"[BGM] {os.path.basename(valid_bgm[0])}"
                 timeline_clips.insert(0, {
-                    "text": f"{bgm_label} (오토덕킹)",
+                    "text": f"{bgm_label} (볼륨 {bgm_vol_pct}%)",
                     "file": bgm_clip_path,
                     "time": 0.0,
                     "duration": total_duration_sec,
@@ -395,8 +418,77 @@ class ShuttleRunDialog(QDialog):
         sig_group.setLayout(sig_layout)
         content_layout.addWidget(sig_group)
 
-        # 6. 음성 안내 및 오토 덕킹 옵션
-        opt_group = QGroupBox("6. 고급 옵션 (음성 멘트 및 오토 덕킹)")
+        # 6. 개별 음량(BGM / 비프음 / TTS) 및 오토덕킹 밸런스 커스텀
+        vol_group = QGroupBox("6. 🎚️ 개별 음량(BGM / 비프음 / TTS) 및 오토덕킹 커스텀")
+        vol_group.setStyleSheet("QGroupBox { font-weight: bold; color: #1e3a8a; }")
+        vol_layout = QVBoxLayout()
+
+        # 볼륨 슬라이더 1: 배경음악(BGM)
+        h_v1 = QHBoxLayout()
+        h_v1.addWidget(QLabel("🎵 배경음악(BGM) 음량:"))
+        self.slider_bgm_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_bgm_vol.setRange(0, 150)
+        self.slider_bgm_vol.setValue(70)
+        self.lbl_bgm_vol = QLabel("70%")
+        self.lbl_bgm_vol.setFixedWidth(45)
+        self.slider_bgm_vol.valueChanged.connect(lambda v: self.lbl_bgm_vol.setText(f"{v}%"))
+        h_v1.addWidget(self.slider_bgm_vol)
+        h_v1.addWidget(self.lbl_bgm_vol)
+        vol_layout.addLayout(h_v1)
+
+        # 볼륨 슬라이더 2: 비프/신호음
+        h_v2 = QHBoxLayout()
+        h_v2.addWidget(QLabel("🔔 신호음(비프/휘슬) 음량:"))
+        self.slider_sig_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_sig_vol.setRange(20, 200)
+        self.slider_sig_vol.setValue(120)
+        self.lbl_sig_vol = QLabel("120%")
+        self.lbl_sig_vol.setFixedWidth(45)
+        self.slider_sig_vol.valueChanged.connect(lambda v: self.lbl_sig_vol.setText(f"{v}%"))
+        h_v2.addWidget(self.slider_sig_vol)
+        h_v2.addWidget(self.lbl_sig_vol)
+        vol_layout.addLayout(h_v2)
+
+        # 볼륨 슬라이더 3: TTS 음성 구령
+        h_v3 = QHBoxLayout()
+        h_v3.addWidget(QLabel("🗣️ 음성 구령(TTS) 음량:"))
+        self.slider_voice_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_voice_vol.setRange(20, 200)
+        self.slider_voice_vol.setValue(130)
+        self.lbl_voice_vol = QLabel("130%")
+        self.lbl_voice_vol.setFixedWidth(45)
+        self.slider_voice_vol.valueChanged.connect(lambda v: self.lbl_voice_vol.setText(f"{v}%"))
+        h_v3.addWidget(self.slider_voice_vol)
+        h_v3.addWidget(self.lbl_voice_vol)
+        vol_layout.addLayout(h_v3)
+
+        # 덕킹 강도 & 프리셋
+        h_v4 = QHBoxLayout()
+        h_v4.addWidget(QLabel("📉 오토덕킹 강도:"))
+        self.combo_duck_level = QComboBox()
+        self.combo_duck_level.addItem("보통 감쇄 (-8 dB) - 기본 추천", -8.0)
+        self.combo_duck_level.addItem("강한 감쇄 (-12 dB) - 신호음/구령 극대화", -12.0)
+        self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지", -4.0)
+        self.combo_duck_level.addItem("최대 감쇄 (-16 dB) - 음악 거의 음소거", -16.0)
+        self.combo_duck_level.addItem("오토덕킹 끄기 (0 dB 감쇄 없음)", 0.0)
+        h_v4.addWidget(self.combo_duck_level)
+
+        btn_preset_default = QPushButton("기본 밸런스")
+        btn_preset_music = QPushButton("음악 중심")
+        btn_preset_voice = QPushButton("구령·신호 극대화")
+        btn_preset_default.clicked.connect(lambda: self.set_vol_preset(70, 120, 130, 0))
+        btn_preset_music.clicked.connect(lambda: self.set_vol_preset(100, 130, 120, 2))
+        btn_preset_voice.clicked.connect(lambda: self.set_vol_preset(50, 160, 160, 1))
+        h_v4.addWidget(btn_preset_default)
+        h_v4.addWidget(btn_preset_music)
+        h_v4.addWidget(btn_preset_voice)
+        vol_layout.addLayout(h_v4)
+
+        vol_group.setLayout(vol_layout)
+        content_layout.addWidget(vol_group)
+
+        # 7. 음성 안내 및 시작 카운트다운 옵션
+        opt_group = QGroupBox("7. 음성 안내 및 시작 카운트다운 옵션")
         opt_layout = QVBoxLayout()
         
         self.cb_countdown = QCheckBox("시작 전 '3-2-1 출발!' 카운트다운 효과음 포함")
@@ -416,7 +508,7 @@ class ShuttleRunDialog(QDialog):
         h_voice.addWidget(self.voice_combo)
         opt_layout.addLayout(h_voice)
 
-        self.cb_ducking = QCheckBox("🎵 BGM 오토 덕킹(Auto-Ducking) 적용 (신호음 및 멘트 송출 시 음악 -8dB 감쇄)")
+        self.cb_ducking = QCheckBox("🎵 BGM 오토 덕킹(Auto-Ducking) 적용 (신호음 및 멘트 송출 시 BGM 자동 감쇄)")
         self.cb_ducking.setChecked(True)
         opt_layout.addWidget(self.cb_ducking)
 
@@ -502,11 +594,21 @@ class ShuttleRunDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "미리듣기 실패", f"효과음 재생 실패: {e}")
 
+    def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
+        self.slider_bgm_vol.setValue(bgm)
+        self.slider_sig_vol.setValue(sig)
+        self.slider_voice_vol.setValue(voice)
+        self.combo_duck_level.setCurrentIndex(duck_idx)
+
     def start_generation(self):
         dist_val = self.dist_btn_group.checkedId()
         age_id = self.age_btn_group.checkedId()
         preset_map = {1: "kinder", 2: "elementary_low", 3: "elementary_high_teen"}
         preset_key = preset_map.get(age_id, "elementary_low")
+
+        duck_db_val = self.combo_duck_level.currentData()
+        if duck_db_val is None:
+            duck_db_val = -8.0
 
         config = {
             "distance": float(dist_val),
@@ -517,7 +619,11 @@ class ShuttleRunDialog(QDialog):
             "use_voice": self.cb_voice.isChecked(),
             "voice_speaker": self.voice_combo.currentText(),
             "auto_ducking": self.cb_ducking.isChecked(),
-            "countdown_enabled": self.cb_countdown.isChecked()
+            "countdown_enabled": self.cb_countdown.isChecked(),
+            "bgm_vol_pct": self.slider_bgm_vol.value(),
+            "sig_vol_pct": self.slider_sig_vol.value(),
+            "voice_vol_pct": self.slider_voice_vol.value(),
+            "duck_db": duck_db_val
         }
 
         self.btn_generate.setEnabled(False)

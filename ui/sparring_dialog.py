@@ -12,11 +12,12 @@ Allows full customization of cues, times, BGM playlist, and auto-ducking.
 import os
 import uuid
 import asyncio
+import math
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QSpinBox, QDoubleSpinBox, QCheckBox, QFileDialog, QMessageBox, QComboBox,
-    QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTabWidget, QApplication
+    QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTabWidget, QApplication, QSlider
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
@@ -25,6 +26,13 @@ from core.shuttle_run_engine import ShuttleRunEngine
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
 from pydub.effects import normalize
+
+
+def vol_pct_to_db(pct: int) -> float:
+    """선형 퍼센트(%) 볼륨을 데시벨(dB)로 변환 (0% -> -60dB 무음, 100% -> 0dB)"""
+    if pct <= 0:
+        return -60.0
+    return round(20.0 * math.log10(pct / 100.0), 2)
 
 
 class SparringWorker(QThread):
@@ -106,17 +114,27 @@ class SparringWorker(QThread):
 
             # 3. 타임라인 클립 구성
             self.progress.emit(65, "타임라인 트랙 데이터 구성 중...")
+            bgm_vol_pct = self.params.get("bgm_vol_pct", 70)
+            sig_vol_pct = self.params.get("sig_vol_pct", 120)
+            voice_vol_pct = self.params.get("voice_vol_pct", 130)
+            duck_db = self.params.get("duck_db", -8.0)
+
+            bgm_vol_db = vol_pct_to_db(bgm_vol_pct)
+            sig_vol_db = vol_pct_to_db(sig_vol_pct)
+            voice_vol_db = vol_pct_to_db(voice_vol_pct)
+
             timeline_clips = []
             for ev in events:
                 f_path = ev.get("sound_file", "")
                 if f_path and os.path.exists(f_path):
+                    clip_vol = voice_vol_db if ev.get("type") == "voice" else sig_vol_db
                     timeline_clips.append({
                         "text": ev["text"],
                         "file": f_path,
                         "time": round(ev["time"], 2),
                         "duration": ev.get("duration", 0.5),
                         "track": ev.get("track", 1),
-                        "vol": ev.get("vol", 0.0)
+                        "vol": clip_vol
                     })
 
             # 4. 다중 BGM 크로스페이드 및 오토 덕킹
@@ -131,15 +149,18 @@ class SparringWorker(QThread):
                     target_duration_ms=total_duration_ms,
                     crossfade_ms=2000
                 )
-                if auto_ducking:
-                    bgm_raw = ShuttleRunEngine.apply_auto_ducking(bgm_raw, duck_segments, duck_db=-8.0)
+                if bgm_vol_db != 0.0:
+                    bgm_raw = bgm_raw + bgm_vol_db
+
+                if auto_ducking and duck_db != 0.0:
+                    bgm_raw = ShuttleRunEngine.apply_auto_ducking(bgm_raw, duck_segments, duck_db=duck_db)
 
                 bgm_clip_path = os.path.join("projects", "temp_tts", f"sparring_bgm_{uuid.uuid4().hex[:6]}.wav")
                 bgm_raw.export(bgm_clip_path, format="wav")
 
                 bgm_label = f"[BGM {len(valid_bgm)}곡] {os.path.basename(valid_bgm[0])} 외" if len(valid_bgm) > 1 else f"[BGM] {os.path.basename(valid_bgm[0])}"
                 timeline_clips.insert(0, {
-                    "text": f"{bgm_label} (오토덕킹)",
+                    "text": f"{bgm_label} (볼륨 {bgm_vol_pct}%)",
                     "file": bgm_clip_path,
                     "time": 0.0,
                     "duration": total_duration_sec,
@@ -423,6 +444,74 @@ class SparringDialog(QDialog):
 
         main_layout.addWidget(common_group)
 
+        # ── 개별 음량 및 오토덕킹 밸런스 커스텀 ──
+        vol_group = QGroupBox("🎚️ 개별 음량(BGM / 비프음 / TTS 구령) 및 오토덕킹 커스텀")
+        vol_group.setStyleSheet("QGroupBox { font-weight: bold; color: #9d174d; }")
+        vol_layout = QVBoxLayout(vol_group)
+
+        # 1. BGM 볼륨
+        h_v1 = QHBoxLayout()
+        h_v1.addWidget(QLabel("🎵 배경음악(BGM) 음량:"))
+        self.slider_bgm_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_bgm_vol.setRange(0, 150)
+        self.slider_bgm_vol.setValue(70)
+        self.lbl_bgm_vol = QLabel("70%")
+        self.lbl_bgm_vol.setFixedWidth(45)
+        self.slider_bgm_vol.valueChanged.connect(lambda v: self.lbl_bgm_vol.setText(f"{v}%"))
+        h_v1.addWidget(self.slider_bgm_vol)
+        h_v1.addWidget(self.lbl_bgm_vol)
+        vol_layout.addLayout(h_v1)
+
+        # 2. 신호음 볼륨
+        h_v2 = QHBoxLayout()
+        h_v2.addWidget(QLabel("🔔 신호음(호각/비프/벨) 음량:"))
+        self.slider_sig_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_sig_vol.setRange(20, 200)
+        self.slider_sig_vol.setValue(120)
+        self.lbl_sig_vol = QLabel("120%")
+        self.lbl_sig_vol.setFixedWidth(45)
+        self.slider_sig_vol.valueChanged.connect(lambda v: self.lbl_sig_vol.setText(f"{v}%"))
+        h_v2.addWidget(self.slider_sig_vol)
+        h_v2.addWidget(self.lbl_sig_vol)
+        vol_layout.addLayout(h_v2)
+
+        # 3. 음성 구령 볼륨
+        h_v3 = QHBoxLayout()
+        h_v3.addWidget(QLabel("🗣️ 훈련 구령(TTS) 음량:"))
+        self.slider_voice_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_voice_vol.setRange(20, 200)
+        self.slider_voice_vol.setValue(130)
+        self.lbl_voice_vol = QLabel("130%")
+        self.lbl_voice_vol.setFixedWidth(45)
+        self.slider_voice_vol.valueChanged.connect(lambda v: self.lbl_voice_vol.setText(f"{v}%"))
+        h_v3.addWidget(self.slider_voice_vol)
+        h_v3.addWidget(self.lbl_voice_vol)
+        vol_layout.addLayout(h_v3)
+
+        # 4. 덕킹 강도 & 프리셋
+        h_v4 = QHBoxLayout()
+        h_v4.addWidget(QLabel("📉 오토덕킹 강도:"))
+        self.combo_duck_level = QComboBox()
+        self.combo_duck_level.addItem("보통 감쇄 (-8 dB) - 기본 추천", -8.0)
+        self.combo_duck_level.addItem("강한 감쇄 (-12 dB) - 신호음/구령 극대화", -12.0)
+        self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지", -4.0)
+        self.combo_duck_level.addItem("최대 감쇄 (-16 dB) - 음악 일시 거의 음소거", -16.0)
+        self.combo_duck_level.addItem("오토덕킹 끄기 (0 dB 감쇄 없음)", 0.0)
+        h_v4.addWidget(self.combo_duck_level)
+
+        btn_preset_default = QPushButton("기본 밸런스")
+        btn_preset_music = QPushButton("음악 중심")
+        btn_preset_voice = QPushButton("구령·신호 극대화")
+        btn_preset_default.clicked.connect(lambda: self.set_vol_preset(70, 120, 130, 0))
+        btn_preset_music.clicked.connect(lambda: self.set_vol_preset(100, 130, 120, 2))
+        btn_preset_voice.clicked.connect(lambda: self.set_vol_preset(50, 160, 160, 1))
+        h_v4.addWidget(btn_preset_default)
+        h_v4.addWidget(btn_preset_music)
+        h_v4.addWidget(btn_preset_voice)
+        vol_layout.addLayout(h_v4)
+
+        main_layout.addWidget(vol_group)
+
         # 상태 안내 및 진행바
         self.status_lbl = QLabel("원하는 훈련 탭을 선택하고 세부 값을 조정한 뒤 [생성하기]를 누르세요.")
         self.status_lbl.setStyleSheet("color: #9d174d; font-weight: bold;")
@@ -485,16 +574,30 @@ class SparringDialog(QDialog):
         self.bgm_playlist = []
         self._update_bgm_label()
 
+    def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
+        self.slider_bgm_vol.setValue(bgm)
+        self.slider_sig_vol.setValue(sig)
+        self.slider_voice_vol.setValue(voice)
+        self.combo_duck_level.setCurrentIndex(duck_idx)
+
     def start_generation(self):
         current_tab_idx = self.tabs.currentIndex()
         mode_map = {0: "relay", 1: "reaction", 2: "combo", 3: "rounds"}
         mode = mode_map.get(current_tab_idx, "relay")
 
+        duck_db_val = self.combo_duck_level.currentData()
+        if duck_db_val is None:
+            duck_db_val = -8.0
+
         params = {
             "countdown_enabled": self.cb_countdown.isChecked(),
             "auto_ducking": self.cb_ducking.isChecked(),
             "voice_speaker": self.voice_combo.currentText(),
-            "use_voice": True
+            "use_voice": True,
+            "bgm_vol_pct": self.slider_bgm_vol.value(),
+            "sig_vol_pct": self.slider_sig_vol.value(),
+            "voice_vol_pct": self.slider_voice_vol.value(),
+            "duck_db": duck_db_val
         }
 
         if mode == "relay":
