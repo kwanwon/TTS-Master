@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "release_date": "2026-09-26",
   "app_name": "AIMaster_TTS",
-  "description": "셔틀런 음원 생성 시 'bgm_path' 오류 완전 해결, BGM 미등록/다중 등록 안정성 강화 및 앱 시작 속도 초고속 최적화"
+  "description": "한체대 라이온 무지개 엠블럼 아이콘 적용, 셔틀런 15m 거리 옵션 추가 및 실시간 인터벌/회전수 계산 미리보기 탑재"
 }

@@ -333,17 +333,20 @@ class ShuttleRunDialog(QDialog):
         dist_group = QGroupBox("1. 왕복 측정 거리 선택 (실내 / 실외)")
         dist_layout = QHBoxLayout()
         self.dist_btn_group = QButtonGroup(self)
-        self.rb_dist_5 = QRadioButton("5m (실내 초소형/유치부 특화)")
-        self.rb_dist_10 = QRadioButton("10m (도장 실내 표준, 추천)")
-        self.rb_dist_20 = QRadioButton("20m (야외/체육관 공인 규격)")
+        self.rb_dist_5 = QRadioButton("5m (초소형/스텝)")
+        self.rb_dist_10 = QRadioButton("10m (도장 표준)")
+        self.rb_dist_15 = QRadioButton("15m (중형 도장)")
+        self.rb_dist_20 = QRadioButton("20m (체육관 공인)")
         self.rb_dist_10.setChecked(True)
         
         self.dist_btn_group.addButton(self.rb_dist_5, 5)
         self.dist_btn_group.addButton(self.rb_dist_10, 10)
+        self.dist_btn_group.addButton(self.rb_dist_15, 15)
         self.dist_btn_group.addButton(self.rb_dist_20, 20)
         
         dist_layout.addWidget(self.rb_dist_5)
         dist_layout.addWidget(self.rb_dist_10)
+        dist_layout.addWidget(self.rb_dist_15)
         dist_layout.addWidget(self.rb_dist_20)
         dist_group.setLayout(dist_layout)
         content_layout.addWidget(dist_group)
@@ -366,6 +369,17 @@ class ShuttleRunDialog(QDialog):
         age_layout.addWidget(self.rb_age_high)
         age_group.setLayout(age_layout)
         content_layout.addWidget(age_group)
+
+        # 실시간 거리/인터벌/회전수 계산 미리보기 배너
+        self.lbl_interval_preview = QLabel()
+        self.lbl_interval_preview.setStyleSheet(
+            "background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; "
+            "padding: 8px 12px; font-weight: bold; color: #065f46; font-size: 13px;"
+        )
+        content_layout.addWidget(self.lbl_interval_preview)
+
+        self.dist_btn_group.idToggled.connect(lambda: self.update_interval_preview())
+        self.age_btn_group.idToggled.connect(lambda: self.update_interval_preview())
 
         # 3. 목표 단계
         stage_group = QGroupBox("3. 목표 단계 설정")
@@ -549,6 +563,36 @@ class ShuttleRunDialog(QDialog):
         btn_box.addWidget(self.btn_generate)
         btn_box.addWidget(btn_cancel)
         main_layout.addLayout(btn_box)
+
+        # 초기 계산 미리보기 업데이트
+        self.update_interval_preview()
+
+    def update_interval_preview(self):
+        """거리/연령 선택 변경 시 1단계 인터벌(초)과 회전수를 실시간 계산하여 안내"""
+        try:
+            dist_val = float(self.dist_btn_group.checkedId())
+            age_id = self.age_btn_group.checkedId()
+            preset_map = {1: "kinder", 2: "elementary_low", 3: "elementary_high_teen"}
+            preset_key = preset_map.get(age_id, "elementary_low")
+
+            schedule = ShuttleRunEngine.calculate_stage_schedule(
+                distance=dist_val,
+                preset_key=preset_key,
+                target_stages=1,
+                stage_duration_sec=60.0
+            )
+            if schedule and hasattr(self, 'lbl_interval_preview'):
+                s1 = schedule[0]
+                spd = s1["speed_kmh"]
+                iv = s1["interval_sec"]
+                cnt = s1["shuttles"]
+                tot_m = int(cnt * dist_val)
+                self.lbl_interval_preview.setText(
+                    f"⚡ [물리학적 계산 결과] 선택한 {int(dist_val)}m 거리 1단계 ({spd} km/h):\n"
+                    f"   ➔ {iv:.2f}초 간격 비프음 | 1분간 총 {cnt}회 왕복 (총 주행 거리 {tot_m}m)"
+                )
+        except Exception:
+            pass
 
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
