@@ -1,6 +1,6 @@
 {
-  "version": "1.0.9",
+  "version": "1.1.0",
   "release_date": "2026-09-26",
   "app_name": "AIMaster_TTS",
-  "description": "앱 시작 속도 초고속 최적화 (엔진 지연 로딩 도입, UI 차단 랙 완전 제거, 0.5초 쾌속 실행)"
+  "description": "셔틀런 음원 생성 시 'bgm_path' 오류 완전 해결, BGM 미등록/다중 등록 안정성 강화 및 앱 시작 속도 초고속 최적화"
 }

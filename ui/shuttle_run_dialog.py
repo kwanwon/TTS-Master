@@ -43,14 +43,13 @@ class ShuttleRunWorker(QThread):
             self.progress.emit(5, "설정값 검증 및 신호음 준비 중...")
             ensure_default_effects()
 
-            distance = self.config["distance"]
-            preset_key = self.config["preset_key"]
-            target_stages = self.config["target_stages"]
-            bgm_path = self.config["bgm_path"]
-            signal_type = self.config["signal_type"]
-            use_voice = self.config["use_voice"]
-            voice_speaker = self.config["voice_speaker"]
-            auto_ducking = self.config["auto_ducking"]
+            distance = self.config.get("distance", 10.0)
+            preset_key = self.config.get("preset_key", "elementary_low")
+            target_stages = self.config.get("target_stages", 10)
+            signal_type = self.config.get("signal_type", "beep")
+            use_voice = self.config.get("use_voice", True)
+            voice_speaker = self.config.get("voice_speaker", "선히 (한국어 여성, 추천)")
+            auto_ducking = self.config.get("auto_ducking", True)
             countdown_enabled = self.config.get("countdown_enabled", True)
 
             # 볼륨 커스텀 설정 읽기 (선형 % -> dB 변환)
@@ -615,6 +614,7 @@ class ShuttleRunDialog(QDialog):
             "preset_key": preset_key,
             "target_stages": self.stage_spin.value(),
             "bgm_paths": list(self.bgm_playlist),
+            "bgm_path": self.bgm_playlist[0] if self.bgm_playlist else "",
             "signal_type": self.sig_combo.currentData(),
             "use_voice": self.cb_voice.isChecked(),
             "voice_speaker": self.voice_combo.currentText(),
