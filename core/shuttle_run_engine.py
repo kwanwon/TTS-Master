@@ -56,12 +56,13 @@ class ShuttleRunEngine:
         stage_cue_durations: Optional[Dict[int, float]] = None,
         countdown_duration: float = 0.0,
         signal_duration_sec: float = 0.25,
-        cue_post_gap_sec: float = 0.35
+        cue_post_gap_sec: float = 0.35,
+        intro_duration_sec: float = 0.0
     ) -> List[Dict[str, Any]]:
         """
         Calculates exact beep timestamps and voice cues for each stage.
         Guarantees strict sequential ordering:
-          [Stage 1 Cue] -> [Countdown] -> [Beep 1-Start] -> ... -> [Beep 1-End] ->
+          [Intro Guide] -> [Stage 1 Cue] -> [Countdown] -> [Beep 1-Start] -> ... -> [Beep 1-End] ->
           [Stage 2 Cue] -> [Beep 2-Start] -> ... -> [Beep 2-End]
         No overlaps occur between voice cues, countdowns, and beeps.
         """
@@ -72,11 +73,14 @@ class ShuttleRunEngine:
 
         schedule = []
 
-        # 1단계 시작 타이밍 계산 (멘트 및 카운트다운 길이 기반)
+        # 1단계 시작 타이밍 계산 (안내 방송, 멘트 및 카운트다운 길이 기반)
+        intro_time = 1.0 if intro_duration_sec > 0 else None
+        intro_offset = (intro_duration_sec + 0.8) if intro_duration_sec > 0 else 0.0
+
         if stage_cue_durations is not None:
             cue_dur_1 = stage_cue_durations.get(1, 0.0)
             if cue_dur_1 > 0:
-                cue_time_1 = 1.0  # BGM 시작 후 1.0초 뒤 멘트 시작
+                cue_time_1 = round(1.0 + intro_offset, 2)
                 t_curr = cue_time_1 + cue_dur_1
                 if countdown_duration > 0:
                     cd_time = round(t_curr + 0.25, 2)
@@ -88,15 +92,15 @@ class ShuttleRunEngine:
             else:
                 cue_time_1 = None
                 if countdown_duration > 0:
-                    cd_time = 1.0
+                    cd_time = round(1.0 + intro_offset, 2)
                     stage_1_first_beep = round(cd_time + countdown_duration + 0.2, 2)
                 else:
                     cd_time = None
-                    stage_1_first_beep = float(start_delay_sec)
+                    stage_1_first_beep = round(float(start_delay_sec) + intro_offset, 2)
         else:
             cue_time_1 = None
             cd_time = None
-            stage_1_first_beep = float(start_delay_sec)
+            stage_1_first_beep = round(float(start_delay_sec) + intro_offset, 2)
 
         last_beep = 0.0
 
@@ -142,7 +146,9 @@ class ShuttleRunEngine:
                 "cue_time_sec": stage_cue_time,
                 "cue_duration_sec": stage_cue_dur,
                 "countdown_time_sec": cd_time if s == 1 else None,
-                "countdown_duration_sec": countdown_duration if s == 1 else 0.0
+                "countdown_duration_sec": countdown_duration if s == 1 else 0.0,
+                "intro_time_sec": intro_time if s == 1 else None,
+                "intro_duration_sec": intro_duration_sec if s == 1 else 0.0
             })
 
         return schedule
@@ -153,8 +159,8 @@ class ShuttleRunEngine:
         cls,
         bgm_audio: AudioSegment,
         duck_segments: List[tuple],
-        duck_db: float = -8.0,
-        fade_ms: int = 150
+        duck_db: float = -4.0,
+        fade_ms: int = 250
     ) -> AudioSegment:
         """
         Ducks background music volume by `duck_db` during periods specified in `duck_segments`
