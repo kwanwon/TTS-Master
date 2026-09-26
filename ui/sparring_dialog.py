@@ -297,7 +297,12 @@ class SparringDialog(QDialog):
         tab_reaction = QWidget()
         l_reac = QVBoxLayout(tab_reaction)
         
-        g_reac_t = QGroupBox("반응 시간 및 간격 설정")
+        # 실전 훈련 시퀀스 안내 배너
+        reac_info = QLabel("🎯 동작 순서: [기술 지시 (예: 1연타!)] ➔ [랜덤 초(3~8초) 긴장 대기] ➔ [신호음/구령 (삑! / 시작! / GO!)] 발차기 타격!")
+        reac_info.setStyleSheet("background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #1e40af; font-size: 12px;")
+        l_reac.addWidget(reac_info)
+
+        g_reac_t = QGroupBox("1. 훈련 시간 및 랜덤 긴장 대기 간격")
         l_rct = QVBoxLayout(g_reac_t)
         h_rct1 = QHBoxLayout()
         h_rct1.addWidget(QLabel("총 훈련 시간:"))
@@ -307,26 +312,58 @@ class SparringDialog(QDialog):
         self.sp_reac_dur.setSuffix(" 초 (2분)")
         h_rct1.addWidget(self.sp_reac_dur)
 
-        h_rct1.addWidget(QLabel("랜덤 신호 간격:"))
+        h_rct1.addWidget(QLabel("랜덤 긴장 대기:"))
         self.sp_reac_min = QDoubleSpinBox()
-        self.sp_reac_min.setRange(1.5, 10.0)
-        self.sp_reac_min.setValue(2.5)
+        self.sp_reac_min.setRange(1.0, 15.0)
+        self.sp_reac_min.setValue(3.0)
         self.sp_reac_min.setSuffix("초 ~ ")
         self.sp_reac_max = QDoubleSpinBox()
-        self.sp_reac_max.setRange(2.0, 15.0)
-        self.sp_reac_max.setValue(5.0)
+        self.sp_reac_max.setRange(2.0, 20.0)
+        self.sp_reac_max.setValue(8.0)
         self.sp_reac_max.setSuffix("초")
         h_rct1.addWidget(self.sp_reac_min)
         h_rct1.addWidget(self.sp_reac_max)
         l_rct.addLayout(h_rct1)
         l_reac.addWidget(g_reac_t)
 
-        g_reac_cues = QGroupBox("💡 랜덤 반응 구령 (쉼표로 구분하여 여러 개 등록 가능)")
+        # 2. 발차기 출발/타격 신호음 종류 선택
+        g_reac_sig = QGroupBox("2. 발차기 출발/타격 신호 (트리거)")
+        l_sig = QHBoxLayout(g_reac_sig)
+        l_sig.addWidget(QLabel("타격 신호음:"))
+        self.combo_reac_signal = QComboBox()
+        self.combo_reac_signal.addItem("📢 경기용 심판 휘슬 (호각)", "whistle")
+        self.combo_reac_signal.addItem("🔔 전자 비프음 (880Hz 삑~익)", "beep")
+        self.combo_reac_signal.addItem("🥁 웅장한 대북 타격음 (쿵)", "drum")
+        self.combo_reac_signal.addItem("🗣️ 음성 구령: '시작!'", "voice_start")
+        self.combo_reac_signal.addItem("🗣️ 음성 구령: 'GO!'", "voice_go")
+        self.combo_reac_signal.addItem("🗣️ 음성 구령: '탕!'", "voice_bang")
+        self.combo_reac_signal.addItem("🎲 랜덤 믹스 (휘슬 / 비프 / 시작! / GO! 무작위)", "random_mix")
+        l_sig.addWidget(self.combo_reac_signal, stretch=1)
+        l_reac.addWidget(g_reac_sig)
+
+        # 3. 명령어 템플릿 프리셋 선택 및 직접 편집
+        g_reac_cues = QGroupBox("3. 기술 지시 구령 및 템플릿")
         l_rcc = QVBoxLayout(g_reac_cues)
-        self.txt_reac_cues = QLineEdit("받아차기!, 1연타!, 2연타!, 카운터!, 앞발 나래차기!")
-        self.txt_reac_cues.setPlaceholderText("예: 받아차기!, 1연타!, 2연타!, 뒤차기!")
-        l_rcc.addWidget(self.txt_reac_cues)
-        lbl_hint = QLabel("※ 스텝을 뛰다가 신호음과 함께 위 구령 중 하나가 무작위로 송출됩니다.")
+        
+        h_tmpl = QHBoxLayout()
+        h_tmpl.addWidget(QLabel("📋 훈련 템플릿 선택:"))
+        self.combo_cues_template = QComboBox()
+        self.combo_cues_template.addItem("⚡ [템플릿 1] 연타 공격 (1연타, 2연타, 3연타, 나래차기)", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
+        self.combo_cues_template.addItem("🛡️ [템플릿 2] 받아차기 / 카운터 (받아차기, 카운터, 뒤차기, 컷트)", "받아차기!, 카운터!, 뒤차기!, 앞발 컷트!")
+        self.combo_cues_template.addItem("🥋 [템플릿 3] 실전 겨루기 (돌려차기, 앞발 찍기, 뒤후리기, 찌르기)", "돌려차기!, 앞발 찍기!, 뒤후리기!, 찌르기!")
+        self.combo_cues_template.addItem("🏃‍♂️ [템플릿 4] 기본 순발력 (앞차기, 돌려차기, 내려찍기, 옆차기)", "앞차기!, 돌려차기!, 내려찍기!, 옆차기!")
+        self.combo_cues_template.currentIndexChanged.connect(self._on_cues_template_changed)
+        h_tmpl.addWidget(self.combo_cues_template, stretch=1)
+        l_rcc.addLayout(h_tmpl)
+
+        h_input = QHBoxLayout()
+        h_input.addWidget(QLabel("✏️ 적용 구령 목록:"))
+        self.txt_reac_cues = QLineEdit("1연타!, 2연타!, 3연타!, 앞발 나래차기!")
+        self.txt_reac_cues.setPlaceholderText("쉼표로 구분하여 자유롭게 기술명을 입력하세요")
+        h_input.addWidget(self.txt_reac_cues, stretch=1)
+        l_rcc.addLayout(h_input)
+
+        lbl_hint = QLabel("※ 스텝 중 위 기술명이 먼저 제시되고, 무작위 대기 시간(3~8초) 후 신호음(삑!/시작!)에 즉시 발차기합니다.")
         lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_rcc.addWidget(lbl_hint)
         l_reac.addWidget(g_reac_cues)
@@ -574,6 +611,11 @@ class SparringDialog(QDialog):
         self.bgm_playlist = []
         self._update_bgm_label()
 
+    def _on_cues_template_changed(self, idx):
+        tmpl_data = self.combo_cues_template.currentData()
+        if tmpl_data:
+            self.txt_reac_cues.setText(tmpl_data)
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -614,7 +656,7 @@ class SparringDialog(QDialog):
             params["max_interval"] = float(self.sp_reac_max.value())
             raw_cues = self.txt_reac_cues.text().split(",")
             params["cues"] = [c.strip() for c in raw_cues if c.strip()]
-            params["signal_sound"] = "whistle"
+            params["signal_sound"] = self.combo_reac_signal.currentData()
 
         elif mode == "combo":
             params["step_sec"] = float(self.sp_combo_step.value())

@@ -157,56 +157,132 @@ class SparringTrainingEngine:
             total_duration_sec = curr_time + 4.0
 
         # ── Mode 2: 스텝 & 받아차기/카운터 반응 훈련 ──
+        # ── Mode 2: 스텝 & 받아차기/카운터 반응 훈련 ──
         elif mode == "reaction":
             total_training_sec = params.get("duration_sec", 120.0)  # 예: 2분 훈련
-            min_interval = params.get("min_interval", 2.5)          # 최소 간격 (초)
-            max_interval = params.get("max_interval", 5.5)          # 최대 간격 (초)
-            reaction_cues = params.get("cues", ["받아차기!", "1연타!", "카운터!"])  # 관장님 커스텀 구령 목록
-            signal_sound = params.get("signal_sound", "whistle")   # whistle or drum or beep
+            min_interval = float(params.get("min_interval", 3.0))   # 최소 랜덤 긴장 대기 시간 (초)
+            max_interval = float(params.get("max_interval", 8.0))   # 최대 랜덤 긴장 대기 시간 (초)
+            if min_interval > max_interval:
+                min_interval, max_interval = max_interval, min_interval
 
-            sig_file = os.path.join("effects", f"{signal_sound}.wav")
+            reaction_cues = params.get("cues", ["1연타!", "2연타!", "받아차기!", "카운터!"])  # 관장님 기술 목록
+            trigger_sound = params.get("signal_sound", "whistle")   # whistle / beep / drum / voice_start / voice_go / voice_bang / random_mix
 
             # 시작 안내
             events.append({
                 "time": curr_time,
                 "type": "voice",
-                "text": "[반응 훈련 시작] 스텝 뛰며 신호에 즉시 반응합니다!",
+                "text": "[반응 훈련 시작] 스텝을 뛰며 기술 지시에 집중합니다!",
                 "duration": 2.8,
                 "track": 2,
                 "vol": 2.0
             })
-            curr_time += 3.5
+            duck_segments.append((int(curr_time * 1000), int((curr_time + 3.0) * 1000)))
+            curr_time += 3.8
 
             limit_time = curr_time + total_training_sec
             cue_count = 1
-            while curr_time < limit_time - 3.0:
-                rand_gap = random.uniform(min_interval, max_interval)
+            recovery_time = 2.0  # 타격 후 스텝 복귀 시간 (2.0초)
+
+            while curr_time < limit_time - 4.0:
+                chosen_cue = random.choice(reaction_cues) if reaction_cues else "1연타!"
+                
+                # 1. 기술 지시/이름 먼저 송출 (예: "1연타!" 또는 "받아차기!")
+                cue_dur = 1.3
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[{cue_count}회] {chosen_cue}",
+                    "duration": cue_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + cue_dur) * 1000)))
+                curr_time += cue_dur
+
+                # 2. 진짜 랜덤 긴장 대기 시간 (3초~10초 등 완전 무작위)
+                rand_gap = round(random.uniform(min_interval, max_interval), 2)
                 curr_time += rand_gap
                 if curr_time >= limit_time:
                     break
 
-                chosen_cue = random.choice(reaction_cues) if reaction_cues else "공격!"
-                
-                # 강력한 신호음 (호각 or 대북)
-                events.append({
-                    "time": curr_time,
-                    "type": "signal",
-                    "text": f"[{cue_count}회] {signal_sound.upper()}!",
-                    "sound_file": sig_file,
-                    "duration": 0.4,
-                    "track": 1,
-                    "vol": 3.0
-                })
-                # 음성 멘트 (옵션으로 동시에 송출)
-                events.append({
-                    "time": curr_time + 0.15,
-                    "type": "voice",
-                    "text": f"[{chosen_cue}]",
-                    "duration": 1.2,
-                    "track": 2,
-                    "vol": 2.0
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + 1.5) * 1000)))
+                # 3. 타격/발차기 트리거 신호 발동 (신호음 or 음성 구령)
+                current_trigger = trigger_sound
+                if current_trigger == "random_mix":
+                    current_trigger = random.choice(["whistle", "beep", "drum", "voice_start", "voice_go"])
+
+                if current_trigger == "whistle":
+                    events.append({
+                        "time": curr_time,
+                        "type": "signal",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 경기용 휘슬!",
+                        "sound_file": os.path.join("effects", "whistle.wav"),
+                        "duration": 0.35,
+                        "track": 1,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.6) * 1000)))
+                    curr_time += 0.4
+                elif current_trigger == "beep":
+                    events.append({
+                        "time": curr_time,
+                        "type": "signal",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 전자 비프음 (삑~익)!",
+                        "sound_file": os.path.join("effects", "beep.wav"),
+                        "duration": 0.25,
+                        "track": 1,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
+                    curr_time += 0.3
+                elif current_trigger == "drum":
+                    events.append({
+                        "time": curr_time,
+                        "type": "signal",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 대북 타격음 (쿵)!",
+                        "sound_file": os.path.join("effects", "drum.wav"),
+                        "duration": 0.45,
+                        "track": 1,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.7) * 1000)))
+                    curr_time += 0.5
+                elif current_trigger == "voice_start":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 시작!",
+                        "duration": 0.8,
+                        "track": 2,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.9) * 1000)))
+                    curr_time += 0.9
+                elif current_trigger == "voice_go":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] GO!",
+                        "duration": 0.7,
+                        "track": 2,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+                    curr_time += 0.8
+                elif current_trigger == "voice_bang":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 탕!",
+                        "duration": 0.6,
+                        "track": 2,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.7) * 1000)))
+                    curr_time += 0.7
+
+                # 4. 타격 후 착지 및 스텝 복귀 시간
+                curr_time += recovery_time
                 cue_count += 1
 
             # 훈련 종료
