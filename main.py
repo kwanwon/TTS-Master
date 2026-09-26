@@ -161,9 +161,10 @@ def main():
     window.raise_()
     window.activateWindow()
     
-    # 3. 비동기 자동 업데이트 확인 (네이버 자동화 방식 적용)
+    # 3. 비동기 자동 업데이트 확인 및 새 버전 첫 실행 팝업
     try:
         window.updater = AutoUpdater(parent_widget=window)
+        window.updater.check_first_run_after_update()
         window.updater.check_for_updates_async(show_no_update_dialog=False)
     except Exception as e:
         print(f"[Updater] Update check skipped: {e}")

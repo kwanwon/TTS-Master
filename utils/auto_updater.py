@@ -132,16 +132,68 @@ class AutoUpdater(QObject):
         self.download_thread = None
         self.progress_dlg = None
         
-    def _load_version(self) -> str:
+    def _load_version_info(self) -> dict:
+        candidates = []
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            candidates.append(os.path.join(sys._MEIPASS, "version.json"))
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        vfile = os.path.join(base_dir, "version.json")
-        if os.path.exists(vfile):
+        candidates.append(os.path.join(base_dir, "version.json"))
+        if getattr(sys, 'frozen', False):
+            exe_dir = os.path.dirname(sys.executable)
+            candidates.append(os.path.join(exe_dir, "version.json"))
+            candidates.append(os.path.join(os.path.dirname(exe_dir), "Resources", "version.json"))
+
+        for vfile in candidates:
+            if os.path.exists(vfile):
+                try:
+                    with open(vfile, "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    pass
+        return {"version": "1.0.0", "description": "기본 버전", "release_date": ""}
+
+    def _load_version(self) -> str:
+        return self._load_version_info().get("version", "1.0.0")
+
+    def check_first_run_after_update(self):
+        """앱 실행 시 새 버전으로 업데이트된 후 첫 실행인지 감지하여 안내 팝업을 표시"""
+        try:
+            from main import APP_DATA_DIR
+            rec_file = os.path.join(APP_DATA_DIR, "last_recorded_version.txt")
+        except Exception:
+            rec_file = os.path.expanduser("~/.aimaster_tts/last_recorded_version.txt")
+
+        last_v = ""
+        if os.path.exists(rec_file):
             try:
-                with open(vfile, "r", encoding="utf-8") as f:
-                    return json.load(f).get("version", "1.0.0")
+                with open(rec_file, "r", encoding="utf-8") as f:
+                    last_v = f.read().strip()
             except Exception:
                 pass
-        return "1.0.0"
+
+        curr_info = self._load_version_info()
+        curr_v = curr_info.get("version", self.current_version)
+        desc = curr_info.get("description", "최신 기능 개선 및 안정성 향상")
+
+        if last_v != curr_v:
+            try:
+                os.makedirs(os.path.dirname(rec_file), exist_ok=True)
+                with open(rec_file, "w", encoding="utf-8") as f:
+                    f.write(curr_v)
+            except Exception:
+                pass
+
+            if self.parent:
+                QMessageBox.information(
+                    self.parent,
+                    f"🎉 AI 마스터 TTS v{curr_v} 업데이트 안내",
+                    f"🚀 최신 버전(v{curr_v})으로 성공적으로 업데이트되었습니다!\n\n"
+                    f"📅 릴리즈 일자: {curr_info.get('release_date', '')}\n\n"
+                    f"[이번 버전 주요 업데이트 내역]\n"
+                    f"• {desc}\n\n"
+                    f"새로워진 기능으로 더 쾌적하게 도장 훈련 음원을 제작해 보세요!"
+                )
+
         
     def check_for_updates_async(self, show_no_update_dialog: bool = False):
         """Non-blocking check on program startup or manual button click."""
@@ -382,7 +434,15 @@ exit
 
     def _on_check_finished(self, has_update: bool, msg: str):
         if not has_update and self.parent:
+            curr_info = self._load_version_info()
+            desc = curr_info.get("description", "")
+            desc_text = f"\n\n[현재 버전(v{self.current_version}) 주요 업데이트 내역]\n• {desc}" if desc else ""
             if "최신 버전" in msg or "등록된 릴리즈" in msg:
-                QMessageBox.information(self.parent, "최신 버전", f"현재 최신 버전(v{self.current_version})을 사용 중입니다.\n새로운 업데이트가 없습니다.")
+                QMessageBox.information(
+                    self.parent,
+                    "최신 버전 확인",
+                    f"✅ 현재 최신 버전(v{self.current_version})을 사용 중입니다.\n"
+                    f"추가로 업데이트할 새로운 버전이 없습니다.{desc_text}"
+                )
             else:
-                QMessageBox.warning(self.parent, "업데이트 확인", f"업데이트 확인 결과:\n{msg}")
+                QMessageBox.warning(self.parent, "업데이트 확인", f"업데이트 확인 결과:\n{msg}{desc_text}")

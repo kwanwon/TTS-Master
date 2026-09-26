@@ -239,6 +239,13 @@ class SparringDialog(QDialog):
         hb_layout.addWidget(desc_lbl)
         main_layout.addWidget(header_box)
 
+        # 스크롤 영역 생성 (작은 화면에서도 하단 버튼이 잘리지 않고 전체 스크롤 지원)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+
         # 4가지 훈련 모드 탭
         self.tabs = QTabWidget()
 
@@ -438,7 +445,7 @@ class SparringDialog(QDialog):
         l_rnd.addStretch()
         self.tabs.addTab(tab_round, "🥊 정규 겨루기 라운드")
 
-        main_layout.addWidget(self.tabs)
+        content_layout.addWidget(self.tabs)
 
         # ── 공통 설정 (BGM, 화자, 오토덕킹) ──
         common_group = QGroupBox("🎵 배경음악(BGM) 및 효과음/음성 옵션")
@@ -479,7 +486,7 @@ class SparringDialog(QDialog):
         h_opts.addWidget(self.voice_combo)
         l_common.addLayout(h_opts)
 
-        main_layout.addWidget(common_group)
+        content_layout.addWidget(common_group)
 
         # ── 개별 음량 및 오토덕킹 밸런스 커스텀 ──
         vol_group = QGroupBox("🎚️ 개별 음량(BGM / 비프음 / TTS 구령) 및 오토덕킹 커스텀")
@@ -547,7 +554,10 @@ class SparringDialog(QDialog):
         h_v4.addWidget(btn_preset_voice)
         vol_layout.addLayout(h_v4)
 
-        main_layout.addWidget(vol_group)
+        content_layout.addWidget(vol_group)
+
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll, stretch=1)
 
         # 상태 안내 및 진행바
         self.status_lbl = QLabel("원하는 훈련 탭을 선택하고 세부 값을 조정한 뒤 [생성하기]를 누르세요.")
