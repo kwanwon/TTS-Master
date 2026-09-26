@@ -1,6 +1,6 @@
 {
-  "version": "1.0.8",
-  "release_date": "2026-09-25",
+  "version": "1.0.9",
+  "release_date": "2026-09-26",
   "app_name": "AIMaster_TTS",
-  "description": "콩글리시 100% 원천 차단: 영어 구간 100% 미국 본토 원어민 보이스(Guy/Jenny) 강제 스위칭 및 성별 맞춤 2개 국어 완벽 연동"
+  "description": "앱 시작 속도 초고속 최적화 (엔진 지연 로딩 도입, UI 차단 랙 완전 제거, 0.5초 쾌속 실행)"
 }

@@ -6,7 +6,6 @@ import tempfile
 import traceback
 import re
 from pydub import AudioSegment
-from core.qwen3_engine import Qwen3Engine
 
 class CoquiEngine:
     def __init__(self):
@@ -365,30 +364,73 @@ class EdgeTTSEngine:
 
 class TTSEngine:
     """
-    팩토리/프록시 클래스: UI에서 호출할 때 단일 인터페이스 유지
+    팩토리/프록시 클래스: UI에서 호출할 때 단일 인터페이스 유지 (지연 로딩 적용)
+    시작 시에는 초경량 Edge-TTS만 즉시 로드하여 0.5초 이내에 쾌속 실행(Fast Launch)을 보장합니다.
     """
     def __init__(self):
         self.current_engine_name = "Edge-TTS (초고음질 온라인)"
-        self.engines = {
-            "Edge-TTS (초고음질 온라인)": EdgeTTSEngine(),
-            "Qwen3-TTS (0.6B)": Qwen3Engine("0.6B"),
-            "Qwen3-TTS (1.7B)": Qwen3Engine("1.7B"),
-            "Coqui XTTS v2": CoquiEngine(),
+        self._current_voice = ""
+        self._saved_use_api = False
+        self._saved_api_key = None
+        self._saved_api_voice_selection = ""
+        self._saved_custom_api_voice_id = None
+
+        self._engine_factories = {
+            "Edge-TTS (초고음질 온라인)": lambda: EdgeTTSEngine(),
+            "Qwen3-TTS (0.6B)": lambda: self._create_qwen3("0.6B"),
+            "Qwen3-TTS (1.7B)": lambda: self._create_qwen3("1.7B"),
+            "Coqui XTTS v2": lambda: self._create_coqui(),
         }
-        self.active_engine = self.engines[self.current_engine_name]
+        self._engine_instances = {}
+        # 시작 시에는 기본 Edge-TTS만 즉시 인스턴스화
+        self._engine_instances[self.current_engine_name] = EdgeTTSEngine()
+        self.active_engine = self._engine_instances[self.current_engine_name]
+
         self._lock = threading.Lock()   # 동시 호출 방지 잠금장치
         self.is_busy = False             # 현재 생성 중인지 상태 플래그
         self.last_error = ""
 
+    def _create_qwen3(self, model_size):
+        from core.qwen3_engine import Qwen3Engine
+        engine = Qwen3Engine(model_size)
+        if self._current_voice:
+            engine.set_voice(self._current_voice)
+        if hasattr(engine, 'use_api'):
+            engine.use_api = self._saved_use_api
+        if hasattr(engine, 'api_key'):
+            engine.api_key = self._saved_api_key
+        if hasattr(engine, 'api_voice_selection'):
+            engine.api_voice_selection = self._saved_api_voice_selection
+        if hasattr(engine, 'custom_api_voice_id'):
+            engine.custom_api_voice_id = self._saved_custom_api_voice_id
+        return engine
+
+    def _create_coqui(self):
+        engine = CoquiEngine()
+        if self._current_voice:
+            engine.set_voice(self._current_voice)
+        return engine
+
+    @property
+    def engines(self):
+        """호환성을 위한 프로퍼티"""
+        return self._engine_instances
+
     def switch_engine(self, engine_name):
-        if engine_name in self.engines:
+        if engine_name in self._engine_factories:
             self.current_engine_name = engine_name
-            self.active_engine = self.engines[engine_name]
+            if engine_name not in self._engine_instances:
+                print(f"[TTSEngine] 지연 로딩 초기화: {engine_name}")
+                self._engine_instances[engine_name] = self._engine_factories[engine_name]()
+            self.active_engine = self._engine_instances[engine_name]
+            if self._current_voice:
+                self.active_engine.set_voice(self._current_voice)
             return True
         return False
         
     def set_voice(self, voice_name):
-        for engine in self.engines.values():
+        self._current_voice = voice_name
+        for engine in self._engine_instances.values():
             engine.set_voice(voice_name)
 
     @property
@@ -397,7 +439,8 @@ class TTSEngine:
 
     @use_api.setter
     def use_api(self, val):
-        for engine in self.engines.values():
+        self._saved_use_api = val
+        for engine in self._engine_instances.values():
             if hasattr(engine, 'use_api'):
                 engine.use_api = val
 
@@ -407,7 +450,8 @@ class TTSEngine:
 
     @api_key.setter
     def api_key(self, val):
-        for engine in self.engines.values():
+        self._saved_api_key = val
+        for engine in self._engine_instances.values():
             if hasattr(engine, 'api_key'):
                 engine.api_key = val
 
@@ -417,7 +461,8 @@ class TTSEngine:
 
     @api_voice_selection.setter
     def api_voice_selection(self, val):
-        for engine in self.engines.values():
+        self._saved_api_voice_selection = val
+        for engine in self._engine_instances.values():
             if hasattr(engine, 'api_voice_selection'):
                 engine.api_voice_selection = val
 
@@ -427,7 +472,8 @@ class TTSEngine:
 
     @custom_api_voice_id.setter
     def custom_api_voice_id(self, val):
-        for engine in self.engines.values():
+        self._saved_custom_api_voice_id = val
+        for engine in self._engine_instances.values():
             if hasattr(engine, 'custom_api_voice_id'):
                 engine.custom_api_voice_id = val
             

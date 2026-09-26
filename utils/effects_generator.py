@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Default Sound Effects Generator
 Generates essential audio effects (beep, whistle, stage_bell, countdown, drum)
@@ -6,13 +7,33 @@ using NumPy and SoundFile if they don't already exist.
 
 import os
 import io
-import numpy as np
-import soundfile as sf
 from pydub import AudioSegment
+
+np = None
+sf = None
+
+def _ensure_libs():
+    global np, sf
+    if np is None:
+        import numpy as _np
+        np = _np
+    if sf is None:
+        import soundfile as _sf
+        sf = _sf
+
+# Required default effect file names
+DEFAULT_EFFECT_FILES = [
+    "beep.wav",
+    "whistle.wav",
+    "stage_bell.wav",
+    "countdown.wav",
+    "drum.wav",
+]
 
 
 def generate_beep(sr=44100, duration=0.25, freq=880.0) -> AudioSegment:
     """880Hz electronic beep sound (0.25s) with attack & decay."""
+    _ensure_libs()
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
     # Fundamental + mild overtone for crisp electronic feel
     signal = 0.75 * np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(2 * np.pi * freq * 2 * t)
@@ -32,6 +53,7 @@ def generate_beep(sr=44100, duration=0.25, freq=880.0) -> AudioSegment:
 
 def generate_whistle(sr=44100, duration=0.35) -> AudioSegment:
     """Referee sports whistle sound (0.35s) with dual frequencies & trill modulation."""
+    _ensure_libs()
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
     # Whistle trill (amplitude modulation) around 28Hz
     mod = 0.75 + 0.25 * np.sin(2 * np.pi * 28 * t)
@@ -59,6 +81,7 @@ def generate_whistle(sr=44100, duration=0.35) -> AudioSegment:
 
 def generate_stage_bell(sr=44100, duration=1.2) -> AudioSegment:
     """Stage level-up 2-tone chime bell (Ding-Dong / E5 -> G#5)."""
+    _ensure_libs()
     t_half = duration / 2.0
     t1 = np.linspace(0, t_half, int(sr * t_half), endpoint=False)
     t2 = np.linspace(0, t_half, int(sr * t_half), endpoint=False)
@@ -85,6 +108,7 @@ def generate_countdown(sr=44100) -> AudioSegment:
     3-2-1 electronic countdown followed by a high start buzzer/gun bang.
     Total duration: 3.5 seconds (3 low beeps at 0.0s, 1.0s, 2.0s and high go beep at 3.0s).
     """
+    _ensure_libs()
     total_sec = 3.6
     total_samples = int(sr * total_sec)
     full_signal = np.zeros(total_samples, dtype=np.float32)
@@ -117,6 +141,7 @@ def generate_countdown(sr=44100) -> AudioSegment:
 
 def generate_drum(sr=44100, duration=0.45) -> AudioSegment:
     """Powerful martial arts impact drum/taiko hit sound."""
+    _ensure_libs()
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
     # Pitch drop from 180Hz down to 55Hz
     freq_sweep = np.linspace(180, 55, len(t))
@@ -139,6 +164,17 @@ def generate_drum(sr=44100, duration=0.45) -> AudioSegment:
 def ensure_default_effects(effects_dir: str = "effects"):
     """Creates default wav assets in effects_dir if missing."""
     os.makedirs(effects_dir, exist_ok=True)
+    
+    # Fast path: check if all effect files already exist and are non-empty
+    all_exist = True
+    for filename in DEFAULT_EFFECT_FILES:
+        fp = os.path.join(effects_dir, filename)
+        if not os.path.exists(fp) or os.path.getsize(fp) == 0:
+            all_exist = False
+            break
+            
+    if all_exist:
+        return
     
     effect_specs = {
         "beep.wav": generate_beep,

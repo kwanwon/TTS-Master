@@ -108,6 +108,13 @@ class MainWindow(QMainWindow):
         saved_voice = state.get("voice_combo", None)
         
         if saved_engine:
+            # 시작 시 무거운 Qwen3 모델이 아직 다운로드되지 않은 상태라면 가벼운 Edge-TTS로 안전하게 기본 설정
+            if "Qwen3" in saved_engine:
+                repo_id = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice" if "0.6B" in saved_engine else "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+                helper = ModelInstallerThread(repo_id=repo_id)
+                if not helper._check_local_cache():
+                    saved_engine = "Edge-TTS (초고음질 온라인)"
+                    saved_voice = None
             self.engine_combo.setCurrentText(saved_engine)
         if state.get("speed_slider"):
             self.speed_slider.setValue(state["speed_slider"])
@@ -683,15 +690,27 @@ class MainWindow(QMainWindow):
             self._set_ui_locked(False)
             return
 
-        # 모델 설치가 필요한 Qwen 엔진의 경우 (의사코드)
+        # 모델 설치가 필요한 Qwen 엔진의 경우
         if "Qwen3" in engine_name:
             repo_id = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice" if "0.6B" in engine_name else "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+            
+            # 1. 이미 로컬 캐시에 설치되어 있는지 즉시 확인 (0.001초 Fast Path)
+            installer_helper = ModelInstallerThread(repo_id=repo_id)
+            cached_path = installer_helper._check_local_cache()
+            if cached_path:
+                self.dl_status.setText(f"{engine_name} 모델이 준비되었습니다. (합성 시 자동 실행)")
+                self.dl_status.setStyleSheet("color: #27ae60; font-weight: bold;")
+                self.dl_progress.hide()
+                self._set_ui_locked(False)
+                return
+
+            # 2. 로컬 캐시가 없는 경우에만 백그라운드 다운로드 진행
             self.dl_status.setText(f"{engine_name} 모델 가중치를 확인 및 다운로드 중입니다...")
             self.dl_status.setStyleSheet("color: blue;")
             self.dl_progress.show()
             self.dl_progress.setValue(0)
             
-            # 메인스레드 차단 방지 QThread
+            # 다운로드 중 UI 잠금
             self._set_ui_locked(True)
             self.installer_thread = ModelInstallerThread(repo_id=repo_id)
             self.installer_thread.progress.connect(self.dl_progress.setValue)
@@ -706,11 +725,11 @@ class MainWindow(QMainWindow):
 
     def on_model_download_finished(self, success, msg):
         self._set_ui_locked(False)
+        self.dl_progress.hide()
         if success:
-            self.dl_status.setText(f"준비 완료! ({msg})")
-            self.dl_status.setStyleSheet("color: green;")
-            # 모델 로드 강제 호출
-            self.tts_engine.load_model()
+            self.dl_status.setText(f"준비 완료! (합성 시 자동 로드)")
+            self.dl_status.setStyleSheet("color: #27ae60; font-weight: bold;")
+            # 메인 UI 스레드 블로킹 방지: load_model()은 GenerateAudioThread(백그라운드)에서 안전하게 자동 호출됨
         else:
             self.dl_status.setText(f"설치 실패: {msg}")
             self.dl_status.setStyleSheet("color: red;")
