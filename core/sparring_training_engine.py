@@ -160,12 +160,13 @@ class SparringTrainingEngine:
         # ── Mode 2: 스텝 & 받아차기/카운터 반응 훈련 ──
         elif mode == "reaction":
             total_training_sec = params.get("duration_sec", 120.0)  # 예: 2분 훈련
-            min_interval = float(params.get("min_interval", 3.0))   # 최소 랜덤 긴장 대기 시간 (초)
-            max_interval = float(params.get("max_interval", 8.0))   # 최대 랜덤 긴장 대기 시간 (초)
+            min_interval = float(params.get("min_interval", 1.0))   # 최소 랜덤 긴장 대기 시간 (초)
+            max_interval = float(params.get("max_interval", 3.0))   # 최대 랜덤 긴장 대기 시간 (초)
             if min_interval > max_interval:
                 min_interval, max_interval = max_interval, min_interval
 
-            reaction_cues = params.get("cues", ["1연타!", "2연타!", "받아차기!", "카운터!"])  # 관장님 기술 목록
+            recovery_time = float(params.get("recovery_sec", 0.8))  # 타격 후 스텝 복귀/준비 대기 시간 (기본 0.8초)
+            reaction_cues = params.get("cues", ["1연타!", "2연타!", "받아차기!", "카운터!"])  # 기술 목록
             trigger_sound = params.get("signal_sound", "whistle")   # whistle / beep / drum / voice_start / voice_go / voice_bang / random_mix
 
             # 시작 안내
@@ -182,13 +183,13 @@ class SparringTrainingEngine:
 
             limit_time = curr_time + total_training_sec
             cue_count = 1
-            recovery_time = 2.0  # 타격 후 스텝 복귀 시간 (2.0초)
 
-            while curr_time < limit_time - 4.0:
+            while curr_time < limit_time - 3.5:
                 chosen_cue = random.choice(reaction_cues) if reaction_cues else "1연타!"
                 
-                # 1. 기술 지시/이름 먼저 송출 (예: "1연타!" 또는 "받아차기!")
-                cue_dur = 1.3
+                # 1. 기술 지시/이름 먼저 송출 (글자 수 기반 간결하고 자연스러운 발성 시간 계산)
+                char_count = len(chosen_cue.replace(" ", "").replace("!", ""))
+                cue_dur = max(0.7, round(char_count * 0.2, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
@@ -200,7 +201,7 @@ class SparringTrainingEngine:
                 duck_segments.append((int(curr_time * 1000), int((curr_time + cue_dur) * 1000)))
                 curr_time += cue_dur
 
-                # 2. 진짜 랜덤 긴장 대기 시간 (3초~10초 등 완전 무작위)
+                # 2. 진짜 랜덤 긴장 대기 시간 (완전 무작위 적용)
                 rand_gap = round(random.uniform(min_interval, max_interval), 2)
                 curr_time += rand_gap
                 if curr_time >= limit_time:

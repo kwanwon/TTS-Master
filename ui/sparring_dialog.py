@@ -305,32 +305,81 @@ class SparringDialog(QDialog):
         l_reac = QVBoxLayout(tab_reaction)
         
         # 실전 훈련 시퀀스 안내 배너
-        reac_info = QLabel("🎯 동작 순서: [기술 지시 (예: 1연타!)] ➔ [랜덤 초(3~8초) 긴장 대기] ➔ [신호음/구령 (삑! / 시작! / GO!)] 발차기 타격!")
+        reac_info = QLabel("🎯 동작 순서: [기술 지시 (예: 1연타!)] ➔ [랜덤 초 긴장 대기] ➔ [신호음/구령 (삑! / 시작! / GO!)] 발차기 타격! ➔ [복귀 대기]")
         reac_info.setStyleSheet("background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #1e40af; font-size: 12px;")
         l_reac.addWidget(reac_info)
 
-        g_reac_t = QGroupBox("1. 훈련 시간 및 랜덤 긴장 대기 간격")
+        g_reac_t = QGroupBox("1. 훈련 시간, 복귀 템포 및 랜덤 긴장 대기")
         l_rct = QVBoxLayout(g_reac_t)
+        
+        # 1행: 총 훈련 시간 & 타격 후 다음 구령까지 복귀 대기
         h_rct1 = QHBoxLayout()
         h_rct1.addWidget(QLabel("총 훈련 시간:"))
         self.sp_reac_dur = QSpinBox()
         self.sp_reac_dur.setRange(30, 600)
         self.sp_reac_dur.setValue(120)
-        self.sp_reac_dur.setSuffix(" 초 (2분)")
+        self.sp_reac_dur.setSuffix(" 초")
         h_rct1.addWidget(self.sp_reac_dur)
 
-        h_rct1.addWidget(QLabel("랜덤 긴장 대기:"))
+        h_rct1.addWidget(QLabel("타격 후 복귀 대기:"))
+        self.sp_reac_recovery = QDoubleSpinBox()
+        self.sp_reac_recovery.setRange(0.2, 5.0)
+        self.sp_reac_recovery.setSingleStep(0.1)
+        self.sp_reac_recovery.setValue(0.8)
+        self.sp_reac_recovery.setSuffix(" 초")
+        self.sp_reac_recovery.setToolTip("비프음으로 발차기 타격 후 착지하여 다음 구령이 나올 때까지의 준비 시간입니다. (스피드 연타는 0.4~0.6초 추천)")
+        h_rct1.addWidget(self.sp_reac_recovery)
+        l_rct.addLayout(h_rct1)
+
+        # 2행: 랜덤 긴장 대기 (지시어 방송 후 비프음이 울릴 때까지)
+        h_rct2 = QHBoxLayout()
+        h_rct2.addWidget(QLabel("랜덤 긴장 대기:"))
         self.sp_reac_min = QDoubleSpinBox()
-        self.sp_reac_min.setRange(1.0, 15.0)
-        self.sp_reac_min.setValue(3.0)
+        self.sp_reac_min.setRange(0.3, 15.0)
+        self.sp_reac_min.setSingleStep(0.2)
+        self.sp_reac_min.setValue(1.0)
         self.sp_reac_min.setSuffix("초 ~ ")
         self.sp_reac_max = QDoubleSpinBox()
-        self.sp_reac_max.setRange(2.0, 20.0)
-        self.sp_reac_max.setValue(8.0)
+        self.sp_reac_max.setRange(0.5, 20.0)
+        self.sp_reac_max.setSingleStep(0.2)
+        self.sp_reac_max.setValue(2.5)
         self.sp_reac_max.setSuffix("초")
-        h_rct1.addWidget(self.sp_reac_min)
-        h_rct1.addWidget(self.sp_reac_max)
-        l_rct.addLayout(h_rct1)
+        h_rct2.addWidget(self.sp_reac_min)
+        h_rct2.addWidget(self.sp_reac_max)
+        l_rct.addLayout(h_rct2)
+
+        # 3행: 훈련 템포 빠른 프리셋 버튼 3종
+        h_presets = QHBoxLayout()
+        h_presets.addWidget(QLabel("⚡ 템포 프리셋:"))
+        
+        btn_preset_speed = QPushButton("🚀 초고속 스피드 연타 (많이 차기)")
+        btn_preset_speed.setStyleSheet("background-color: #fee2e2; color: #991b1b; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
+        btn_preset_speed.clicked.connect(lambda: self._apply_reac_preset(rec=0.5, min_w=0.6, max_w=1.6))
+        
+        btn_preset_standard = QPushButton("🥋 실전 겨루기 (표준)")
+        btn_preset_standard.setStyleSheet("background-color: #e0f2fe; color: #0369a1; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
+        btn_preset_standard.clicked.connect(lambda: self._apply_reac_preset(rec=0.8, min_w=1.0, max_w=2.5))
+
+        btn_preset_tactical = QPushButton("🛡️ 전술 카운터 (여유)")
+        btn_preset_tactical.setStyleSheet("background-color: #f1f5f9; color: #334155; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
+        btn_preset_tactical.clicked.connect(lambda: self._apply_reac_preset(rec=1.5, min_w=2.5, max_w=5.0))
+
+        h_presets.addWidget(btn_preset_speed)
+        h_presets.addWidget(btn_preset_standard)
+        h_presets.addWidget(btn_preset_tactical)
+        l_rct.addLayout(h_presets)
+
+        # 4행: 실시간 예상 타격 횟수 배너
+        self.lbl_reac_est = QLabel()
+        self.lbl_reac_est.setStyleSheet("color: #047857; font-weight: bold; font-size: 12px; background: #ecfdf5; padding: 6px 10px; border-radius: 4px; border: 1px solid #a7f3d0;")
+        l_rct.addWidget(self.lbl_reac_est)
+
+        self.sp_reac_dur.valueChanged.connect(self._update_reaction_estimate)
+        self.sp_reac_recovery.valueChanged.connect(self._update_reaction_estimate)
+        self.sp_reac_min.valueChanged.connect(self._update_reaction_estimate)
+        self.sp_reac_max.valueChanged.connect(self._update_reaction_estimate)
+        self._update_reaction_estimate()
+
         l_reac.addWidget(g_reac_t)
 
         # 2. 발차기 출발/타격 신호음 종류 선택
@@ -632,6 +681,43 @@ class SparringDialog(QDialog):
         self.slider_voice_vol.setValue(voice)
         self.combo_duck_level.setCurrentIndex(duck_idx)
 
+    def _apply_reac_preset(self, rec: float, min_w: float, max_w: float):
+        self.sp_reac_recovery.setValue(rec)
+        self.sp_reac_min.setValue(min_w)
+        self.sp_reac_max.setValue(max_w)
+        self._update_reaction_estimate()
+
+    def _update_reaction_estimate(self):
+        try:
+            total_sec = float(self.sp_reac_dur.value())
+            rec_sec = float(self.sp_reac_recovery.value())
+            min_sec = float(self.sp_reac_min.value())
+            max_sec = float(self.sp_reac_max.value())
+            if min_sec > max_sec:
+                min_sec = max_sec
+
+            # 시작 멘트(약 3.8초) 및 마무리 벨(약 3초) 제외한 실훈련 시간
+            usable_sec = max(10.0, total_sec - 6.8)
+            cue_sec = 0.9      # 짧은 구령 발성 시간
+            trigger_sec = 0.3  # 타격 신호음(비프/휘슬) 시간
+
+            avg_wait = (min_sec + max_sec) / 2.0
+            cycle_avg = cue_sec + avg_wait + trigger_sec + rec_sec
+            cycle_fast = cue_sec + min_sec + trigger_sec + rec_sec
+            cycle_slow = cue_sec + max_sec + trigger_sec + rec_sec
+
+            est_avg = max(1, int(usable_sec / cycle_avg))
+            est_min = max(1, int(usable_sec / cycle_slow))
+            est_max = max(1, int(usable_sec / cycle_fast))
+
+            if hasattr(self, 'lbl_reac_est') and self.lbl_reac_est:
+                self.lbl_reac_est.setText(
+                    f"⚡ 예상 타격 횟수: 약 {est_avg}회 ({est_min}~{est_max}회)  |  "
+                    f"1회당 평균 약 {cycle_avg:.1f}초  |  비프음 후 다음 구령까지 {rec_sec:.1f}초 대기"
+                )
+        except Exception:
+            pass
+
     def start_generation(self):
         current_tab_idx = self.tabs.currentIndex()
         mode_map = {0: "relay", 1: "reaction", 2: "combo", 3: "rounds"}
@@ -664,6 +750,7 @@ class SparringDialog(QDialog):
             params["duration_sec"] = float(self.sp_reac_dur.value())
             params["min_interval"] = float(self.sp_reac_min.value())
             params["max_interval"] = float(self.sp_reac_max.value())
+            params["recovery_sec"] = float(self.sp_reac_recovery.value())
             raw_cues = self.txt_reac_cues.text().split(",")
             params["cues"] = [c.strip() for c in raw_cues if c.strip()]
             params["signal_sound"] = self.combo_reac_signal.currentData()
