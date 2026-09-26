@@ -55,6 +55,7 @@ class ShuttleRunEngine:
         start_delay_sec: float = 5.0,
         stage_cue_durations: Optional[Dict[int, float]] = None,
         countdown_duration: float = 0.0,
+        countdown_delay_sec: float = 1.0,
         signal_duration_sec: float = 0.25,
         cue_post_gap_sec: float = 0.35,
         intro_duration_sec: float = 0.0
@@ -73,34 +74,29 @@ class ShuttleRunEngine:
 
         schedule = []
 
-        # 1단계 시작 타이밍 계산 (안내 방송, 멘트 및 카운트다운 길이 기반)
+        # 1단계 시작 타이밍 계산:
+        # [준비 안내] ➔ [카운트다운: 3, 2, 1] ➔ [1.0초 긴장 딜레이] ➔ [1단계 구령] ➔ [첫 출발 신호음]
         intro_time = 1.0 if intro_duration_sec > 0 else None
-        intro_offset = (intro_duration_sec + 0.8) if intro_duration_sec > 0 else 0.0
+        t_prep_end = (1.0 + intro_duration_sec) if intro_duration_sec > 0 else 0.5
 
-        if stage_cue_durations is not None:
-            cue_dur_1 = stage_cue_durations.get(1, 0.0)
+        if countdown_duration > 0:
+            cd_time = round(t_prep_end + 0.4, 2)
+            t_cd_end = cd_time + countdown_duration
+            cue_time_1 = round(t_cd_end + countdown_delay_sec, 2)
+            cue_dur_1 = stage_cue_durations.get(1, 0.0) if stage_cue_durations else 0.0
             if cue_dur_1 > 0:
-                cue_time_1 = round(1.0 + intro_offset, 2)
-                t_curr = cue_time_1 + cue_dur_1
-                if countdown_duration > 0:
-                    cd_time = round(t_curr + 0.25, 2)
-                    t_curr = cd_time + countdown_duration
-                    stage_1_first_beep = round(t_curr + 0.2, 2)
-                else:
-                    cd_time = None
-                    stage_1_first_beep = round(t_curr + cue_post_gap_sec, 2)
+                stage_1_first_beep = round(cue_time_1 + cue_dur_1 + cue_post_gap_sec, 2)
+            else:
+                stage_1_first_beep = round(cue_time_1 + 0.25, 2)
+        else:
+            cd_time = None
+            cue_dur_1 = stage_cue_durations.get(1, 0.0) if stage_cue_durations else 0.0
+            if cue_dur_1 > 0:
+                cue_time_1 = round(t_prep_end + 0.5, 2)
+                stage_1_first_beep = round(cue_time_1 + cue_dur_1 + cue_post_gap_sec, 2)
             else:
                 cue_time_1 = None
-                if countdown_duration > 0:
-                    cd_time = round(1.0 + intro_offset, 2)
-                    stage_1_first_beep = round(cd_time + countdown_duration + 0.2, 2)
-                else:
-                    cd_time = None
-                    stage_1_first_beep = round(float(start_delay_sec) + intro_offset, 2)
-        else:
-            cue_time_1 = None
-            cd_time = None
-            stage_1_first_beep = round(float(start_delay_sec) + intro_offset, 2)
+                stage_1_first_beep = round(t_prep_end + float(start_delay_sec), 2)
 
         last_beep = 0.0
 

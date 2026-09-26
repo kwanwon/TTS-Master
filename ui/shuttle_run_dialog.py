@@ -120,15 +120,55 @@ class ShuttleRunWorker(QThread):
             import edge_tts
             import io
 
-            # A. 심폐지구력 셔틀런 사전 안내 방송 생성 (방법 및 요령 설명)
+            # 신호음 명칭 식별 (비프음 / 휘슬 / 북)
+            sig_name = "신호음"
+            if signal_type == "whistle":
+                sig_name = "휘슬"
+            elif signal_type == "drum":
+                sig_name = "북"
+            elif signal_type == "beep":
+                sig_name = "비프음"
+
+            # A. 출발 전 준비 안내 방송 생성
+            # 사용자 요청: "이제 시작 하겠습니다. 준비해주세요. 신호음(비프음, 휘슬, 북) 소리에 출발해주세요."
+            prep_instruction = f"이제 시작하겠습니다. 준비해 주세요. {sig_name} 소리에 맞춰 출발해 주세요."
+            if intro_enabled and intro_text:
+                full_prep_text = f"{intro_text} {prep_instruction}"
+            else:
+                full_prep_text = prep_instruction
+
             intro_file = ""
             intro_duration = 0.0
-            if intro_enabled and intro_text:
-                self.progress.emit(10, "사전 셔틀런 안내 방송 음성 생성 중...")
-                intro_path = os.path.join("projects", "temp_tts", f"shuttle_intro_{uuid.uuid4().hex[:6]}.wav")
+            self.progress.emit(10, "사전 안내 및 출발 준비 음성 생성 중...")
+            intro_path = os.path.join("projects", "temp_tts", f"shuttle_prep_{uuid.uuid4().hex[:6]}.wav")
+            try:
+                async def _gen_intro():
+                    comm = edge_tts.Communicate(full_prep_text, voice_id, rate="+15%")
+                    buf = io.BytesIO()
+                    async for chunk in comm.stream():
+                        if chunk['type'] == 'audio':
+                            buf.write(chunk['data'])
+                    buf.seek(0)
+                    raw_seg = AudioSegment.from_file(buf, format="mp3")
+                    trimmed_seg = trim_audio_silence(raw_seg)
+                    trimmed_seg.export(intro_path, format="wav")
+
+                asyncio.run(_gen_intro())
+                if os.path.exists(intro_path):
+                    intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
+                    intro_file = intro_path
+            except Exception as e_intro:
+                print(f"[Shuttle] Prep TTS fail: {e_intro}")
+
+            # B. 카운트다운 생성 (TTS로 '쓰리, 투, 원.' 발성하여 '출발' 단어 혼동 완전 차단)
+            cd_file = ""
+            cd_duration = 0.0
+            if countdown_enabled:
+                self.progress.emit(12, "카운트다운 음성('쓰리, 투, 원') 생성 중...")
+                cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_{uuid.uuid4().hex[:6]}.wav")
                 try:
-                    async def _gen_intro():
-                        comm = edge_tts.Communicate(intro_text, voice_id, rate="+15%")
+                    async def _gen_cd():
+                        comm = edge_tts.Communicate("쓰리, 투, 원.", voice_id, rate="+10%")
                         buf = io.BytesIO()
                         async for chunk in comm.stream():
                             if chunk['type'] == 'audio':
@@ -136,16 +176,19 @@ class ShuttleRunWorker(QThread):
                         buf.seek(0)
                         raw_seg = AudioSegment.from_file(buf, format="mp3")
                         trimmed_seg = trim_audio_silence(raw_seg)
-                        trimmed_seg.export(intro_path, format="wav")
+                        trimmed_seg.export(cd_path, format="wav")
 
-                    asyncio.run(_gen_intro())
-                    if os.path.exists(intro_path):
-                        intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
-                        intro_file = intro_path
-                except Exception as e_intro:
-                    print(f"[Shuttle] Intro TTS fail: {e_intro}")
+                    asyncio.run(_gen_cd())
+                    if os.path.exists(cd_path):
+                        cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
+                        cd_file = cd_path
+                except Exception as e_cd:
+                    print(f"[Shuttle] Countdown TTS fail: {e_cd}")
+                    if countdown_audio:
+                        cd_duration = len(countdown_audio) / 1000.0
+                        cd_file = countdown_path
 
-            # B. 단계별 구령 텍스트 맵 및 속도 배정 (5m용 '1단!', '1!' 등 초간결화 및 고속 발성 지원)
+            # C. 단계별 구령 텍스트 맵 및 속도 배정 (1단계 구령 및 5m용 '1단!', '1!' 등)
             if cue_style == "dan" or (cue_style == "auto" and distance <= 5.0):
                 cue_text_map = {1: "1단!"}
                 for s in range(2, target_stages + 1):
@@ -162,7 +205,7 @@ class ShuttleRunWorker(QThread):
                     cue_text_map[s] = f"{s}단계!"
                 cue_rate = "+25%"
             else:
-                cue_text_map = {1: "1단계 시작합니다."}
+                cue_text_map = {1: "1단계!"}
                 for s in range(2, target_stages + 1):
                     cue_text_map[s] = f"{s}단계 시작!"
                 cue_rate = "+20%"
@@ -198,9 +241,9 @@ class ShuttleRunWorker(QThread):
                         voice_files[st] = v_path
                         voice_texts[st] = text
 
-            # 3. 셔틀런 단계별 타임스탬프 계산 (실제 음성 길이 및 사전 안내 길이를 기반으로 비중복 순차 스케줄 산출)
+            # 3. 셔틀런 단계별 타임스탬프 계산
+            # 순서: [준비 안내] ➔ [카운트다운: 쓰리, 투, 원] ➔ (1초 딜레이) ➔ [1단계 구령] ➔ [첫 출발 신호음]
             self.progress.emit(55, "정밀 생체역학 및 비중복 순차 인터벌 스케줄 계산 중...")
-            cd_duration = len(countdown_audio) / 1000.0 if (countdown_enabled and countdown_audio) else 0.0
             sig_dur = len(signal_audio) / 1000.0
             schedule = ShuttleRunEngine.calculate_stage_schedule(
                 distance=distance,
@@ -211,8 +254,9 @@ class ShuttleRunWorker(QThread):
                 stage_cue_durations=voice_durations if use_voice else None,
                 countdown_duration=cd_duration,
                 signal_duration_sec=sig_dur,
-                cue_post_gap_sec=0.20 if distance <= 5.0 else 0.35,
-                intro_duration_sec=intro_duration
+                cue_post_gap_sec=0.20 if distance <= 5.0 else 0.25,
+                intro_duration_sec=intro_duration,
+                countdown_delay_sec=1.0
             )
 
             # 4. 타임라인 클립 데이터 구성 (순차 배치 및 스마트 오토 덕킹 세그먼트 생성)
@@ -220,10 +264,10 @@ class ShuttleRunWorker(QThread):
             timeline_clips = []
             duck_segments = []
 
-            # A. 사전 안내 방송 클립 (있을 경우)
+            # A. 사전 안내 및 출발 준비 방송 클립
             if intro_file and intro_duration > 0:
                 timeline_clips.append({
-                    "text": "[사전 안내] 심폐지구력 셔틀런 방법 설명",
+                    "text": f"[출발 준비] {sig_name} 소리에 맞춰 출발 안내",
                     "file": intro_file,
                     "time": 1.0,
                     "duration": intro_duration,
@@ -233,8 +277,23 @@ class ShuttleRunWorker(QThread):
                 if duck_mode in ("voice_only", "all") and auto_ducking:
                     duck_segments.append((1000, int((1.0 + intro_duration) * 1000)))
 
-            # B. 1단계 시작 멘트
             s1 = schedule[0]
+
+            # B. 카운트다운 클립 (쓰리, 투, 원)
+            if countdown_enabled and cd_file and s1.get("countdown_time_sec") is not None:
+                cd_time = s1["countdown_time_sec"]
+                timeline_clips.append({
+                    "text": "[카운트다운] 쓰리, 투, 원 (1초 후 1단계)",
+                    "file": cd_file,
+                    "time": cd_time,
+                    "duration": cd_duration,
+                    "track": cd_track,
+                    "vol": voice_vol_db
+                })
+                if duck_mode in ("voice_only", "all") and auto_ducking:
+                    duck_segments.append((int(cd_time * 1000), int((cd_time + cd_duration) * 1000)))
+
+            # C. 1단계 시작 멘트 (1단계 / 1단) ➔ 바로 1단계 첫 비프음으로 연결!
             if use_voice and 1 in voice_files and s1.get("cue_time_sec") is not None:
                 c_time = s1["cue_time_sec"]
                 c_dur = s1["cue_duration_sec"]
@@ -248,20 +307,6 @@ class ShuttleRunWorker(QThread):
                 })
                 if duck_mode in ("voice_only", "all") and auto_ducking:
                     duck_segments.append((int(c_time * 1000), int((c_time + c_dur) * 1000)))
-
-            # C. 카운트다운 클립
-            if countdown_enabled and countdown_audio and s1.get("countdown_time_sec") is not None:
-                cd_time = s1["countdown_time_sec"]
-                timeline_clips.append({
-                    "text": "[출발 카운트다운] 3-2-1 출발!",
-                    "file": countdown_path,
-                    "time": cd_time,
-                    "duration": cd_duration,
-                    "track": cd_track,
-                    "vol": sig_vol_db
-                })
-                if duck_mode in ("voice_only", "all") and auto_ducking:
-                    duck_segments.append((int(cd_time * 1000), int((cd_time + cd_duration) * 1000)))
 
             # D. 단계별 신호음 및 2단계 이상 음성 구령
             for stage_info in schedule:
@@ -646,10 +691,16 @@ class ShuttleRunDialog(QDialog):
         h_intro.addWidget(self.combo_intro_style, stretch=1)
         opt_layout.addLayout(h_intro)
 
-        # 시작 전 카운트다운 효과음
-        self.cb_countdown = QCheckBox("시작 전 '3-2-1 출발!' 카운트다운 효과음 포함")
+        # 시작 전 카운트다운
+        self.cb_countdown = QCheckBox("시작 전 '쓰리, 투, 원' 카운트다운 포함 (1초 딜레이 후 '1단계 - 신호음' 순서로 출발)")
         self.cb_countdown.setChecked(True)
+        self.cb_countdown.setStyleSheet("font-weight: bold; color: #1e3a8a;")
         opt_layout.addWidget(self.cb_countdown)
+
+        # 실전 출발 시퀀스 안내 배너
+        seq_banner = QLabel("🎯 1단계 출발 순서: [준비 안내: 신호음 소리에 출발!] ➔ [쓰리, 투, 원] ➔ (1초 딜레이) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]")
+        seq_banner.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #166534; font-size: 11px;")
+        opt_layout.addWidget(seq_banner)
 
         # 단계 구령 및 성우
         h_voice = QHBoxLayout()
@@ -672,7 +723,7 @@ class ShuttleRunDialog(QDialog):
         self.combo_cue_style.addItem("🥋 초간결 단계 ('1단!', '2단!', '3단!') - 5m 단거리 추천", "dan")
         self.combo_cue_style.addItem("🔢 초미니멀 숫자 ('1!', '2!', '3!') - 0.25초 순간 구령", "num")
         self.combo_cue_style.addItem("⚡ 간결 단계 ('1단계!', '2단계!')", "stage_short")
-        self.combo_cue_style.addItem("📢 표준 단계 ('1단계 시작!', '2단계 시작!')", "stage_std")
+        self.combo_cue_style.addItem("📢 표준 단계 ('1단계!', '2단계 시작!')", "stage_std")
         h_cue_style.addWidget(self.combo_cue_style, stretch=1)
         opt_layout.addLayout(h_cue_style)
 
