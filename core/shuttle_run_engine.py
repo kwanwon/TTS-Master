@@ -52,24 +52,18 @@ class ShuttleRunEngine:
         preset_key: str,
         target_stages: int = 8,
         stage_duration_sec: float = 60.0,
-        start_delay_sec: float = 5.0
+        start_delay_sec: float = 5.0,
+        stage_cue_durations: Optional[Dict[int, float]] = None,
+        countdown_duration: float = 0.0,
+        signal_duration_sec: float = 0.25,
+        cue_post_gap_sec: float = 0.35
     ) -> List[Dict[str, Any]]:
         """
         Calculates exact beep timestamps and voice cues for each stage.
-        Returns a list of dicts:
-        [
-            {
-                "stage": 1,
-                "speed_kmh": 8.0,
-                "interval_sec": 4.74,
-                "shuttles": 13,
-                "beeps": [5.0, 9.74, 14.48, ...],
-                "stage_start_sec": 5.0,
-                "stage_end_sec": 65.0,
-                "voice_time_sec": 5.0
-            },
-            ...
-        ]
+        Guarantees strict sequential ordering:
+          [Stage 1 Cue] -> [Countdown] -> [Beep 1-Start] -> ... -> [Beep 1-End] ->
+          [Stage 2 Cue] -> [Beep 2-Start] -> ... -> [Beep 2-End]
+        No overlaps occur between voice cues, countdowns, and beeps.
         """
         preset = cls.PRESETS.get(preset_key, cls.PRESETS["elementary_low"])
         start_speed = preset["start_speed"]
@@ -77,27 +71,65 @@ class ShuttleRunEngine:
         turn_time = preset["turn_time"]
 
         schedule = []
-        current_time = float(start_delay_sec)
+
+        # 1단계 시작 타이밍 계산 (멘트 및 카운트다운 길이 기반)
+        if stage_cue_durations is not None:
+            cue_dur_1 = stage_cue_durations.get(1, 0.0)
+            if cue_dur_1 > 0:
+                cue_time_1 = 1.0  # BGM 시작 후 1.0초 뒤 멘트 시작
+                t_curr = cue_time_1 + cue_dur_1
+                if countdown_duration > 0:
+                    cd_time = round(t_curr + 0.25, 2)
+                    t_curr = cd_time + countdown_duration
+                    stage_1_first_beep = round(t_curr + 0.2, 2)
+                else:
+                    cd_time = None
+                    stage_1_first_beep = round(t_curr + cue_post_gap_sec, 2)
+            else:
+                cue_time_1 = None
+                if countdown_duration > 0:
+                    cd_time = 1.0
+                    stage_1_first_beep = round(cd_time + countdown_duration + 0.2, 2)
+                else:
+                    cd_time = None
+                    stage_1_first_beep = float(start_delay_sec)
+        else:
+            cue_time_1 = None
+            cd_time = None
+            stage_1_first_beep = float(start_delay_sec)
+
+        last_beep = 0.0
 
         for s in range(1, target_stages + 1):
             speed_kmh = start_speed + (s - 1) * speed_inc
-            # Convert km/h to m/s
             speed_ms = speed_kmh / 3.6
-            
-            # Physics/Biomechanics formula: T = D / V + T_turn
             raw_interval = (distance / speed_ms) + turn_time
-            # Round to 2 decimals for clean intervals (e.g., 4.74, 4.50, 4.29)
             interval_sec = round(raw_interval, 2)
-            
-            # Number of shuttles in this stage (approx 60s per stage)
             num_shuttles = max(1, int(round(stage_duration_sec / interval_sec)))
-            actual_stage_duration = num_shuttles * interval_sec
 
-            stage_start = current_time
+            if s == 1:
+                stage_start = stage_1_first_beep
+                stage_cue_time = cue_time_1
+                stage_cue_dur = stage_cue_durations.get(1, 0.0) if stage_cue_durations else 0.0
+            else:
+                cue_gap = 0.15 if distance <= 5.0 else 0.25
+                post_gap = 0.25 if distance <= 5.0 else cue_post_gap_sec
+                stage_cue_dur = stage_cue_durations.get(s, 0.0) if stage_cue_durations else 0.0
+                
+                if stage_cue_dur > 0:
+                    stage_cue_time = round(last_beep + signal_duration_sec + cue_gap, 2)
+                    stage_start = round(stage_cue_time + stage_cue_dur + post_gap, 2)
+                else:
+                    stage_cue_time = None
+                    stage_start = round(last_beep + signal_duration_sec + (0.3 if distance <= 5.0 else 0.6), 2)
+
+            # 비프 타임스탬프: B_0(출발), B_1..B_num_shuttles(각 회차 도착 및 턴)
             beeps = []
-            for b in range(num_shuttles):
+            for b in range(num_shuttles + 1):
                 beep_time = round(stage_start + b * interval_sec, 2)
                 beeps.append(beep_time)
+
+            last_beep = beeps[-1]
 
             schedule.append({
                 "stage": s,
@@ -105,14 +137,16 @@ class ShuttleRunEngine:
                 "interval_sec": interval_sec,
                 "shuttles": num_shuttles,
                 "beeps": beeps,
-                "stage_start_sec": stage_start,
-                "stage_end_sec": stage_start + actual_stage_duration,
-                "voice_time_sec": stage_start
+                "stage_start_sec": beeps[0],
+                "stage_end_sec": beeps[-1],
+                "cue_time_sec": stage_cue_time,
+                "cue_duration_sec": stage_cue_dur,
+                "countdown_time_sec": cd_time if s == 1 else None,
+                "countdown_duration_sec": countdown_duration if s == 1 else 0.0
             })
 
-            current_time = round(stage_start + actual_stage_duration, 2)
-
         return schedule
+
 
     @classmethod
     def apply_auto_ducking(

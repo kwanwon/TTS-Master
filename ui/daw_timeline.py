@@ -41,21 +41,40 @@ class AudioClipItem(QGraphicsRectItem):
         self.y_pos = self.track_idx * TRACK_HEIGHT + RULER_HEIGHT + 5
         self.setPos(x_pos, self.y_pos)
 
-        colors = ["#3498db", "#e67e22", "#9b59b6"]
-        self.setBrush(QBrush(QColor(colors[self.track_idx % len(colors)])))
+        # 클립 색상 결정: 단일 트랙에 배치되어도 BGM/구령/신호음이 직관적으로 구분되도록 함
+        txt = self.text.lower()
+        if self.track_idx == 0 or "[bgm" in txt or "bgm" in txt:
+            clip_color = "#3498db"  # Blue (BGM)
+        elif any(k in self.text for k in ["멘트", "단계", "출발", "카운트다운", "구령"]) or any(k in txt for k in ["voice", "tts"]):
+            clip_color = "#9b59b6"  # Purple (Voice/Cue)
+        elif any(k in self.text for k in ["신호음", "비프", "휘슬", "신호"]) or any(k in txt for k in ["beep", "whistle", "drum"]):
+            clip_color = "#e67e22"  # Orange (Signal/Beep)
+        else:
+            colors = ["#3498db", "#e67e22", "#9b59b6"]
+            clip_color = colors[self.track_idx % len(colors)]
+
+        self.setBrush(QBrush(QColor(clip_color)))
         self.setPen(QPen(QColor("#1a252f"), 1))
 
         for child in self.childItems():
             child.setParentItem(None)
 
-        display_txt = self.text[:16] + "..." if len(self.text) > 16 else self.text
-        self.label = QGraphicsTextItem(display_txt, self)
-        self.label.setDefaultTextColor(Qt.GlobalColor.white)
-        self.label.setPos(3, 2)
+        # 클립 폭에 맞춘 가독성 라벨 렌더링 (비프음 등 좁은 블록에서 텍스트 겹침 방지)
+        if width_px < 35:
+            display_txt = self.text[:4]
+            self.label = QGraphicsTextItem(display_txt, self)
+            self.label.setDefaultTextColor(Qt.GlobalColor.white)
+            self.label.setPos(1, 2)
+            # 좁은 블록은 하단 시간 라벨 생략하여 텍스트 겹침 방지
+        else:
+            display_txt = self.text[:14] + "..." if len(self.text) > 14 else self.text
+            self.label = QGraphicsTextItem(display_txt, self)
+            self.label.setDefaultTextColor(Qt.GlobalColor.white)
+            self.label.setPos(3, 2)
 
-        self.time_label = QGraphicsTextItem(f"{self.time_sec:.1f}s", self)
-        self.time_label.setDefaultTextColor(QColor("#ecf0f1"))
-        self.time_label.setPos(3, 20)
+            self.time_label = QGraphicsTextItem(f"{self.time_sec:.1f}s", self)
+            self.time_label.setDefaultTextColor(QColor("#ecf0f1"))
+            self.time_label.setPos(3, 20)
 
     def rescale(self, new_pps):
         self.pps = new_pps

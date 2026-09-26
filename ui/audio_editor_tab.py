@@ -813,10 +813,12 @@ class AudioEditorTab(QWidget):
             self.update_ui_time()
             self.trigger_auto_mix()
             
+            layout_info = "트랙 1: 배경음악(BGM) | 트랙 2: 훈련 트랙 (신호음+구령 순차 정렬)" if res.get("track_layout") == "single" else "트랙 1: 배경음악(BGM) | 트랙 2: 신호음 | 트랙 3: 음성 구령"
             QMessageBox.information(
                 self, "로드 완료",
                 f"🎉 {int(res['distance'])}m {res['target_stages']}단계 셔틀런 트랙이 타임라인에 완벽히 로드되었습니다!\n"
-                "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(비프/휘슬) | 트랙 3: 음성 안내 및 차임벨\n\n"
+                f"{layout_info}\n\n"
+                "소리가 엉키지 않고 멘트와 신호음이 순차적으로 정렬되었습니다.\n"
                 "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
             )
 
