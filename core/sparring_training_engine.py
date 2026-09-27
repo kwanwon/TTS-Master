@@ -74,8 +74,8 @@ class SparringTrainingEngine:
             "desc": "신나는 스텝 중 불규칙 랜덤 신호음/구령에 즉시 반응 발차기"
         },
         "combo": {
-            "name": "스텝 + 콤비네이션 연타 인터벌 (1연타 / 2연타 / 3연타)",
-            "desc": "정해진 주기마다 '1연타!', '2연타!' 구령에 맞춰 콤보 폭발"
+            "name": "스텝 + 콤비네이션 연타 인터벌 (스텝 지시 ➔ 삐익 ➔ 갈려/중지)",
+            "desc": "스텝 유지 후 신호음에 전력 연타 폭발, 종료 신호(갈려/중지/그만/비프)에 스텝 복귀"
         },
         "rounds": {
             "name": "정규 스파링 라운드 타이머 시뮬레이터",
@@ -127,7 +127,15 @@ class SparringTrainingEngine:
                 elif mode == "reaction":
                     intro_text = "지금부터 실전 스파링 반응 훈련을 시작합니다. 스텝을 뛰며 기술 지시를 듣고 신호음에 맞춰 빠르고 정확하게 타격하세요. 모두 준비해 주세요!"
                 elif mode == "combo":
-                    intro_text = "지금부터 스텝 콤비네이션 연타 훈련을 시작합니다. 스텝을 유지하다가 신호음과 구령에 맞춰 전력 연타하세요. 준비해 주세요!"
+                    stop_name_map = {
+                        "voice_kalyeo": "갈려",
+                        "voice_stop": "중지",
+                        "voice_end": "그만",
+                        "beep": "종료 비프음",
+                        "whistle": "종료 휘슬"
+                    }
+                    stop_label = stop_name_map.get(params.get("stop_signal", "voice_kalyeo"), "갈려")
+                    intro_text = f"지금부터 스텝 콤비네이션 연타 훈련을 시작합니다. 지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, '{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
                 elif mode == "rounds":
                     intro_text = "지금부터 정규 스파링 라운드 훈련을 시작합니다. 양 선수 준비해 주세요!"
                 else:
@@ -424,49 +432,139 @@ class SparringTrainingEngine:
 
         # ── Mode 3: 스텝 + 콤비네이션 연타 인터벌 ──
         elif mode == "combo":
-            step_sec = params.get("step_sec", 8.0)         # 스텝 지속 시간 (예: 8초)
-            combo_sec = params.get("combo_sec", 4.0)       # 연타 지속 시간 (예: 4초)
-            sets_count = params.get("sets_count", 6)       # 세트 수 (예: 6세트)
-            combo_types = params.get("combo_types", ["1연타", "2연타", "3연타"])  # 순환 콤보
+            step_sec = float(params.get("step_sec", 8.0))         # 스텝 지속 시간 (예: 8초)
+            combo_sec = float(params.get("combo_sec", 4.0))       # 전력 연타 지속 시간 (예: 4초)
+            sets_count = int(params.get("sets_count", 6))         # 총 세트 수 (예: 6세트)
+
+            # 스텝 목록 (태권도 실전 6가지 기본 스텝 순서)
+            raw_steps = params.get("step_types", [
+                "제자리 스텝", "앞뒤 스텝", "업다운 스텝", "앞발 스텝", "뒷발 스텝", "앞발 스텝 발바꿔"
+            ])
+            step_types = [s.strip() for s in raw_steps if s and s.strip()]
+            if not step_types:
+                step_types = ["제자리 스텝", "앞뒤 스텝", "업다운 스텝", "앞발 스텝", "뒷발 스텝", "앞발 스텝 발바꿔"]
+
+            start_signal = params.get("start_signal", "whistle")   # whistle / beep / drum
+            stop_signal = params.get("stop_signal", "voice_kalyeo") # voice_kalyeo / voice_stop / voice_end / beep / whistle
+
+            start_sound_file = os.path.join("effects", "whistle.wav")
+            start_sound_label = "경기용 휘슬 (삐익-!)"
+            if start_signal == "beep":
+                start_sound_file = os.path.join("effects", "beep.wav")
+                start_sound_label = "전자 비프음 (삑~익!)"
+            elif start_signal == "drum":
+                start_sound_file = os.path.join("effects", "drum.wav")
+                start_sound_label = "대북 타격음 (쿵!)"
 
             for s in range(1, sets_count + 1):
-                combo_name = combo_types[(s - 1) % len(combo_types)]
-                # 스텝 구간 시작 안내
+                step_name = step_types[(s - 1) % len(step_types)]
+
+                # 1. 스텝 지시 음성 (군더더기 없이 스텝 명칭만 또렷하게 지시: 예 "제자리 스텝!")
+                cue_dur = max(0.8, round(len(step_name) * 0.18, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
-                    "text": f"[{s}세트] 스텝 유지! 호흡 조절!",
-                    "duration": 2.0,
+                    "text": f"[{s}세트] {step_name}!",
+                    "duration": cue_dur,
                     "track": 2,
-                    "vol": 1.5
+                    "vol": 2.5
                 })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + 2.0) * 1000)))
+                duck_segments.append((int(curr_time * 1000), int((curr_time + cue_dur) * 1000)))
+
+                # 스텝 유지 시간 동안 뛰기
                 curr_time += step_sec
 
-                # 연타 돌입 신호 및 구령
+                # 2. 타격 시작 신호음 (삐익-!)
                 events.append({
                     "time": curr_time,
-                    "type": "whistle",
-                    "text": "[휘슬] 연타 돌입!",
-                    "sound_file": os.path.join("effects", "whistle.wav"),
+                    "type": "signal",
+                    "text": f"[{s}세트 연타 시작] {start_sound_label}",
+                    "sound_file": start_sound_file,
                     "duration": 0.35,
                     "track": 1,
-                    "vol": 2.5
+                    "vol": 3.0
                 })
-                events.append({
-                    "time": curr_time + 0.2,
-                    "type": "voice",
-                    "text": f"[{combo_name}] {combo_name} 전력 타격!",
-                    "duration": 1.8,
-                    "track": 2,
-                    "vol": 2.5
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + combo_sec) * 1000)))
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.6) * 1000)))
+
+                # 3. 전력 연타 시간 진행 (더 이상 매번 연타 종류를 길게 말하지 않고 전력 타격 집중)
                 curr_time += combo_sec
 
-            # 마무리 멘트
+                # 4. 연타 종료 신호 (갈려 / 중지 / 그만 / 비프음 / 휘슬 중 선택)
+                if stop_signal == "voice_kalyeo":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": "[연타 종료] 갈려!",
+                        "duration": 0.7,
+                        "track": 2,
+                        "vol": 2.8
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+                    curr_time += 0.8
+                elif stop_signal == "voice_stop":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": "[연타 종료] 중지!",
+                        "duration": 0.7,
+                        "track": 2,
+                        "vol": 2.8
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+                    curr_time += 0.8
+                elif stop_signal == "voice_end":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": "[연타 종료] 그만!",
+                        "duration": 0.7,
+                        "track": 2,
+                        "vol": 2.8
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+                    curr_time += 0.8
+                elif stop_signal == "beep":
+                    events.append({
+                        "time": curr_time,
+                        "type": "signal",
+                        "text": "[연타 종료] 비프음",
+                        "sound_file": os.path.join("effects", "beep.wav"),
+                        "duration": 0.25,
+                        "track": 1,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
+                    curr_time += 0.5
+                elif stop_signal == "whistle":
+                    events.append({
+                        "time": curr_time,
+                        "type": "signal",
+                        "text": "[연타 종료] 심판 호각",
+                        "sound_file": os.path.join("effects", "whistle.wav"),
+                        "duration": 0.35,
+                        "track": 1,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
+                    curr_time += 0.5
+                else:  # 기본값 갈려
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": "[연타 종료] 갈려!",
+                        "duration": 0.7,
+                        "track": 2,
+                        "vol": 2.8
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+                    curr_time += 0.8
+
+                # 세트 간 자연스러운 호흡 텀 (0.4초)
+                curr_time += 0.4
+
+            # 5. 모든 세트 종료 시 정중한 훈련 종료 멘트
             events.append({
-                "time": curr_time,
+                "time": curr_time + 0.3,
                 "type": "bell",
                 "text": "[훈련 완료]",
                 "sound_file": os.path.join("effects", "stage_bell.wav"),

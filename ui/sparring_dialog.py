@@ -204,7 +204,9 @@ class SparringWorker(QThread):
                                 if chunk['type'] == 'audio':
                                     buf.write(chunk['data'])
                             buf.seek(0)
-                            AudioSegment.from_file(buf, format="mp3").export(path, format="wav")
+                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(path, format="wav")
 
                         asyncio.run(_synth(clean_text, voice_id, v_path))
                         if os.path.exists(v_path):
@@ -559,37 +561,86 @@ class SparringDialog(QDialog):
         tab_combo = QWidget()
         l_combo = QVBoxLayout(tab_combo)
         
-        g_combo_set = QGroupBox("스텝 및 연타 시간 설정")
+        # 1. 스텝 및 연타 시간 설정
+        g_combo_set = QGroupBox("1. 스텝 및 연타 시간 설정")
         l_cbs = QVBoxLayout(g_combo_set)
         h_cbs1 = QHBoxLayout()
         h_cbs1.addWidget(QLabel("스텝 유지 시간:"))
         self.sp_combo_step = QSpinBox()
-        self.sp_combo_step.setRange(4, 30)
+        self.sp_combo_step.setRange(3, 60)
         self.sp_combo_step.setValue(8)
         self.sp_combo_step.setSuffix(" 초")
         h_cbs1.addWidget(self.sp_combo_step)
 
         h_cbs1.addWidget(QLabel("전력 연타 시간:"))
         self.sp_combo_strike = QSpinBox()
-        self.sp_combo_strike.setRange(2, 20)
+        self.sp_combo_strike.setRange(2, 30)
         self.sp_combo_strike.setValue(4)
         self.sp_combo_strike.setSuffix(" 초")
         h_cbs1.addWidget(self.sp_combo_strike)
 
         h_cbs1.addWidget(QLabel("총 세트 수:"))
         self.sp_combo_sets = QSpinBox()
-        self.sp_combo_sets.setRange(2, 20)
+        self.sp_combo_sets.setRange(1, 30)
         self.sp_combo_sets.setValue(6)
         self.sp_combo_sets.setSuffix(" 세트")
         h_cbs1.addWidget(self.sp_combo_sets)
         l_cbs.addLayout(h_cbs1)
         l_combo.addWidget(g_combo_set)
 
-        g_combo_types = QGroupBox("콤비네이션 연타 구령 (세트마다 순환)")
-        l_cbt = QVBoxLayout(g_combo_types)
-        self.txt_combo_types = QLineEdit("1연타, 2연타, 3연타, 나래차기 연타, 뒷발 돌려차기 연타")
-        l_cbt.addWidget(self.txt_combo_types)
-        l_combo.addWidget(g_combo_types)
+        # 2. 신호음 설정 (타격 시작음 및 연타 종료 구령/신호 선택)
+        g_combo_signals = QGroupBox("2. 타격 시작 신호 및 연타 종료 신호 (선택)")
+        l_csig = QVBoxLayout(g_combo_signals)
+        
+        h_cs1 = QHBoxLayout()
+        h_cs1.addWidget(QLabel("타격 시작 신호음:"))
+        self.combo_start_signal = QComboBox()
+        self.combo_start_signal.addItem("📢 경기용 심판 휘슬 (호각 삐익~!)", "whistle")
+        self.combo_start_signal.addItem("🔔 전자 비프음 (880Hz 삑~익!)", "beep")
+        self.combo_start_signal.addItem("🥁 웅장한 대북 타격음 (쿵!)", "drum")
+        h_cs1.addWidget(self.combo_start_signal, stretch=1)
+        l_csig.addLayout(h_cs1)
+
+        h_cs2 = QHBoxLayout()
+        h_cs2.addWidget(QLabel("연타 종료 신호:"))
+        self.combo_stop_signal = QComboBox()
+        self.combo_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
+        self.combo_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
+        self.combo_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        self.combo_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
+        h_cs2.addWidget(self.combo_stop_signal, stretch=1)
+        l_csig.addLayout(h_cs2)
+        l_combo.addWidget(g_combo_signals)
+
+        # 3. 스텝 지시 구령 목록 (세트마다 순서대로 지시)
+        g_combo_steps = QGroupBox("3. 스텝 지시 구령 (세트마다 순환 지시)")
+        l_cst = QVBoxLayout(g_combo_steps)
+        
+        h_tmpl_step = QHBoxLayout()
+        h_tmpl_step.addWidget(QLabel("📋 스텝 템플릿:"))
+        self.combo_step_tmpl = QComboBox()
+        self.combo_step_tmpl.addItem("🥋 [태권도 실전 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔", 
+            "제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
+        self.combo_step_tmpl.addItem("⚡ [스피드 순발력] 제자리 ➔ 사이드 ➔ 지그재그 ➔ 앞발 발바꿔 ➔ 페이크",
+            "제자리 스텝, 사이드 스텝, 지그재그 스텝, 앞발 스텝 발바꿔, 페이크 스텝")
+        self.combo_step_tmpl.addItem("🛡️ [거리 조절 & 방어] 앞뒤 ➔ 제자리 ➔ 백스텝 후 전진 ➔ 사이드",
+            "앞뒤 스텝, 제자리 스텝, 백스텝 후 전진, 사이드 스텝")
+        self.combo_step_tmpl.currentIndexChanged.connect(self._on_step_tmpl_changed)
+        h_tmpl_step.addWidget(self.combo_step_tmpl, stretch=1)
+        l_cst.addLayout(h_tmpl_step)
+
+        h_step_txt = QHBoxLayout()
+        h_step_txt.addWidget(QLabel("✏️ 적용 스텝 목록:"))
+        self.txt_combo_steps = QLineEdit("제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
+        self.txt_combo_steps.setPlaceholderText("쉼표로 구분하여 자유롭게 스텝 종류를 입력하세요")
+        h_step_txt.addWidget(self.txt_combo_steps, stretch=1)
+        l_cst.addLayout(h_step_txt)
+
+        lbl_step_hint = QLabel("※ 처음에 전체 훈련 방식 안내 후, [스텝 지시] ➔ [삐익(신호음)] ➔ [전력 연타] ➔ [갈려/중지/종료음] 순서로 군더더기 없이 진행됩니다.")
+        lbl_step_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        l_cst.addWidget(lbl_step_hint)
+        l_combo.addWidget(g_combo_steps)
         l_combo.addStretch()
         self.tabs.addTab(tab_combo, "🔥 스텝 + 콤비네이션 연타")
 
@@ -825,6 +876,11 @@ class SparringDialog(QDialog):
         if tmpl_data:
             self.txt_relay_cue.setText(tmpl_data)
 
+    def _on_step_tmpl_changed(self, idx):
+        tmpl_data = self.combo_step_tmpl.currentData()
+        if tmpl_data:
+            self.txt_combo_steps.setText(tmpl_data)
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -911,8 +967,10 @@ class SparringDialog(QDialog):
             params["step_sec"] = float(self.sp_combo_step.value())
             params["combo_sec"] = float(self.sp_combo_strike.value())
             params["sets_count"] = self.sp_combo_sets.value()
-            raw_types = self.txt_combo_types.text().split(",")
-            params["combo_types"] = [t.strip() for t in raw_types if t.strip()]
+            raw_steps = self.txt_combo_steps.text().split(",")
+            params["step_types"] = [s.strip() for s in raw_steps if s.strip()]
+            params["start_signal"] = self.combo_start_signal.currentData() or "whistle"
+            params["stop_signal"] = self.combo_stop_signal.currentData() or "voice_kalyeo"
 
         elif mode == "rounds":
             params["round_sec"] = float(self.sp_rnd_time.value())
