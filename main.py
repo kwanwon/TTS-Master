@@ -75,6 +75,7 @@ from ui.layout import MainWindow
 from core.serial_auth import SerialAuth
 from ui.serial_auth_dialog import SerialAuthDialog
 from utils.auto_updater import AutoUpdater
+from utils.theme_manager import setup_theme_listener
 
 LOCK_FILE = os.path.join(tempfile.gettempdir(), "aimaster_tts_running.lock")
 
@@ -136,13 +137,9 @@ def main():
         QMessageBox.warning(None, "중복 실행 방지", "AI 마스터 (TTS 컨트롤러)가 이미 실행 중입니다.\n기존에 열려 있는 창을 확인해 주세요.")
         sys.exit(0)
 
-    # 야간 모드일 때 리스트와 버튼 글씨가 검정색으로 나오는 macOS 버그 방지
-    if app.styleHints().colorScheme() == Qt.ColorScheme.Dark:
-        app.setStyleSheet("""
-            QListWidget, QTableWidget { background-color: #2b2b2b; color: #ffffff; }
-            QPushButton { background-color: #404040; color: #ffffff; border: 1px solid #555; border-radius: 4px; padding: 5px; }
-            QPushButton:hover { background-color: #505050; }
-        """)
+    # 다크 모드 및 라이트 모드 실시간 자동 대응 고대비 테마 리스너 활성화
+    # (macOS 네이티브 아쿠아 테마 충돌 및 QComboBox 흰 글씨/흰 배경 가림 현상 원천 차단)
+    setup_theme_listener(app)
 
     # 1. 시리얼 인증 사전 검사 (0.001초 로컬 캐시 즉시 신뢰하여 시작 렉/슬립 대기 완전 제거)
     serial_auth = SerialAuth()
