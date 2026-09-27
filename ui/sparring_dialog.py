@@ -36,12 +36,15 @@ def vol_pct_to_db(pct: int) -> float:
 
 
 def trim_audio_silence(seg: AudioSegment, threshold: float = -42.0) -> AudioSegment:
-    """TTS 음성의 앞뒤 여백 무음을 타이트하게 잘라내어 멘트 간격이 정확히 맞도록 함"""
+    """TTS 음성의 앞쪽 무음은 타이트하게 자르되, 뒤쪽은 말끝 여운(모음/자음 감쇄)이 잘리지 않도록 안전 여백(300ms)을 보존함"""
     try:
         from pydub.silence import detect_leading_silence
         lead = detect_leading_silence(seg, silence_threshold=threshold)
         trail = detect_leading_silence(seg.reverse(), silence_threshold=threshold)
-        trimmed = seg[lead:max(lead, len(seg) - trail)]
+        # 말끝이 툭 끊기지 않도록 뒤쪽 무음 중 300ms를 안전하게 남김
+        safe_trail = max(0, trail - 300)
+        end_idx = max(lead, len(seg) - safe_trail)
+        trimmed = seg[lead:end_idx]
         return trimmed if len(trimmed) >= 80 else seg
     except Exception:
         return seg
@@ -835,6 +838,26 @@ class SparringDialog(QDialog):
         h_opts.addWidget(self.voice_combo)
         l_common.addLayout(h_opts)
 
+        # 훈련 종료 후 휴식/대기 안내 멘트 설정 (사용자 요청: 정렬 대신 물 한잔 및 다음 지시 대기/휴식)
+        h_outro = QVBoxLayout()
+        h_outro_top = QHBoxLayout()
+        h_outro_top.addWidget(QLabel("🏁 훈련 종료 멘트 (휴식/대기 안내):"))
+        self.combo_outro_tmpl = QComboBox()
+        self.combo_outro_tmpl.addItem("💧 [물 한잔 & 대기] 물 한잔 마시고 호흡 가다듬으며 다음 지시 대기",
+            "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요.")
+        self.combo_outro_tmpl.addItem("☕ [자유 휴식 & 호흡] 호흡 가다듬고 잠시 자유롭게 휴식",
+            "훈련 종료! 수고하셨습니다! 호흡 가다듬고 잠시 자유롭게 휴식하세요.")
+        self.combo_outro_tmpl.addItem("⏳ [다음 훈련 대기] 땀 닦고 물 마시며 다음 훈련을 위해 대기",
+            "훈련 종료! 모두 수고하셨습니다! 땀 닦고 물 마시며 다음 훈련을 위해 제자리에서 대기하세요.")
+        self.combo_outro_tmpl.currentIndexChanged.connect(self._on_outro_tmpl_changed)
+        h_outro_top.addWidget(self.combo_outro_tmpl, stretch=1)
+        h_outro.addLayout(h_outro_top)
+
+        self.txt_outro_ment = QLineEdit("훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요.")
+        self.txt_outro_ment.setPlaceholderText("훈련 종료 후 송출될 휴식 및 대기 안내 멘트를 자유롭게 입력하세요")
+        h_outro.addWidget(self.txt_outro_ment)
+        l_common.addLayout(h_outro)
+
         content_layout.addWidget(common_group)
 
         # ── 개별 음량 및 오토덕킹 밸런스 커스텀 ──
@@ -990,6 +1013,11 @@ class SparringDialog(QDialog):
         if tmpl_data:
             self.txt_combo_kicks.setText(tmpl_data)
 
+    def _on_outro_tmpl_changed(self, idx):
+        tmpl_data = self.combo_outro_tmpl.currentData()
+        if tmpl_data:
+            self.txt_outro_ment.setText(tmpl_data)
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -1052,7 +1080,8 @@ class SparringDialog(QDialog):
             "bgm_vol_pct": self.slider_bgm_vol.value(),
             "sig_vol_pct": self.slider_sig_vol.value(),
             "voice_vol_pct": self.slider_voice_vol.value(),
-            "duck_db": duck_db_val
+            "duck_db": duck_db_val,
+            "outro_text": self.txt_outro_ment.text().strip()
         }
 
         if mode == "relay":

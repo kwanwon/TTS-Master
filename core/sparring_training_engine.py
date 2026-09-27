@@ -283,17 +283,20 @@ class SparringTrainingEngine:
                         duck_segments.append((int(curr_time * 1000), int((curr_time + chg_dur) * 1000)))
                         curr_time += chg_dur + change_sec
 
-            # 5. 모든 세트 종료 시 정중한 훈련 종료 멘트
+            # 5. 모든 세트 종료 시 휴식 및 대기 안내 멘트 (사용자 요청: 정렬 대신 물 한잔 및 다음 지시 대기/휴식 개념 적용)
+            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 0.5,
                 "type": "voice",
-                "text": "[훈련 종료] 훈련 종료! 수고하셨습니다! 호흡 가다듬고 정렬하세요.",
-                "duration": 3.5,
+                "text": f"[훈련 종료] {outro_text}",
+                "duration": outro_dur,
                 "track": 2,
                 "vol": 2.5
             })
-            duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 4.2) * 1000)))
-            total_duration_sec = curr_time + 5.0
+            duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + outro_dur + 0.5) * 1000)))
+            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0  # 마지막 음성 완전히 끝난 뒤 최소 2.0초 여유 딜레이 보장
 
         # ── Mode 2: 스텝 & 실전 기술 반응 훈련 ──
         elif mode == "reaction":
@@ -448,16 +451,19 @@ class SparringTrainingEngine:
                 "track": 2,
                 "vol": 1.5
             })
+            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 1.8,
                 "type": "voice",
-                "text": "[훈련 종료] 훈련 종료! 수고하셨습니다! 호흡 가다듬고 정렬하세요.",
-                "duration": 3.5,
+                "text": f"[훈련 종료] {outro_text}",
+                "duration": outro_dur,
                 "track": 2,
                 "vol": 2.5
             })
-            duck_segments.append((int((curr_time + 1.8) * 1000), int((curr_time + 5.5) * 1000)))
-            total_duration_sec = curr_time + 6.0
+            duck_segments.append((int((curr_time + 1.8) * 1000), int((curr_time + 1.8 + outro_dur + 0.5) * 1000)))
+            total_duration_sec = curr_time + 1.8 + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
 
         # ── Mode 3: 스텝 + 콤비네이션 연타 인터벌 ──
         elif mode == "combo":
@@ -610,16 +616,19 @@ class SparringTrainingEngine:
                 "track": 2,
                 "vol": 1.5
             })
+            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 1.5,
                 "type": "voice",
-                "text": "[훈련 종료] 훈련 종료! 수고하셨습니다! 호흡 가다듬고 정렬하세요.",
-                "duration": 3.5,
+                "text": f"[훈련 종료] {outro_text}",
+                "duration": outro_dur,
                 "track": 2,
                 "vol": 2.5
             })
-            duck_segments.append((int((curr_time + 1.5) * 1000), int((curr_time + 5.2) * 1000)))
-            total_duration_sec = curr_time + 6.0
+            duck_segments.append((int((curr_time + 1.5) * 1000), int((curr_time + 1.5 + outro_dur + 0.5) * 1000)))
+            total_duration_sec = curr_time + 1.5 + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
 
         # ── Mode 4: 정규 스파링 라운드 시뮬레이터 ──
         elif mode == "rounds":
