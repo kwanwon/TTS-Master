@@ -35,6 +35,18 @@ def vol_pct_to_db(pct: int) -> float:
     return round(20.0 * math.log10(pct / 100.0), 2)
 
 
+def trim_audio_silence(seg: AudioSegment, threshold: float = -42.0) -> AudioSegment:
+    """TTS 음성의 앞뒤 여백 무음을 타이트하게 잘라내어 멘트 간격이 정확히 맞도록 함"""
+    try:
+        from pydub.silence import detect_leading_silence
+        lead = detect_leading_silence(seg, silence_threshold=threshold)
+        trail = detect_leading_silence(seg.reverse(), silence_threshold=threshold)
+        trimmed = seg[lead:max(lead, len(seg) - trail)]
+        return trimmed if len(trimmed) >= 80 else seg
+    except Exception:
+        return seg
+
+
 class SparringWorker(QThread):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal(bool, str, dict)
@@ -78,78 +90,76 @@ class SparringWorker(QThread):
                 en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
                 cd_file = None
 
+                # Helper for word-by-word stepped countdown with 1.5s (1500ms) delay
+                async def _synth_stepped_cd(words: List[str], voice: str, rate: str = "+0%") -> AudioSegment:
+                    silence_gap = AudioSegment.silent(duration=1500)
+                    segs = []
+                    for w in words:
+                        comm = edge_tts.Communicate(w, voice, rate=rate)
+                        buf = io.BytesIO()
+                        async for chunk in comm.stream():
+                            if chunk['type'] == 'audio':
+                                buf.write(chunk['data'])
+                        buf.seek(0)
+                        s = trim_audio_silence(AudioSegment.from_file(buf, format="mp3"))
+                        segs.append(s)
+                    full = segs[0]
+                    for s in segs[1:]:
+                        full = full + silence_gap + s
+                    return full
+
                 if cd_style == "beep":
-                    self.progress.emit(10, "전자 비프음 카운트다운(띡-띡-띡) 준비 중...")
+                    self.progress.emit(10, "전자 비프음 카운트다운(3박자 띡-띡-띡) 준비 중...")
                     cd_beeps = os.path.join("effects", "countdown_beeps.wav")
                     if os.path.exists(cd_beeps):
                         cd_file = cd_beeps
                 elif cd_style == "en_ready":
-                    self.progress.emit(10, "영어 카운트다운(Are you ready? Ready! Three, Two, One) 생성 중...")
+                    self.progress.emit(10, "영어 카운트다운(Are you ready? Ready! Three, Two, One) 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_en_ready_{uuid.uuid4().hex[:6]}.wav")
                     try:
                         import edge_tts, io
                         async def _synth_cd():
-                            comm = edge_tts.Communicate("Are you ready? Ready! Three, Two, One.", en_voice, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["Are you ready? Ready!", "Three", "Two", "One"], en_voice, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
                         if os.path.exists(cd_path):
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
                 elif cd_style == "ko_ready":
-                    self.progress.emit(10, "한국어 카운트다운(준비되었나요? 준비! 셋, 둘, 하나) 생성 중...")
+                    self.progress.emit(10, "한국어 카운트다운(준비되었나요? 준비! 셋, 둘, 하나) 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_ko_ready_{uuid.uuid4().hex[:6]}.wav")
                     try:
                         import edge_tts, io
                         async def _synth_cd():
-                            comm = edge_tts.Communicate("준비되었나요? 준비! 셋, 둘, 하나.", voice_id, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["준비되었나요? 준비!", "셋", "둘", "하나"], voice_id, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
                         if os.path.exists(cd_path):
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
                 elif cd_style == "ko_321":
-                    self.progress.emit(10, "한국어 카운트다운(셋, 둘, 하나) 생성 중...")
+                    self.progress.emit(10, "한국어 카운트다운(셋, 둘, 하나) 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_ko_321_{uuid.uuid4().hex[:6]}.wav")
                     try:
                         import edge_tts, io
                         async def _synth_cd():
-                            comm = edge_tts.Communicate("셋, 둘, 하나.", voice_id, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["셋", "둘", "하나"], voice_id, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
                         if os.path.exists(cd_path):
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
                 else:  # en_321 기본값 (본토 영어 발음)
-                    self.progress.emit(10, "영어 본토 발음 카운트다운(Three, Two, One) 생성 중...")
+                    self.progress.emit(10, "영어 본토 발음 카운트다운(Three, Two, One) 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_en_321_{uuid.uuid4().hex[:6]}.wav")
                     try:
                         import edge_tts, io
                         async def _synth_cd():
-                            comm = edge_tts.Communicate("Three, Two, One.", en_voice, rate="+5%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["Three", "Two", "One"], en_voice, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
                         if os.path.exists(cd_path):
                             cd_file = cd_path

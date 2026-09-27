@@ -18,6 +18,50 @@ from pydub import AudioSegment
 from core.shuttle_run_engine import ShuttleRunEngine
 
 
+class BalancedCuePicker:
+    """
+    균등 분배 및 연속 중복 방지 큐 피커
+    - 모든 기술이 편중 없이 균등하게 출현 (골고루)
+    - 순차적이지 않고 예측 불가능한 덱 셔플 방식
+    - 동일 기술이 연속으로 나오는 횟수를 최대 2회 이하로 엄격히 제한 (3회 이상 연속 절대 방지)
+    """
+    def __init__(self, cues: List[str], max_consecutive: int = 2):
+        self.cues = [c.strip() for c in cues if c.strip()]
+        self.max_consecutive = max(1, max_consecutive)
+        self.history: List[str] = []
+        self.bag: List[str] = []
+
+    def next_cue(self) -> str:
+        if not self.cues:
+            return "1연타!"
+        if len(self.cues) == 1:
+            return self.cues[0]
+
+        if not self.bag:
+            self.bag = self.cues.copy()
+            random.shuffle(self.bag)
+            # 덱(백) 경계 검사: 직전 기술과 새 백의 첫 기술이 동일할 경우
+            if self.history and self.bag[0] == self.history[-1]:
+                must_swap = (len(self.history) >= self.max_consecutive and 
+                             all(h == self.bag[0] for h in self.history[-self.max_consecutive:]))
+                if must_swap or random.random() < 0.75:
+                    for i in range(1, len(self.bag)):
+                        if self.bag[i] != self.history[-1]:
+                            self.bag[0], self.bag[i] = self.bag[i], self.bag[0]
+                            break
+
+        candidate = self.bag.pop(0)
+
+        # 동일 기술 연속 출현 제한 하드 가드 (최대 2회 이하 유지)
+        if len(self.history) >= self.max_consecutive and all(h == candidate for h in self.history[-self.max_consecutive:]):
+            other_options = [c for c in self.cues if c != candidate]
+            if other_options:
+                candidate = random.choice(other_options)
+
+        self.history.append(candidate)
+        return candidate
+
+
 class SparringTrainingEngine:
     # Training presets
     TRAINING_MODES = {
@@ -113,7 +157,8 @@ class SparringTrainingEngine:
             elif cd_style == "beep":
                 cd_text = "[카운트다운] 전자 비프음 3회 (띡-띡-띡)"
 
-            cd_dur = 3.5 if "ready" in cd_style else 2.5
+            # 3-2-1 각 숫자 사이에 1.5초 딜레이 배치: 총 소요시간 약 4.3초 (ready 포함 시 약 6.5초)
+            cd_dur = 6.5 if "ready" in cd_style else 4.3
             events.append({
                 "time": curr_time,
                 "type": "countdown",
@@ -125,7 +170,7 @@ class SparringTrainingEngine:
                 "vol": 2.0
             })
             duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
-            curr_time += cd_dur + 1.0  # 1.0초 긴장 딜레이
+            curr_time += cd_dur + 1.5  # 1(One) 발성 후 1.5초 긴장 딜레이 (사용자 요청: 3-1.5s, 2-1.5s, 1-1.5s)
 
         # ── Mode 1: 다자간 릴레이 순환 발차기 (1:1, 1:2, 1:3) ──
         if mode == "relay":
@@ -139,12 +184,11 @@ class SparringTrainingEngine:
             if not cues_list:
                 cues_list = ["백스텝 후 받아차기 교차 상단"]
 
-            cue_idx = 0
+            cue_picker = BalancedCuePicker(cues_list, max_consecutive=2) if len(cues_list) > 1 else None
             for c in range(1, cycles + 1):
                 for f in range(1, fighters_count + 1):
                     fighter_name = f"{f}번 타자" if fighters_count > 2 else ("A선수" if f == 1 else "B선수")
-                    current_cue = cues_list[cue_idx % len(cues_list)]
-                    cue_idx += 1
+                    current_cue = cue_picker.next_cue() if cue_picker else cues_list[0]
                     
                     # 1. 설명/기술 명칭 먼저 충분히 송출 (절대로 '출발' 단어 넣지 않음!)
                     call_text = f"{fighter_name}! {current_cue}!"
@@ -252,8 +296,11 @@ class SparringTrainingEngine:
             limit_time = curr_time + total_training_sec
             cue_count = 1
 
+            # 골고루 균등 분배 및 연속 중복 최대 2회 이하 큐 피커
+            cue_picker = BalancedCuePicker(reaction_cues, max_consecutive=2)
+
             while curr_time < limit_time - 3.5:
-                chosen_cue = random.choice(reaction_cues) if reaction_cues else "1연타!"
+                chosen_cue = cue_picker.next_cue()
                 
                 # 1. 기술 지시/이름 먼저 송출 (글자 수 기반 간결하고 자연스러운 발성 시간 계산)
                 char_count = len(chosen_cue.replace(" ", "").replace("!", ""))

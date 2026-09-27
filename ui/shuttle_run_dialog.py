@@ -170,6 +170,25 @@ class ShuttleRunWorker(QThread):
                 is_female = "여성" in voice_speaker or "선히" in voice_speaker
                 en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
 
+                # Helper for word-by-word stepped countdown with 1.5s (1500ms) delay
+                async def _synth_stepped_cd(words: list, voice: str, rate: str = "+0%") -> AudioSegment:
+                    silence_gap = AudioSegment.silent(duration=1500)
+                    segs = []
+                    for w in words:
+                        comm = edge_tts.Communicate(w, voice, rate=rate)
+                        buf = io.BytesIO()
+                        async for chunk in comm.stream():
+                            if chunk['type'] == 'audio':
+                                buf.write(chunk['data'])
+                        buf.seek(0)
+                        raw_seg = AudioSegment.from_file(buf, format="mp3")
+                        trimmed_seg = trim_audio_silence(raw_seg)
+                        segs.append(trimmed_seg)
+                    full = segs[0]
+                    for s in segs[1:]:
+                        full = full + silence_gap + s
+                    return full
+
                 if cd_style == "beep":
                     self.progress.emit(12, "전자 비프음 카운트다운(3박자 띡-띡-띡) 준비 중...")
                     ensure_default_effects()
@@ -179,20 +198,13 @@ class ShuttleRunWorker(QThread):
                         cd_file = cd_beeps_path
                         cd_clip_text = "[카운트다운] 전자 비프음 3회 (띡-띡-띡)"
                 elif cd_style == "en_ready":
-                    self.progress.emit(12, "영어 스포츠 카운트다운('Are you ready? Ready! Three, Two, One') 본토 발음 생성 중...")
+                    self.progress.emit(12, "영어 스포츠 카운트다운('Are you ready? Ready! Three, Two, One') 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_en_ready_{uuid.uuid4().hex[:6]}.wav")
                     cd_clip_text = "[카운트다운] Are you ready? Ready! Three, Two, One (영어 본토 발음)"
                     try:
                         async def _gen_cd():
-                            comm = edge_tts.Communicate("Are you ready? Ready! Three, Two, One.", en_voice, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["Are you ready? Ready!", "Three", "Two", "One"], en_voice, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
 
                         asyncio.run(_gen_cd())
                         if os.path.exists(cd_path):
@@ -201,20 +213,13 @@ class ShuttleRunWorker(QThread):
                     except Exception as e_cd:
                         print(f"[Shuttle] Countdown TTS fail: {e_cd}")
                 elif cd_style == "ko_ready":
-                    self.progress.emit(12, "한국어 친근한 카운트다운('준비되었나요? 준비! 셋, 둘, 하나') 생성 중...")
+                    self.progress.emit(12, "한국어 친근한 카운트다운('준비되었나요? 준비! 셋, 둘, 하나') 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_ko_ready_{uuid.uuid4().hex[:6]}.wav")
                     cd_clip_text = "[카운트다운] 준비되었나요? 준비! 셋, 둘, 하나"
                     try:
                         async def _gen_cd():
-                            comm = edge_tts.Communicate("준비되었나요? 준비! 셋, 둘, 하나.", voice_id, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["준비되었나요? 준비!", "셋", "둘", "하나"], voice_id, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
 
                         asyncio.run(_gen_cd())
                         if os.path.exists(cd_path):
@@ -223,20 +228,13 @@ class ShuttleRunWorker(QThread):
                     except Exception as e_cd:
                         print(f"[Shuttle] Countdown TTS fail: {e_cd}")
                 elif cd_style == "ko_321":
-                    self.progress.emit(12, "한국어 카운트다운('셋, 둘, 하나') 생성 중...")
+                    self.progress.emit(12, "한국어 카운트다운('셋, 둘, 하나') 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_ko_321_{uuid.uuid4().hex[:6]}.wav")
                     cd_clip_text = "[카운트다운] 셋, 둘, 하나"
                     try:
                         async def _gen_cd():
-                            comm = edge_tts.Communicate("셋, 둘, 하나.", voice_id, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["셋", "둘", "하나"], voice_id, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
 
                         asyncio.run(_gen_cd())
                         if os.path.exists(cd_path):
@@ -245,20 +243,13 @@ class ShuttleRunWorker(QThread):
                     except Exception as e_cd:
                         print(f"[Shuttle] Countdown TTS fail: {e_cd}")
                 else:  # en_321 기본값
-                    self.progress.emit(12, "영어 카운트다운('Three, Two, One' 본토 발음) 생성 중...")
+                    self.progress.emit(12, "영어 카운트다운('Three, Two, One' 본토 발음) 1.5초 간격 생성 중...")
                     cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_en_321_{uuid.uuid4().hex[:6]}.wav")
                     cd_clip_text = "[카운트다운] Three, Two, One (영어 본토 발음)"
                     try:
                         async def _gen_cd():
-                            comm = edge_tts.Communicate("Three, Two, One.", en_voice, rate="+10%")
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(cd_path, format="wav")
+                            full_seg = await _synth_stepped_cd(["Three", "Two", "One"], en_voice, rate="+5%")
+                            full_seg.export(cd_path, format="wav")
 
                         asyncio.run(_gen_cd())
                         if os.path.exists(cd_path):
