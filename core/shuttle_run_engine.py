@@ -53,6 +53,7 @@ class ShuttleRunEngine:
     DISTANCES = {
         5: {"name": "5m (실내 초소형)", "val": 5.0},
         10: {"name": "10m (실내 표준)", "val": 10.0},
+        15: {"name": "15m (중형 도장)", "val": 15.0},
         20: {"name": "20m (야외 공인)", "val": 20.0}
     }
 
