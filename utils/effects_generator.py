@@ -52,28 +52,47 @@ def generate_beep(sr=44100, duration=0.25, freq=880.0) -> AudioSegment:
     return AudioSegment.from_file(buf, format='wav')
 
 
-def generate_whistle(sr=44100, duration=0.35) -> AudioSegment:
-    """Referee sports whistle sound (0.35s) with dual frequencies & trill modulation."""
+def generate_whistle(sr=44100, duration=0.38) -> AudioSegment:
+    """Crisp, piercing referee sports whistle (Fox 40 style) with tri-tone resonance and rapid vortex trill."""
     _ensure_libs()
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
-    # Whistle trill (amplitude modulation) around 28Hz
-    mod = 0.75 + 0.25 * np.sin(2 * np.pi * 28 * t)
-    # Dual whistle frequencies (2500Hz and 2750Hz typical for sports pea-less whistles)
-    f1, f2 = 2500.0, 2750.0
-    signal = (0.5 * np.sin(2 * np.pi * f1 * t) + 0.5 * np.sin(2 * np.pi * f2 * t)) * mod
     
-    # Slight white noise for breathiness
-    noise = np.random.normal(0, 0.05, len(t))
-    signal = signal + noise
+    # 36Hz rapid fluttering pea/vortex modulation (crisp tremolo)
+    am_trill = 0.65 + 0.35 * np.sin(2 * np.pi * 36 * t)
     
-    # Attack / Decay envelope
+    # Slight frequency flutter (FM)
+    fm_flutter = 40.0 * np.sin(2 * np.pi * 36 * t)
+    
+    # Fox 40 signature frequencies (crisp, piercing 2850Hz, 3180Hz, 3600Hz)
+    f1 = 2850.0 + fm_flutter
+    f2 = 3180.0 + fm_flutter
+    f3 = 3600.0 + fm_flutter
+    
+    phase1 = 2 * np.pi * np.cumsum(f1) / sr
+    phase2 = 2 * np.pi * np.cumsum(f2) / sr
+    phase3 = 2 * np.pi * np.cumsum(f3) / sr
+    
+    # Primary tones + high resonant overtone
+    signal = (0.45 * np.sin(phase1) + 
+              0.40 * np.sin(phase2) + 
+              0.15 * np.sin(phase3)) * am_trill
+              
+    # Harmonic brilliance (crisp overtones at ~6000Hz)
+    signal += 0.08 * np.sin(2 * phase1) + 0.06 * np.sin(2 * phase2)
+    
+    # Attack & decay envelope: fast sharp attack (8ms) and clean decay (35ms)
     env = np.ones_like(t)
-    att_samples = int(sr * 0.02)
-    dec_samples = int(sr * 0.05)
-    env[:att_samples] = np.linspace(0, 1, att_samples)
-    env[-dec_samples:] = np.linspace(1, 0, dec_samples)
-    signal = (signal * env * 0.85).astype(np.float32)
-
+    att_samples = int(sr * 0.008)
+    dec_samples = int(sr * 0.035)
+    env[:att_samples] = np.linspace(0.1, 1.0, att_samples)
+    env[-dec_samples:] = np.linspace(1.0, 0.0, dec_samples)
+    
+    signal = signal * env
+    # Normalize to -0.5 dB
+    max_val = np.max(np.abs(signal))
+    if max_val > 0:
+        signal = (signal / max_val * 0.95).astype(np.float32)
+        
     buf = io.BytesIO()
     sf.write(buf, signal, sr, format='WAV', subtype='PCM_16')
     buf.seek(0)

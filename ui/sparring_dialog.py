@@ -82,12 +82,13 @@ class SparringWorker(QThread):
             os.makedirs(os.path.join("projects", "temp_tts"), exist_ok=True)
             voice_cache = {}
 
+            is_female = "선히" in voice_speaker or "여성" in voice_speaker
+            en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+
             # 2-1. 카운트다운 오디오 준비 (영어 본토 발음 및 한국어 지원)
             countdown_events = [ev for ev in events if ev["type"] == "countdown"]
             if countdown_events:
                 cd_style = self.params.get("countdown_style", "en_321")
-                is_female = "선히" in voice_speaker or "여성" in voice_speaker
-                en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
                 cd_file = None
 
                 # Helper for word-by-word stepped countdown with 1.5s (1500ms) delay
@@ -196,9 +197,16 @@ class SparringWorker(QThread):
                     try:
                         import edge_tts
                         import io
+                        import re
+
+                        # 텍스트가 영문 전용(한글 미포함)일 경우 미국 본토 원어민 성우(en_voice) 적용!
+                        has_korean = bool(re.search(r'[가-힣]', clean_text))
+                        has_english = bool(re.search(r'[a-zA-Z]', clean_text))
+                        target_voice = en_voice if (has_english and not has_korean) else voice_id
+                        rate_val = "+10%" if (has_english and not has_korean) else "+0%"
 
                         async def _synth(t, v, path):
-                            comm = edge_tts.Communicate(t, v)
+                            comm = edge_tts.Communicate(t, v, rate=rate_val)
                             buf = io.BytesIO()
                             async for chunk in comm.stream():
                                 if chunk['type'] == 'audio':
@@ -208,7 +216,7 @@ class SparringWorker(QThread):
                             trimmed_seg = trim_audio_silence(raw_seg)
                             trimmed_seg.export(path, format="wav")
 
-                        asyncio.run(_synth(clean_text, voice_id, v_path))
+                        asyncio.run(_synth(clean_text, target_voice, v_path))
                         if os.path.exists(v_path):
                             v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
                             voice_cache[clean_text] = {"file": v_path, "duration": v_dur}
@@ -522,9 +530,10 @@ class SparringDialog(QDialog):
         self.combo_reac_signal.addItem("🔔 전자 비프음 (880Hz 삑~익)", "beep")
         self.combo_reac_signal.addItem("🥁 웅장한 대북 타격음 (쿵)", "drum")
         self.combo_reac_signal.addItem("🗣️ 음성 구령: '시작!'", "voice_start")
-        self.combo_reac_signal.addItem("🗣️ 음성 구령: 'GO!'", "voice_go")
+        self.combo_reac_signal.addItem("🗣️ 음성 구령: \"Let's Go!\" (미국 본토 발음)", "voice_letsgo")
+        self.combo_reac_signal.addItem("🗣️ 음성 구령: \"Ready, Go!\" (미국 본토 발음)", "voice_readygo")
         self.combo_reac_signal.addItem("🗣️ 음성 구령: '탕!'", "voice_bang")
-        self.combo_reac_signal.addItem("🎲 랜덤 믹스 (휘슬 / 비프 / 시작! / GO! 무작위)", "random_mix")
+        self.combo_reac_signal.addItem("🎲 랜덤 믹스 (휘슬 / 비프 / 시작! / Let's Go! 무작위)", "random_mix")
         l_sig.addWidget(self.combo_reac_signal, stretch=1)
         l_reac.addWidget(g_reac_sig)
 

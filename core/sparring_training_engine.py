@@ -351,7 +351,7 @@ class SparringTrainingEngine:
                 # 3. 타격/발차기 트리거 신호 발동 (신호음 or 음성 구령)
                 current_trigger = trigger_sound
                 if current_trigger == "random_mix":
-                    current_trigger = random.choice(["whistle", "beep", "drum", "voice_start", "voice_go", "voice_bang"])
+                    current_trigger = random.choice(["whistle", "beep", "drum", "voice_start", "voice_letsgo", "voice_readygo", "voice_bang"])
 
                 if current_trigger == "whistle":
                     events.append({
@@ -359,7 +359,7 @@ class SparringTrainingEngine:
                         "type": "signal",
                         "text": f"[트리거 ({rand_gap}초 대기 후)] 경기용 휘슬!",
                         "sound_file": os.path.join("effects", "whistle.wav"),
-                        "duration": 0.35,
+                        "duration": 0.38,
                         "track": 1,
                         "vol": 3.0
                     })
@@ -400,17 +400,28 @@ class SparringTrainingEngine:
                     })
                     duck_segments.append((int(curr_time * 1000), int((curr_time + 0.9) * 1000)))
                     curr_time += 0.9
-                elif current_trigger == "voice_go":
+                elif current_trigger in ("voice_letsgo", "voice_go"):
                     events.append({
                         "time": curr_time,
                         "type": "voice",
-                        "text": f"[트리거 ({rand_gap}초 대기 후)] GO!",
-                        "duration": 0.7,
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] Let's Go!",
+                        "duration": 0.65,
                         "track": 2,
                         "vol": 3.0
                     })
                     duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
-                    curr_time += 0.8
+                    curr_time += 0.75
+                elif current_trigger == "voice_readygo":
+                    events.append({
+                        "time": curr_time,
+                        "type": "voice",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] Ready, Go!",
+                        "duration": 0.95,
+                        "track": 2,
+                        "vol": 3.0
+                    })
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 1.1) * 1000)))
+                    curr_time += 1.05
                 elif current_trigger == "voice_bang":
                     events.append({
                         "time": curr_time,
