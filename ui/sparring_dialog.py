@@ -228,6 +228,66 @@ class SparringWorker(QThread):
                         ev["sound_file"] = os.path.join("effects", "beep.wav")
                         ev["duration"] = 0.25
 
+            # 2-3. 실제 오디오 실측 길이를 기반으로 동적 타임라인 체이닝 및 1.0초 정밀 딜레이 정렬
+            # (사용자 요청: B선수 명칭/기술 발성 종료를 실제 오디오 길이로 확인 후 정확히 1.0초 딜레이 후 신호음 배치, 말 잘림 원천 방지)
+            events.sort(key=lambda x: x["time"])
+
+            for i in range(len(events) - 1):
+                curr_ev = events[i]
+                next_ev = events[i + 1]
+
+                curr_dur = curr_ev.get("duration", 0.5)
+                curr_end = curr_ev["time"] + curr_dur
+                curr_type = curr_ev.get("type", "")
+                next_type = next_ev.get("type", "")
+                next_text = next_ev.get("text", "")
+
+                # 1) 다자간 릴레이 타격 신호음(삑~익!)인 경우:
+                # 선수 호출 및 기술 설명 음성이 완전히 끝난 후 정확히 1.0초 뒤에 신호음이 울리도록 동적 정렬!
+                if "타격 신호음" in next_text and curr_type == "voice":
+                    target_next_time = round(curr_end + 1.0, 2)
+                    delta = round(target_next_time - next_ev["time"], 2)
+                    if abs(delta) > 0.01:
+                        for j in range(i + 1, len(events)):
+                            events[j]["time"] = round(events[j]["time"] + delta, 2)
+
+                # 2) 기타 구령 음성 직후 신호음/트리거인 경우: 최소 1.0초 딜레이 보장
+                elif curr_type == "voice" and next_type in ("beep", "signal", "whistle"):
+                    min_target_time = round(curr_end + 1.0, 2)
+                    if next_ev["time"] < min_target_time:
+                        delta = round(min_target_time - next_ev["time"], 2)
+                        for j in range(i + 1, len(events)):
+                            events[j]["time"] = round(events[j]["time"] + delta, 2)
+
+                # 3) 사전 안내나 카운트다운 음성 직후 다음 이벤트: 최소 0.8초 안전 간격 확보
+                elif curr_type in ("voice", "countdown"):
+                    min_target_time = round(curr_end + 0.8, 2)
+                    if next_ev["time"] < min_target_time:
+                        delta = round(min_target_time - next_ev["time"], 2)
+                        for j in range(i + 1, len(events)):
+                            events[j]["time"] = round(events[j]["time"] + delta, 2)
+
+                # 4) 신호음 직후 다음 이벤트: 최소 0.05초 확보하여 오디오 중첩 방지
+                elif curr_type in ("beep", "signal", "whistle", "bell"):
+                    min_target_time = round(curr_end + 0.05, 2)
+                    if next_ev["time"] < min_target_time:
+                        delta = round(min_target_time - next_ev["time"], 2)
+                        for j in range(i + 1, len(events)):
+                            events[j]["time"] = round(events[j]["time"] + delta, 2)
+
+            # 2-4. 타임라인 재정렬에 맞춘 오토덕킹 구간(duck_segments) 및 전체 재생시간 재계산
+            duck_segments = []
+            for ev in events:
+                st_ms = int(ev["time"] * 1000)
+                dur_ms = int(ev.get("duration", 0.5) * 1000)
+                duck_segments.append((st_ms, st_ms + dur_ms + 200))
+
+            if events:
+                last_ev = events[-1]
+                last_end_sec = last_ev["time"] + last_ev.get("duration", 1.0)
+                total_duration_sec = round(last_end_sec + 2.0, 2)
+                total_duration_ms = int(total_duration_sec * 1000)
+
             # 3. 타임라인 클립 구성
             self.progress.emit(65, "타임라인 트랙 데이터 구성 중...")
             bgm_vol_pct = self.params.get("bgm_vol_pct", 70)

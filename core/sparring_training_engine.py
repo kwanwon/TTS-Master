@@ -218,7 +218,7 @@ class SparringTrainingEngine:
                     
                     # 1. 설명/기술 명칭 먼저 충분히 송출 (절대로 '출발' 단어 넣지 않음!)
                     call_text = f"{fighter_name}! {current_cue}!"
-                    call_dur = max(1.5, round(len(call_text) * 0.18, 2))
+                    call_dur = max(2.0, round(len(call_text) * 0.22, 2))
                     events.append({
                         "time": curr_time,
                         "type": "voice",
@@ -228,7 +228,7 @@ class SparringTrainingEngine:
                         "vol": 2.5
                     })
                     duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
-                    curr_time += call_dur + 0.25
+                    curr_time += call_dur + 1.0  # 사용자 요청: 음성 안내 완료 후 1.0초 여유 딜레이 후 신호음 배치
 
                     # 2. 설명 직후 타격 시작 신호음 (삑~익!)
                     events.append({
@@ -271,7 +271,7 @@ class SparringTrainingEngine:
                             next_fighter = f"{next_f_idx}번 타자"
 
                         change_msg = f"선수 교대! {next_fighter} 준비!"
-                        chg_dur = 1.8
+                        chg_dur = max(1.8, round(len(change_msg) * 0.22, 2))
                         events.append({
                             "time": curr_time,
                             "type": "voice",
@@ -330,7 +330,7 @@ class SparringTrainingEngine:
                 
                 # 1. 기술 지시/이름 먼저 송출 (글자 수 기반 간결하고 자연스러운 발성 시간 계산)
                 char_count = len(chosen_cue.replace(" ", "").replace("!", ""))
-                cue_dur = max(0.7, round(char_count * 0.2, 2))
+                cue_dur = max(0.9, round(char_count * 0.22, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
@@ -498,7 +498,7 @@ class SparringTrainingEngine:
                 else:
                     cue_text = f"[{s}세트] {step_name}!"
 
-                cue_dur = max(0.8, round(len(cue_text) * 0.16, 2))
+                cue_dur = max(1.0, round(len(cue_text) * 0.22, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
@@ -597,8 +597,8 @@ class SparringTrainingEngine:
                     duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
                     curr_time += 0.8
 
-                # 세트 간 자연스러운 호흡 텀 (0.4초)
-                curr_time += 0.4
+                # 세트 간 자연스러운 호흡 텀 (1.0초)
+                curr_time += 1.0
 
             # 5. 모든 세트 종료 시 정중한 훈련 종료 멘트
             events.append({
