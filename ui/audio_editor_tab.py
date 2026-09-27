@@ -171,8 +171,8 @@ class AudioEditorTab(QWidget):
         """)
         self.btn_shuttle_run.clicked.connect(self.open_shuttle_run_wizard)
 
-        # 🥋 겨루기 & 발차기 훈련 음원 마법사 버튼
-        self.btn_sparring = QPushButton("🥋 겨루기/발차기 훈련 마법사")
+        # 🥋 스파링 훈련 마법사 버튼
+        self.btn_sparring = QPushButton("🥋 스파링 훈련 마법사")
         self.btn_sparring.setStyleSheet("""
             QPushButton {
                 background-color: #be185d;
@@ -823,7 +823,7 @@ class AudioEditorTab(QWidget):
             )
 
     def open_sparring_wizard(self):
-        """🥋 겨루기 & 발차기 훈련 음원 자동 생성 마법사 열기 및 타임라인 로드"""
+        """🥋 스파링 훈련 마법사 열기 및 타임라인 로드"""
         tts_eng = self.main_window.tts_engine if self.main_window else None
         dlg = SparringDialog(parent=self, tts_engine=tts_eng)
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
@@ -859,7 +859,7 @@ class AudioEditorTab(QWidget):
             self.update_ui_time()
             self.trigger_auto_mix()
             
-            mode_name = res.get("mode_name", "겨루기/발차기 훈련")
+            mode_name = res.get("mode_name", "스파링 훈련")
             QMessageBox.information(
                 self, "로드 완료",
                 f"🎉 [{mode_name}] 트랙이 타임라인에 완벽히 로드되었습니다!\n"

@@ -58,7 +58,7 @@ class SparringWorker(QThread):
             total_duration_sec = schedule_data["total_duration_sec"]
             total_duration_ms = int(total_duration_sec * 1000)
 
-            # 2. 음성 멘트 합성 (Edge-TTS 활용)
+            # 2. 음성 멘트 및 카운트다운 합성 (Edge-TTS 활용)
             use_voice = self.params.get("use_voice", True)
             voice_speaker = self.params.get("voice_speaker", "선히")
             voice_id = "ko-KR-SunHiNeural"
@@ -70,6 +70,99 @@ class SparringWorker(QThread):
             os.makedirs(os.path.join("projects", "temp_tts"), exist_ok=True)
             voice_cache = {}
 
+            # 2-1. 카운트다운 오디오 준비 (영어 본토 발음 및 한국어 지원)
+            countdown_events = [ev for ev in events if ev["type"] == "countdown"]
+            if countdown_events:
+                cd_style = self.params.get("countdown_style", "en_321")
+                is_female = "선히" in voice_speaker or "여성" in voice_speaker
+                en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+                cd_file = None
+
+                if cd_style == "beep":
+                    self.progress.emit(10, "전자 비프음 카운트다운(띡-띡-띡) 준비 중...")
+                    cd_beeps = os.path.join("effects", "countdown_beeps.wav")
+                    if os.path.exists(cd_beeps):
+                        cd_file = cd_beeps
+                elif cd_style == "en_ready":
+                    self.progress.emit(10, "영어 카운트다운(Are you ready? Ready! Three, Two, One) 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_en_ready_{uuid.uuid4().hex[:6]}.wav")
+                    try:
+                        import edge_tts, io
+                        async def _synth_cd():
+                            comm = edge_tts.Communicate("Are you ready? Ready! Three, Two, One.", en_voice, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                        asyncio.run(_synth_cd())
+                        if os.path.exists(cd_path):
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[SparringWorker] countdown TTS fail: {e_cd}")
+                elif cd_style == "ko_ready":
+                    self.progress.emit(10, "한국어 카운트다운(준비되었나요? 준비! 셋, 둘, 하나) 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_ko_ready_{uuid.uuid4().hex[:6]}.wav")
+                    try:
+                        import edge_tts, io
+                        async def _synth_cd():
+                            comm = edge_tts.Communicate("준비되었나요? 준비! 셋, 둘, 하나.", voice_id, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                        asyncio.run(_synth_cd())
+                        if os.path.exists(cd_path):
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[SparringWorker] countdown TTS fail: {e_cd}")
+                elif cd_style == "ko_321":
+                    self.progress.emit(10, "한국어 카운트다운(셋, 둘, 하나) 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_ko_321_{uuid.uuid4().hex[:6]}.wav")
+                    try:
+                        import edge_tts, io
+                        async def _synth_cd():
+                            comm = edge_tts.Communicate("셋, 둘, 하나.", voice_id, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                        asyncio.run(_synth_cd())
+                        if os.path.exists(cd_path):
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[SparringWorker] countdown TTS fail: {e_cd}")
+                else:  # en_321 기본값 (본토 영어 발음)
+                    self.progress.emit(10, "영어 본토 발음 카운트다운(Three, Two, One) 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"sparring_cd_en_321_{uuid.uuid4().hex[:6]}.wav")
+                    try:
+                        import edge_tts, io
+                        async def _synth_cd():
+                            comm = edge_tts.Communicate("Three, Two, One.", en_voice, rate="+5%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            AudioSegment.from_file(buf, format="mp3").export(cd_path, format="wav")
+                        asyncio.run(_synth_cd())
+                        if os.path.exists(cd_path):
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[SparringWorker] countdown TTS fail: {e_cd}")
+
+                if cd_file and os.path.exists(cd_file):
+                    dur = len(AudioSegment.from_file(cd_file)) / 1000.0
+                    for cev in countdown_events:
+                        cev["sound_file"] = cd_file
+                        cev["duration"] = dur
+
+            # 2-2. 본 구령 음성 합성
             voice_events = [ev for ev in events if ev["type"] == "voice"]
             for idx, ev in enumerate(voice_events):
                 pct = 15 + int(45 * ((idx + 1) / max(len(voice_events), 1)))
@@ -80,7 +173,10 @@ class SparringWorker(QThread):
                     parts = text.split("]", 1)
                     clean_text = parts[1].strip() if len(parts) > 1 and parts[1].strip() else parts[0].strip("[")
 
-                self.progress.emit(pct, f"구령 음성 합성 중 ({idx+1}/{len(voice_events)}): {clean_text[:12]}...")
+                # 혹시라도 포함되었을 수 있는 '출발' 단어 완전 제거
+                clean_text = clean_text.replace("출발!", "").replace("출발", "").strip()
+
+                self.progress.emit(pct, f"훈련 구령 음성 합성 중 ({idx+1}/{len(voice_events)}): {clean_text[:12]}...")
 
                 if clean_text in voice_cache:
                     ev["sound_file"] = voice_cache[clean_text]["file"]
@@ -127,7 +223,7 @@ class SparringWorker(QThread):
             for ev in events:
                 f_path = ev.get("sound_file", "")
                 if f_path and os.path.exists(f_path):
-                    clip_vol = voice_vol_db if ev.get("type") == "voice" else sig_vol_db
+                    clip_vol = voice_vol_db if ev.get("type") in ("voice", "countdown") else sig_vol_db
                     timeline_clips.append({
                         "text": ev["text"],
                         "file": f_path,
@@ -195,12 +291,12 @@ class SparringWorker(QThread):
             self.progress.emit(100, "완료!")
             result_data = {
                 "mode": self.mode,
-                "mode_name": SparringTrainingEngine.TRAINING_MODES.get(self.mode, {}).get("name", "겨루기/발차기 훈련"),
+                "mode_name": SparringTrainingEngine.TRAINING_MODES.get(self.mode, {}).get("name", "스파링 훈련"),
                 "timeline_clips": timeline_clips,
                 "master_audio_path": output_master_path,
                 "total_duration_sec": total_duration_sec
             }
-            self.finished.emit(True, "겨루기/발차기 훈련 음원이 성공적으로 생성되었습니다.", result_data)
+            self.finished.emit(True, "스파링 훈련 음원이 성공적으로 생성되었습니다.", result_data)
 
         except Exception as e:
             import traceback
@@ -209,13 +305,13 @@ class SparringWorker(QThread):
 
 
 class SparringDialog(QDialog):
-    """겨루기 & 발차기 트레이닝 음원 생성 마법사 UI 다이얼로그"""
+    """스파링 훈련 음원 생성 마법사 UI 다이얼로그"""
 
     def __init__(self, parent=None, tts_engine=None):
         super().__init__(parent)
         self.tts_engine = tts_engine
-        self.setWindowTitle("🥋 겨루기 & 미트 발차기 트레이닝 음원 마법사")
-        self.resize(700, 750)
+        self.setWindowTitle("🥋 스파링 훈련 마법사")
+        self.resize(700, 780)
         self.bgm_playlist: List[str] = []
         self.generated_result = None
 
@@ -228,10 +324,10 @@ class SparringDialog(QDialog):
         header_box = QGroupBox()
         header_box.setStyleSheet("background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 6px;")
         hb_layout = QVBoxLayout(header_box)
-        title_lbl = QLabel("🥋 맞춤형 겨루기 스텝 & 미트 발차기 훈련 음원 생성기")
+        title_lbl = QLabel("🥋 맞춤형 실전 스파링 & 미트 발차기 훈련 음원 마법사")
         title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #9d174d;")
         desc_lbl = QLabel(
-            "오늘의 훈련 목표(1:1 받아차기, 1·2연타, 1:2/1:3 순환 미트, 겨루기 라운드)에 맞춰\n"
+            "오늘의 훈련 목표(1:1 / 1:2 / 1:3 릴레이 미트, 스텝 & 실전 반응, 콤비네이션 연타, 정규 스파링 라운드)에 맞춰\n"
             "구령과 신호음, 신나는 BGM을 자유자재로 설정하고 오토덕킹으로 깔끔하게 자동 합성합니다."
         )
         desc_lbl.setStyleSheet("color: #475569; font-size: 12px;")
@@ -252,6 +348,11 @@ class SparringDialog(QDialog):
         # ── 탭 1: 1:1, 1:2, 1:3 릴레이 미트 ──
         tab_relay = QWidget()
         l_relay = QVBoxLayout(tab_relay)
+
+        # 실전 훈련 시퀀스 흐름 안내
+        relay_flow_info = QLabel("💡 동작 흐름: [선수 호명 및 기술 설명] ➔ (0.25초) ➔ [🔔 삑! 타격 신호음] ➔ [타격] ➔ [🗣️ '선수 교대! B선수 준비!'] (절대 '출발' 단어 없음)")
+        relay_flow_info.setStyleSheet("background-color: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #86198f; font-size: 12px;")
+        l_relay.addWidget(relay_flow_info)
         
         g_relay_f = QGroupBox("선수 인원 구성")
         hl_rf = QHBoxLayout(g_relay_f)
@@ -264,7 +365,7 @@ class SparringDialog(QDialog):
         hl_rf.addWidget(self.rb_relay_13)
         l_relay.addWidget(g_relay_f)
 
-        g_relay_t = QGroupBox("시간 및 훈련 설정")
+        g_relay_t = QGroupBox("시간 및 실전 기술 설정")
         l_rt = QVBoxLayout(g_relay_t)
         
         h_rt1 = QHBoxLayout()
@@ -281,21 +382,39 @@ class SparringDialog(QDialog):
         self.sp_relay_change.setValue(3)
         self.sp_relay_change.setSuffix(" 초")
         h_rt1.addWidget(self.sp_relay_change)
-        l_rt.addLayout(h_rt1)
 
-        h_rt2 = QHBoxLayout()
-        h_rt2.addWidget(QLabel("전체 순환 세트 수:"))
+        h_rt1.addWidget(QLabel("전체 세트:"))
         self.sp_relay_cycles = QSpinBox()
         self.sp_relay_cycles.setRange(1, 10)
         self.sp_relay_cycles.setValue(3)
         self.sp_relay_cycles.setSuffix(" 세트")
-        h_rt2.addWidget(self.sp_relay_cycles)
+        h_rt1.addWidget(self.sp_relay_cycles)
+        l_rt.addLayout(h_rt1)
 
-        h_rt2.addWidget(QLabel("공격 구령/기술명:"))
-        self.txt_relay_cue = QLineEdit("받아차기")
-        self.txt_relay_cue.setPlaceholderText("예: 받아차기, 1연타, 나래차기 등")
-        h_rt2.addWidget(self.txt_relay_cue)
+        # 릴레이 훈련 기술 템플릿 선택 드롭다운
+        h_rt_tmpl = QHBoxLayout()
+        h_rt_tmpl.addWidget(QLabel("📋 실전 기술 템플릿:"))
+        self.combo_relay_template = QComboBox()
+        self.combo_relay_template.addItem("🥋 [실전 스파링 콤보 1] 백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단", "백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단")
+        self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 2] 앞발 컷트 후 뒷발 돌려차기 상단, 사이드 스텝 후 뒤차기 카운터", "앞발 컷트 후 뒷발 돌려차기 상단, 사이드 스텝 후 뒤차기 카운터")
+        self.combo_relay_template.addItem("🎯 [실전 스파링 콤보 3] 빠른발 몸통 페인트 후 앞발 상단 찍기, 원투 연타 후 뒷발 돌려차기", "빠른발 몸통 페인트 후 앞발 상단 찍기, 원투 연타 후 뒷발 돌려차기")
+        self.combo_relay_template.addItem("🛡️ [단일 기술 집중] 백스텝 후 받아차기 교차 상단", "백스텝 후 받아차기 교차 상단")
+        self.combo_relay_template.addItem("🔥 [연타 콤보] 1연타, 2연타, 3연타, 나래차기 연타", "1연타, 2연타, 3연타, 나래차기 연타")
+        self.combo_relay_template.currentIndexChanged.connect(self._on_relay_template_changed)
+        h_rt_tmpl.addWidget(self.combo_relay_template, stretch=1)
+        l_rt.addLayout(h_rt_tmpl)
+
+        h_rt2 = QHBoxLayout()
+        h_rt2.addWidget(QLabel("✏️ 적용 공격 기술명:"))
+        self.txt_relay_cue = QLineEdit("백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단")
+        self.txt_relay_cue.setPlaceholderText("쉼표(,)로 구분하여 입력 시 선수/세트별로 순환 지시됩니다.")
+        h_rt2.addWidget(self.txt_relay_cue, stretch=1)
         l_rt.addLayout(h_rt2)
+
+        lbl_relay_hint = QLabel("※ 쉼표(,)로 구분해 여러 기술을 입력하면 A선수, B선수에게 차례로 다양한 기술을 지시합니다.")
+        lbl_relay_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        l_rt.addWidget(lbl_relay_hint)
+
         l_relay.addWidget(g_relay_t)
         l_relay.addStretch()
         self.tabs.addTab(tab_relay, "🔄 1:1 / 1:2 / 1:3 릴레이 미트")
@@ -404,27 +523,27 @@ class SparringDialog(QDialog):
         h_tmpl = QHBoxLayout()
         h_tmpl.addWidget(QLabel("📋 훈련 템플릿 선택:"))
         self.combo_cues_template = QComboBox()
-        self.combo_cues_template.addItem("⚡ [템플릿 1] 연타 공격 (1연타, 2연타, 3연타, 나래차기)", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
-        self.combo_cues_template.addItem("🛡️ [템플릿 2] 받아차기 / 카운터 (받아차기, 카운터, 뒤차기, 컷트)", "받아차기!, 카운터!, 뒤차기!, 앞발 컷트!")
-        self.combo_cues_template.addItem("🥋 [템플릿 3] 실전 겨루기 (돌려차기, 앞발 찍기, 뒤후리기, 찌르기)", "돌려차기!, 앞발 찍기!, 뒤후리기!, 찌르기!")
-        self.combo_cues_template.addItem("🏃‍♂️ [템플릿 4] 기본 순발력 (앞차기, 돌려차기, 내려찍기, 옆차기)", "앞차기!, 돌려차기!, 내려찍기!, 옆차기!")
+        self.combo_cues_template.addItem("🥋 [실전 스파링 콤보] 백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 상단!, 사이드 스텝 후 뒤차기!", "백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
+        self.combo_cues_template.addItem("⚡ [스피드 연타] 1연타!, 2연타!, 3연타!, 앞발 나래차기!", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
+        self.combo_cues_template.addItem("🛡️ [받아차기 / 카운터] 백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!", "백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!")
+        self.combo_cues_template.addItem("🏃‍♂️ [기본기 순발력] 앞차기!, 돌려차기!, 내려찍기!, 옆차기!", "앞차기!, 돌려차기!, 내려찍기!, 옆차기!")
         self.combo_cues_template.currentIndexChanged.connect(self._on_cues_template_changed)
         h_tmpl.addWidget(self.combo_cues_template, stretch=1)
         l_rcc.addLayout(h_tmpl)
 
         h_input = QHBoxLayout()
         h_input.addWidget(QLabel("✏️ 적용 구령 목록:"))
-        self.txt_reac_cues = QLineEdit("1연타!, 2연타!, 3연타!, 앞발 나래차기!")
+        self.txt_reac_cues = QLineEdit("백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
         self.txt_reac_cues.setPlaceholderText("쉼표로 구분하여 자유롭게 기술명을 입력하세요")
         h_input.addWidget(self.txt_reac_cues, stretch=1)
         l_rcc.addLayout(h_input)
 
-        lbl_hint = QLabel("※ 스텝 중 위 기술명이 먼저 제시되고, 무작위 대기 시간(3~8초) 후 신호음(삑!/시작!)에 즉시 발차기합니다.")
+        lbl_hint = QLabel("※ 스텝 중 위 기술명이 먼저 제시되고, 무작위 대기 시간 후 신호음(삑!)에 즉시 반응 타격합니다. ('출발' 단어 없음)")
         lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_rcc.addWidget(lbl_hint)
         l_reac.addWidget(g_reac_cues)
         l_reac.addStretch()
-        self.tabs.addTab(tab_reaction, "⚡ 스텝 & 받아차기 반응")
+        self.tabs.addTab(tab_reaction, "⚡ 스텝 & 실전 반응")
 
         # ── 탭 3: 스텝 + 콤비 연타 인터벌 ──
         tab_combo = QWidget()
@@ -458,16 +577,16 @@ class SparringDialog(QDialog):
 
         g_combo_types = QGroupBox("콤비네이션 연타 구령 (세트마다 순환)")
         l_cbt = QVBoxLayout(g_combo_types)
-        self.txt_combo_types = QLineEdit("1연타, 2연타, 3연타, 나래차기 연타")
+        self.txt_combo_types = QLineEdit("1연타, 2연타, 3연타, 나래차기 연타, 뒷발 돌려차기 연타")
         l_cbt.addWidget(self.txt_combo_types)
         l_combo.addWidget(g_combo_types)
         l_combo.addStretch()
         self.tabs.addTab(tab_combo, "🔥 스텝 + 콤비네이션 연타")
 
-        # ── 탭 4: 정규 겨루기 라운드 ──
+        # ── 탭 4: 정규 스파링 라운드 ──
         tab_round = QWidget()
         l_rnd = QVBoxLayout(tab_round)
-        g_rnd_set = QGroupBox("라운드 시간 설정")
+        g_rnd_set = QGroupBox("스파링 라운드 시간 설정")
         l_rnds = QHBoxLayout(g_rnd_set)
         
         l_rnds.addWidget(QLabel("1라운드 경기 시간:"))
@@ -492,12 +611,12 @@ class SparringDialog(QDialog):
         l_rnds.addWidget(self.sp_rnd_count)
         l_rnd.addWidget(g_rnd_set)
         l_rnd.addStretch()
-        self.tabs.addTab(tab_round, "🥊 정규 겨루기 라운드")
+        self.tabs.addTab(tab_round, "🥊 정규 스파링 라운드")
 
         content_layout.addWidget(self.tabs)
 
-        # ── 공통 설정 (BGM, 화자, 오토덕킹) ──
-        common_group = QGroupBox("🎵 배경음악(BGM) 및 효과음/음성 옵션")
+        # ── 공통 설정 (BGM, 화자, 오토덕킹, 카운트다운) ──
+        common_group = QGroupBox("🎵 배경음악(BGM) 및 구령/신호음 옵션")
         l_common = QVBoxLayout(common_group)
 
         # BGM 다중 선택
@@ -515,13 +634,29 @@ class SparringDialog(QDialog):
         self.bgm_label.setStyleSheet("color: #64748b; font-style: italic;")
         l_common.addWidget(self.bgm_label)
 
-        # 음성 화자 및 오토덕킹
-        h_opts = QHBoxLayout()
-        self.cb_countdown = QCheckBox("시작 전 카운트다운(3-2-1) 포함")
+        # 시작 전 안내 및 카운트다운 설정
+        h_intro_opts = QHBoxLayout()
+        self.cb_intro = QCheckBox("시작 전 기술 설명 및 준비 안내 음성 포함")
+        self.cb_intro.setChecked(True)
+        self.cb_countdown = QCheckBox("카운트다운 포함")
         self.cb_countdown.setChecked(True)
+        h_intro_opts.addWidget(self.cb_intro)
+        h_intro_opts.addWidget(self.cb_countdown)
+
+        h_intro_opts.addWidget(QLabel("카운트다운 구령:"))
+        self.combo_cd_style = QComboBox()
+        self.combo_cd_style.addItem("🇺🇸 영어 본토 발음 (Three, Two, One)", "en_321")
+        self.combo_cd_style.addItem("🏆 영어 스포츠 구령 (Are you ready? Ready! Three, Two, One)", "en_ready")
+        self.combo_cd_style.addItem("🇰🇷 한국어 친근한 구령 (준비되었나요? 준비! 셋, 둘, 하나)", "ko_ready")
+        self.combo_cd_style.addItem("🥋 한국어 표준 구령 (셋, 둘, 하나)", "ko_321")
+        self.combo_cd_style.addItem("🔔 전자 비프음 3회 (띡-띡-띡)", "beep")
+        h_intro_opts.addWidget(self.combo_cd_style)
+        l_common.addLayout(h_intro_opts)
+
+        # 화자 및 오토덕킹
+        h_opts = QHBoxLayout()
         self.cb_ducking = QCheckBox("🎵 BGM 오토 덕킹(신호 시 음악 -8dB 감쇄)")
         self.cb_ducking.setChecked(True)
-        h_opts.addWidget(self.cb_countdown)
         h_opts.addWidget(self.cb_ducking)
 
         h_opts.addWidget(QLabel("구령 화자:"))
@@ -675,6 +810,11 @@ class SparringDialog(QDialog):
         if tmpl_data:
             self.txt_reac_cues.setText(tmpl_data)
 
+    def _on_relay_template_changed(self, idx):
+        tmpl_data = self.combo_relay_template.currentData()
+        if tmpl_data:
+            self.txt_relay_cue.setText(tmpl_data)
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -728,7 +868,9 @@ class SparringDialog(QDialog):
             duck_db_val = -8.0
 
         params = {
+            "intro_enabled": self.cb_intro.isChecked(),
             "countdown_enabled": self.cb_countdown.isChecked(),
+            "countdown_style": self.combo_cd_style.currentData() or "en_321",
             "auto_ducking": self.cb_ducking.isChecked(),
             "voice_speaker": self.voice_combo.currentText(),
             "use_voice": True,
@@ -744,7 +886,7 @@ class SparringDialog(QDialog):
             params["strike_sec"] = float(self.sp_relay_strike.value())
             params["change_sec"] = float(self.sp_relay_change.value())
             params["cycles"] = self.sp_relay_cycles.value()
-            params["cue_text"] = self.txt_relay_cue.text().strip() or "받아차기"
+            params["cue_text"] = self.txt_relay_cue.text().strip() or "백스텝 후 받아차기 교차 상단"
 
         elif mode == "reaction":
             params["duration_sec"] = float(self.sp_reac_dur.value())
@@ -795,7 +937,7 @@ class SparringDialog(QDialog):
             reply = QMessageBox.question(
                 self,
                 "훈련 음원 생성 완료",
-                "🎉 맞춤 겨루기/발차기 훈련 음원이 성공적으로 생성되었습니다!\n\n"
+                "🎉 맞춤 스파링 & 발차기 훈련 음원이 성공적으로 생성되었습니다!\n\n"
                 f"- 모드: {SparringTrainingEngine.TRAINING_MODES.get(result_data['mode'], {}).get('name', '맞춤 훈련')}\n"
                 f"- 총 재생 시간: {dur_m}분 {dur_s}초\n\n"
                 "지금 바로 음악 편집기 타임라인에 트랙별(BGM/신호음/구령)로 로드하시겠습니까?\n"
@@ -815,7 +957,7 @@ class SparringDialog(QDialog):
                 if save_reply == QMessageBox.StandardButton.Yes:
                     save_path, _ = QFileDialog.getSaveFileName(
                         self, "훈련 음원 저장",
-                        f"발차기훈련_{result_data['mode']}_{dur_m}분{dur_s}초.wav",
+                        f"스파링훈련_{result_data['mode']}_{dur_m}분{dur_s}초.wav",
                         "Audio Files (*.wav *.mp3)",
                         options=QFileDialog.Option.DontUseNativeDialog
                     )
