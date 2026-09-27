@@ -272,26 +272,25 @@ class ShuttleRunWorker(QThread):
                     cd_duration = len(countdown_audio) / 1000.0
                     cd_file = countdown_path
 
-            # C. 단계별 구령 텍스트 맵 및 속도 배정 (1단계 구령 및 5m용 '1단!', '1!' 등)
-            if cue_style == "dan" or (cue_style == "auto" and distance <= 5.0):
-                cue_text_map = {1: "1단!"}
-                for s in range(2, target_stages + 1):
-                    cue_text_map[s] = f"{s}단!"
+            # C. 단계별 구령 텍스트 맵 및 성우/배속 배정 ("시작" 단어 원천 제거 및 영어 본토 발음 지원)
+            cue_voice = voice_id
+            if cue_style == "en_level":
+                cue_text_map = {s: f"Level {s}!" for s in range(1, target_stages + 1)}
+                cue_rate = "+20%"
+                cue_voice = en_voice
+            elif cue_style == "en_num":
+                en_num_words = {1: "One!", 2: "Two!", 3: "Three!", 4: "Four!", 5: "Five!", 6: "Six!", 7: "Seven!", 8: "Eight!", 9: "Nine!", 10: "Ten!", 11: "Eleven!", 12: "Twelve!", 13: "Thirteen!", 14: "Fourteen!", 15: "Fifteen!"}
+                cue_text_map = {s: en_num_words.get(s, f"{s}!") for s in range(1, target_stages + 1)}
+                cue_rate = "+25%"
+                cue_voice = en_voice
+            elif cue_style == "dan" or (cue_style == "auto" and distance <= 5.0):
+                cue_text_map = {s: f"{s}단!" for s in range(1, target_stages + 1)}
                 cue_rate = "+35%"
             elif cue_style == "num":
-                cue_text_map = {1: "1!"}
-                for s in range(2, target_stages + 1):
-                    cue_text_map[s] = f"{s}!"
+                cue_text_map = {s: f"{s}!" for s in range(1, target_stages + 1)}
                 cue_rate = "+35%"
-            elif cue_style == "stage_short":
-                cue_text_map = {1: "1단계!"}
-                for s in range(2, target_stages + 1):
-                    cue_text_map[s] = f"{s}단계!"
-                cue_rate = "+25%"
-            else:
-                cue_text_map = {1: "1단계!"}
-                for s in range(2, target_stages + 1):
-                    cue_text_map[s] = f"{s}단계 시작!"
+            else:  # stage (표준 단계) - "시작" 단어 완전 제거! 오직 "1단계!", "2단계!"로만 구령
+                cue_text_map = {s: f"{s}단계!" for s in range(1, target_stages + 1)}
                 cue_rate = "+20%"
 
             if use_voice:
@@ -314,7 +313,7 @@ class ShuttleRunWorker(QThread):
                             trimmed_seg = trim_audio_silence(raw_seg)
                             trimmed_seg.export(p, format="wav")
 
-                        asyncio.run(_gen(text, voice_id, v_path, cue_rate))
+                        asyncio.run(_gen(text, cue_voice, v_path, cue_rate))
                         generated = True
                     except Exception as e_voice:
                         print(f"[Shuttle] Edge-TTS direct fail: {e_voice}")
@@ -819,15 +818,21 @@ class ShuttleRunDialog(QDialog):
         h_voice.addWidget(self.voice_combo)
         opt_layout.addLayout(h_voice)
 
-        # 구령 스타일 선택 (5m용 '1단!', '2단!' 등)
+        # 구령 스타일 선택 (영어 Level 1, One, 한국어 1단계, 1단 등)
         h_cue_style = QHBoxLayout()
         h_cue_style.addWidget(QLabel("  🥋 구령 스타일:"))
         self.combo_cue_style = QComboBox()
-        self.combo_cue_style.addItem("🥋 초간결 단계 ('1단!', '2단!', '3단!') - 5m 단거리 추천", "dan")
-        self.combo_cue_style.addItem("🔢 초미니멀 숫자 ('1!', '2!', '3!') - 0.25초 순간 구령", "num")
-        self.combo_cue_style.addItem("⚡ 간결 단계 ('1단계!', '2단계!')", "stage_short")
-        self.combo_cue_style.addItem("📢 표준 단계 ('1단계!', '2단계 시작!')", "stage_std")
+        self.combo_cue_style.addItem("🇺🇸 영어 레벨 ('Level 1!', 'Level 2!' - 미국 본토 발음)", "en_level")
+        self.combo_cue_style.addItem("🇺🇸 영어 숫자 ('One!', 'Two!', 'Three!' - 본토 발음)", "en_num")
+        self.combo_cue_style.addItem("📢 한국어 표준 단계 ('1단계!', '2단계!' - 시작 단어 제외)", "stage")
+        self.combo_cue_style.addItem("🥋 한국어 초간결 단 ('1단!', '2단!', '3단!') - 5m 단거리 추천", "dan")
+        self.combo_cue_style.addItem("🔢 한국어 초미니멀 숫자 ('1!', '2!', '3!') - 0.25초 순간 구령", "num")
+
+        btn_preview_cue = QPushButton("🎧 구령 미리듣기")
+        btn_preview_cue.clicked.connect(self.preview_cue_sound)
+
         h_cue_style.addWidget(self.combo_cue_style, stretch=1)
+        h_cue_style.addWidget(btn_preview_cue)
         opt_layout.addLayout(h_cue_style)
 
         lbl_voice_info = QLabel("💡 5m 단거리는 '1단!', '2단!' 또는 '1!', '2!'로 설정하시면 빠른 배속(+35%)으로 신호음 간격에 완벽히 들어맞습니다.")
@@ -1046,6 +1051,43 @@ class ShuttleRunDialog(QDialog):
                 sound.play()
             except Exception as e:
                 QMessageBox.warning(self, "미리듣기 실패", f"카운트다운 재생 실패: {e}")
+
+    def preview_cue_sound(self):
+        style = self.combo_cue_style.currentData()
+        speaker = self.voice_combo.currentText()
+        is_female = "여성" in speaker or "선히" in speaker
+        en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+        ko_voice = "ko-KR-SunHiNeural" if is_female else "ko-KR-InJoonNeural"
+
+        if style == "en_level":
+            file_path = os.path.join("projects", "temp_tts", f"preview_cue_level_{'female' if is_female else 'male'}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("Level 1!", en_voice, file_path, rate="+20%")
+        elif style == "en_num":
+            file_path = os.path.join("projects", "temp_tts", f"preview_cue_ennum_{'female' if is_female else 'male'}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("One!", en_voice, file_path, rate="+25%")
+        elif style == "dan":
+            file_path = os.path.join("projects", "temp_tts", f"preview_cue_dan_{ko_voice}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("1단!", ko_voice, file_path, rate="+35%")
+        elif style == "num":
+            file_path = os.path.join("projects", "temp_tts", f"preview_cue_num_{ko_voice}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("1!", ko_voice, file_path, rate="+35%")
+        else:  # stage
+            file_path = os.path.join("projects", "temp_tts", f"preview_cue_stage_{ko_voice}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("1단계!", ko_voice, file_path, rate="+20%")
+
+        if os.path.exists(file_path):
+            try:
+                import pygame
+                pygame.mixer.init()
+                sound = pygame.mixer.Sound(file_path)
+                sound.play()
+            except Exception as e:
+                QMessageBox.warning(self, "미리듣기 실패", f"구령 재생 실패: {e}")
 
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_mode_idx: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
