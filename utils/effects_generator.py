@@ -27,6 +27,7 @@ DEFAULT_EFFECT_FILES = [
     "whistle.wav",
     "stage_bell.wav",
     "countdown.wav",
+    "countdown_beeps.wav",
     "drum.wav",
 ]
 
@@ -161,6 +162,33 @@ def generate_drum(sr=44100, duration=0.45) -> AudioSegment:
     return AudioSegment.from_file(buf, format='wav')
 
 
+def generate_countdown_beeps(sr=44100, count=3, interval_sec=0.75, beep_dur=0.15, freq=520.0) -> AudioSegment:
+    """
+    3-beep electronic warning countdown (띡 - 띡 - 띡).
+    Clear, distinct pulses at 520Hz with soft attack/decay envelopes.
+    """
+    _ensure_libs()
+    total_sec = (count - 1) * interval_sec + beep_dur + 0.1
+    samples = int(sr * total_sec)
+    sig = np.zeros(samples, dtype=np.float32)
+
+    t_beep = np.linspace(0, beep_dur, int(sr * beep_dur), endpoint=False)
+    env = np.ones_like(t_beep)
+    fl = int(sr * 0.01)
+    env[:fl] = np.linspace(0, 1, fl)
+    env[-fl:] = np.linspace(1, 0, fl)
+    beep_wave = (0.75 * np.sin(2 * np.pi * freq * t_beep) * env).astype(np.float32)
+
+    for i in range(count):
+        pos = int(i * interval_sec * sr)
+        sig[pos:pos + len(beep_wave)] += beep_wave
+
+    buf = io.BytesIO()
+    sf.write(buf, sig, sr, format='WAV', subtype='PCM_16')
+    buf.seek(0)
+    return AudioSegment.from_file(buf, format='wav')
+
+
 def ensure_default_effects(effects_dir: str = "effects"):
     """Creates default wav assets in effects_dir if missing."""
     os.makedirs(effects_dir, exist_ok=True)
@@ -181,6 +209,7 @@ def ensure_default_effects(effects_dir: str = "effects"):
         "whistle.wav": generate_whistle,
         "stage_bell.wav": generate_stage_bell,
         "countdown.wav": generate_countdown,
+        "countdown_beeps.wav": generate_countdown_beeps,
         "drum.wav": generate_drum,
     }
 

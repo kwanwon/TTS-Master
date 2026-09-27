@@ -160,33 +160,117 @@ class ShuttleRunWorker(QThread):
             except Exception as e_intro:
                 print(f"[Shuttle] Prep TTS fail: {e_intro}")
 
-            # B. 카운트다운 생성 (TTS로 '쓰리, 투, 원.' 발성하여 '출발' 단어 혼동 완전 차단)
+            # B. 카운트다운 생성 (템플릿: 영어 321, 비프음, 한국어 준비, 영어 준비, 한국어 321)
             cd_file = ""
             cd_duration = 0.0
-            if countdown_enabled:
-                self.progress.emit(12, "카운트다운 음성('쓰리, 투, 원') 생성 중...")
-                cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_{uuid.uuid4().hex[:6]}.wav")
-                try:
-                    async def _gen_cd():
-                        comm = edge_tts.Communicate("쓰리, 투, 원.", voice_id, rate="+10%")
-                        buf = io.BytesIO()
-                        async for chunk in comm.stream():
-                            if chunk['type'] == 'audio':
-                                buf.write(chunk['data'])
-                        buf.seek(0)
-                        raw_seg = AudioSegment.from_file(buf, format="mp3")
-                        trimmed_seg = trim_audio_silence(raw_seg)
-                        trimmed_seg.export(cd_path, format="wav")
+            cd_clip_text = "[카운트다운] Three, Two, One"
 
-                    asyncio.run(_gen_cd())
-                    if os.path.exists(cd_path):
-                        cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
-                        cd_file = cd_path
-                except Exception as e_cd:
-                    print(f"[Shuttle] Countdown TTS fail: {e_cd}")
-                    if countdown_audio:
-                        cd_duration = len(countdown_audio) / 1000.0
-                        cd_file = countdown_path
+            if countdown_enabled:
+                cd_style = self.config.get("countdown_style", "en_321")
+                is_female = "여성" in voice_speaker or "선히" in voice_speaker
+                en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+
+                if cd_style == "beep":
+                    self.progress.emit(12, "전자 비프음 카운트다운(3박자 띡-띡-띡) 준비 중...")
+                    ensure_default_effects()
+                    cd_beeps_path = os.path.join("effects", "countdown_beeps.wav")
+                    if os.path.exists(cd_beeps_path):
+                        cd_duration = len(AudioSegment.from_file(cd_beeps_path)) / 1000.0
+                        cd_file = cd_beeps_path
+                        cd_clip_text = "[카운트다운] 전자 비프음 3회 (띡-띡-띡)"
+                elif cd_style == "en_ready":
+                    self.progress.emit(12, "영어 스포츠 카운트다운('Are you ready? Ready! Three, Two, One') 본토 발음 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_en_ready_{uuid.uuid4().hex[:6]}.wav")
+                    cd_clip_text = "[카운트다운] Are you ready? Ready! Three, Two, One (영어 본토 발음)"
+                    try:
+                        async def _gen_cd():
+                            comm = edge_tts.Communicate("Are you ready? Ready! Three, Two, One.", en_voice, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(cd_path, format="wav")
+
+                        asyncio.run(_gen_cd())
+                        if os.path.exists(cd_path):
+                            cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[Shuttle] Countdown TTS fail: {e_cd}")
+                elif cd_style == "ko_ready":
+                    self.progress.emit(12, "한국어 친근한 카운트다운('준비되었나요? 준비! 셋, 둘, 하나') 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_ko_ready_{uuid.uuid4().hex[:6]}.wav")
+                    cd_clip_text = "[카운트다운] 준비되었나요? 준비! 셋, 둘, 하나"
+                    try:
+                        async def _gen_cd():
+                            comm = edge_tts.Communicate("준비되었나요? 준비! 셋, 둘, 하나.", voice_id, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(cd_path, format="wav")
+
+                        asyncio.run(_gen_cd())
+                        if os.path.exists(cd_path):
+                            cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[Shuttle] Countdown TTS fail: {e_cd}")
+                elif cd_style == "ko_321":
+                    self.progress.emit(12, "한국어 카운트다운('셋, 둘, 하나') 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_ko_321_{uuid.uuid4().hex[:6]}.wav")
+                    cd_clip_text = "[카운트다운] 셋, 둘, 하나"
+                    try:
+                        async def _gen_cd():
+                            comm = edge_tts.Communicate("셋, 둘, 하나.", voice_id, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(cd_path, format="wav")
+
+                        asyncio.run(_gen_cd())
+                        if os.path.exists(cd_path):
+                            cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[Shuttle] Countdown TTS fail: {e_cd}")
+                else:  # en_321 기본값
+                    self.progress.emit(12, "영어 카운트다운('Three, Two, One' 본토 발음) 생성 중...")
+                    cd_path = os.path.join("projects", "temp_tts", f"shuttle_cd_en_321_{uuid.uuid4().hex[:6]}.wav")
+                    cd_clip_text = "[카운트다운] Three, Two, One (영어 본토 발음)"
+                    try:
+                        async def _gen_cd():
+                            comm = edge_tts.Communicate("Three, Two, One.", en_voice, rate="+10%")
+                            buf = io.BytesIO()
+                            async for chunk in comm.stream():
+                                if chunk['type'] == 'audio':
+                                    buf.write(chunk['data'])
+                            buf.seek(0)
+                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(cd_path, format="wav")
+
+                        asyncio.run(_gen_cd())
+                        if os.path.exists(cd_path):
+                            cd_duration = len(AudioSegment.from_file(cd_path)) / 1000.0
+                            cd_file = cd_path
+                    except Exception as e_cd:
+                        print(f"[Shuttle] Countdown TTS fail: {e_cd}")
+
+                # 최후 폴백
+                if not cd_file and countdown_audio:
+                    cd_duration = len(countdown_audio) / 1000.0
+                    cd_file = countdown_path
 
             # C. 단계별 구령 텍스트 맵 및 속도 배정 (1단계 구령 및 5m용 '1단!', '1!' 등)
             if cue_style == "dan" or (cue_style == "auto" and distance <= 5.0):
@@ -279,16 +363,16 @@ class ShuttleRunWorker(QThread):
 
             s1 = schedule[0]
 
-            # B. 카운트다운 클립 (쓰리, 투, 원)
+            # B. 카운트다운 클립
             if countdown_enabled and cd_file and s1.get("countdown_time_sec") is not None:
                 cd_time = s1["countdown_time_sec"]
                 timeline_clips.append({
-                    "text": "[카운트다운] 쓰리, 투, 원 (1초 후 1단계)",
+                    "text": f"{cd_clip_text} (1초 후 1단계)",
                     "file": cd_file,
                     "time": cd_time,
                     "duration": cd_duration,
                     "track": cd_track,
-                    "vol": voice_vol_db
+                    "vol": sig_vol_db if cd_style == "beep" else voice_vol_db
                 })
                 if duck_mode in ("voice_only", "all") and auto_ducking:
                     duck_segments.append((int(cd_time * 1000), int((cd_time + cd_duration) * 1000)))
@@ -691,16 +775,35 @@ class ShuttleRunDialog(QDialog):
         h_intro.addWidget(self.combo_intro_style, stretch=1)
         opt_layout.addLayout(h_intro)
 
-        # 시작 전 카운트다운
-        self.cb_countdown = QCheckBox("시작 전 '쓰리, 투, 원' 카운트다운 포함 (1초 딜레이 후 '1단계 - 신호음' 순서로 출발)")
+        # 시작 전 카운트다운 템플릿 선택 및 안내
+        h_cd = QHBoxLayout()
+        self.cb_countdown = QCheckBox("시작 전 카운트다운:")
         self.cb_countdown.setChecked(True)
         self.cb_countdown.setStyleSheet("font-weight: bold; color: #1e3a8a;")
-        opt_layout.addWidget(self.cb_countdown)
 
-        # 실전 출발 시퀀스 안내 배너
-        seq_banner = QLabel("🎯 1단계 출발 순서: [준비 안내: 신호음 소리에 출발!] ➔ [쓰리, 투, 원] ➔ (1초 딜레이) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]")
-        seq_banner.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #166534; font-size: 11px;")
-        opt_layout.addWidget(seq_banner)
+        self.combo_countdown_style = QComboBox()
+        self.combo_countdown_style.addItem("🇺🇸 영어 카운트다운 ('Three, Two, One' - 본토 원어민 발음)", "en_321")
+        self.combo_countdown_style.addItem("🔔 전자 비프음 (띡, 띡, 띡 - 신호음 3박자)", "beep")
+        self.combo_countdown_style.addItem("🇰🇷 한국어 친근한 멘트 ('준비되었나요? 준비! 셋, 둘, 하나')", "ko_ready")
+        self.combo_countdown_style.addItem("🇺🇸 영어 스포츠 멘트 ('Are you ready? Ready! Three, Two, One' - 본토 발음)", "en_ready")
+        self.combo_countdown_style.addItem("🇰🇷 한국어 정통 카운트다운 ('셋, 둘, 하나')", "ko_321")
+        self.combo_countdown_style.setStyleSheet("font-weight: 500;")
+
+        btn_preview_cd = QPushButton("🎧 카운트다운 미리듣기")
+        btn_preview_cd.clicked.connect(self.preview_countdown_sound)
+
+        h_cd.addWidget(self.cb_countdown)
+        h_cd.addWidget(self.combo_countdown_style, stretch=1)
+        h_cd.addWidget(btn_preview_cd)
+        opt_layout.addLayout(h_cd)
+
+        # 실전 출발 시퀀스 안내 배너 (선택 템플릿에 따라 실시간 문구 갱신)
+        self.seq_banner = QLabel()
+        self.seq_banner.setStyleSheet("background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #166534; font-size: 11px;")
+        opt_layout.addWidget(self.seq_banner)
+
+        self.combo_countdown_style.currentIndexChanged.connect(self.update_countdown_banner)
+        self.cb_countdown.toggled.connect(self.update_countdown_banner)
 
         # 단계 구령 및 성우
         h_voice = QHBoxLayout()
@@ -784,6 +887,7 @@ class ShuttleRunDialog(QDialog):
 
         # 초기 계산 미리보기 업데이트
         self.update_interval_preview()
+        self.update_countdown_banner()
 
     def update_interval_preview(self):
         """거리/연령 선택 변경 시 1단계 인터벌(초)과 회전수를 실시간 계산하여 안내"""
@@ -860,6 +964,89 @@ class ShuttleRunDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "미리듣기 실패", f"효과음 재생 실패: {e}")
 
+    def update_countdown_banner(self):
+        if not hasattr(self, 'seq_banner'):
+            return
+        enabled = self.cb_countdown.isChecked()
+        self.combo_countdown_style.setEnabled(enabled)
+
+        if not enabled:
+            self.seq_banner.setText("🎯 1단계 출발 순서: [준비 안내] ➔ (5초 대기) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]")
+            return
+
+        style = self.combo_countdown_style.currentData()
+        style_desc_map = {
+            "en_321": "🇺🇸 Three, Two, One (본토 영어 발음)",
+            "beep": "🔔 전자 비프음 3회 (띡-띡-띡)",
+            "ko_ready": "🇰🇷 준비되었나요? 준비! 셋, 둘, 하나",
+            "en_ready": "🇺🇸 Are you ready? Ready! Three, Two, One (본토 발음)",
+            "ko_321": "🇰🇷 셋, 둘, 하나",
+        }
+        cd_desc = style_desc_map.get(style, "🇺🇸 Three, Two, One")
+        self.seq_banner.setText(
+            f"🎯 1단계 출발 순서: [준비 안내: 신호음 소리에 출발!] ➔ [{cd_desc}] ➔ (1초 딜레이) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]"
+        )
+
+    def _quick_tts_export(self, text: str, voice: str, out_path: str, rate: str = "+0%"):
+        try:
+            import edge_tts
+            import asyncio
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+            async def _run():
+                comm = edge_tts.Communicate(text, voice, rate=rate)
+                buf = io.BytesIO()
+                async for chunk in comm.stream():
+                    if chunk['type'] == 'audio':
+                        buf.write(chunk['data'])
+                buf.seek(0)
+                raw_seg = AudioSegment.from_file(buf, format="mp3")
+                trimmed_seg = trim_audio_silence(raw_seg)
+                trimmed_seg.export(out_path, format="wav")
+
+            asyncio.run(_run())
+        except Exception as e:
+            print(f"[Preview] TTS fail: {e}")
+
+    def preview_countdown_sound(self):
+        style = self.combo_countdown_style.currentData()
+        speaker = self.voice_combo.currentText()
+        is_female = "여성" in speaker or "선히" in speaker
+
+        if style == "beep":
+            file_path = os.path.join("effects", "countdown_beeps.wav")
+            if not os.path.exists(file_path):
+                ensure_default_effects()
+        elif style == "en_ready":
+            en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+            file_path = os.path.join("projects", "temp_tts", f"preview_cd_en_ready_{'female' if is_female else 'male'}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("Are you ready? Ready! Three, Two, One.", en_voice, file_path, rate="+10%")
+        elif style == "ko_ready":
+            voice_id = "ko-KR-SunHiNeural" if is_female else "ko-KR-InJoonNeural"
+            file_path = os.path.join("projects", "temp_tts", f"preview_cd_ko_ready_{voice_id}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("준비되었나요? 준비! 셋, 둘, 하나.", voice_id, file_path, rate="+10%")
+        elif style == "ko_321":
+            voice_id = "ko-KR-SunHiNeural" if is_female else "ko-KR-InJoonNeural"
+            file_path = os.path.join("projects", "temp_tts", f"preview_cd_ko_321_{voice_id}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("셋, 둘, 하나.", voice_id, file_path, rate="+10%")
+        else:  # en_321
+            en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
+            file_path = os.path.join("projects", "temp_tts", f"preview_cd_en_321_{'female' if is_female else 'male'}.wav")
+            if not os.path.exists(file_path):
+                self._quick_tts_export("Three, Two, One.", en_voice, file_path, rate="+10%")
+
+        if os.path.exists(file_path):
+            try:
+                import pygame
+                pygame.mixer.init()
+                sound = pygame.mixer.Sound(file_path)
+                sound.play()
+            except Exception as e:
+                QMessageBox.warning(self, "미리듣기 실패", f"카운트다운 재생 실패: {e}")
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_mode_idx: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -895,6 +1082,7 @@ class ShuttleRunDialog(QDialog):
             "voice_speaker": self.voice_combo.currentText(),
             "auto_ducking": self.cb_ducking.isChecked(),
             "countdown_enabled": self.cb_countdown.isChecked(),
+            "countdown_style": self.combo_countdown_style.currentData(),
             "track_layout": self.combo_track_layout.currentData(),
             "bgm_vol_pct": self.slider_bgm_vol.value(),
             "sig_vol_pct": self.slider_sig_vol.value(),
