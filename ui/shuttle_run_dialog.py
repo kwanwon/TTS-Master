@@ -593,22 +593,25 @@ class ShuttleRunDialog(QDialog):
         dist_group.setLayout(dist_layout)
         content_layout.addWidget(dist_group)
 
-        # 2. 연령 대상 및 시작 속도
-        age_group = QGroupBox("2. 연령 대상 (시작 속도 및 턴 감속 적용)")
+        # 2. 난이도 및 훈련 수준 선택 (4단계 수준별 시작 속도 및 턴 감속 적용)
+        age_group = QGroupBox("2. 훈련 난이도 및 수준 선택 (수준별 시작 속도 및 턴 감속 자동 연동)")
         age_layout = QVBoxLayout()
         self.age_btn_group = QButtonGroup(self)
-        self.rb_age_kinder = QRadioButton("유치부 (6.5 km/h 시작, 턴 감속 0.75초 고려)")
-        self.rb_age_low = QRadioButton("초등 저학년 (8.0 km/h 시작, 턴 감속 0.5초 표준)")
-        self.rb_age_high = QRadioButton("초등 고학년 및 청소년 (8.5 km/h 시작, 공인 페이서)")
-        self.rb_age_low.setChecked(True)
+        self.rb_level_beginner = QRadioButton("🌱 초급 (생활체육 · 유치부 · 일반회원 취미반)  ➔ 6.0 km/h 시작, 턴 0.85초 (가장 여유롭고 안전함)")
+        self.rb_level_intermediate = QRadioButton("🏃 일반선수 (초등학생 표준 · 생활체육 숙련)    ➔ 7.2 km/h 시작, 턴 0.65초 (표준 도장 체력 훈련)")
+        self.rb_level_advanced = QRadioButton("🥋 전문선수 (선수부 · 중고등부 · 체대입시반)    ➔ 8.0 km/h 시작, 턴 0.50초 (고강도 시합 대비)")
+        self.rb_level_pro = QRadioButton("🏆 프로선수 (공인 규격 페이서 · 엘리트 마스터) ➔ 8.5 km/h 시작, 턴 0.45초 (PAPS 공인 만점 도전)")
+        self.rb_level_intermediate.setChecked(True)
 
-        self.age_btn_group.addButton(self.rb_age_kinder, 1)
-        self.age_btn_group.addButton(self.rb_age_low, 2)
-        self.age_btn_group.addButton(self.rb_age_high, 3)
+        self.age_btn_group.addButton(self.rb_level_beginner, 1)
+        self.age_btn_group.addButton(self.rb_level_intermediate, 2)
+        self.age_btn_group.addButton(self.rb_level_advanced, 3)
+        self.age_btn_group.addButton(self.rb_level_pro, 4)
 
-        age_layout.addWidget(self.rb_age_kinder)
-        age_layout.addWidget(self.rb_age_low)
-        age_layout.addWidget(self.rb_age_high)
+        age_layout.addWidget(self.rb_level_beginner)
+        age_layout.addWidget(self.rb_level_intermediate)
+        age_layout.addWidget(self.rb_level_advanced)
+        age_layout.addWidget(self.rb_level_pro)
         age_group.setLayout(age_layout)
         content_layout.addWidget(age_group)
 
@@ -899,8 +902,8 @@ class ShuttleRunDialog(QDialog):
         try:
             dist_val = float(self.dist_btn_group.checkedId())
             age_id = self.age_btn_group.checkedId()
-            preset_map = {1: "kinder", 2: "elementary_low", 3: "elementary_high_teen"}
-            preset_key = preset_map.get(age_id, "elementary_low")
+            preset_map = {1: "beginner", 2: "intermediate", 3: "advanced", 4: "pro"}
+            preset_key = preset_map.get(age_id, "intermediate")
 
             schedule = ShuttleRunEngine.calculate_stage_schedule(
                 distance=dist_val,
@@ -1101,8 +1104,8 @@ class ShuttleRunDialog(QDialog):
     def start_generation(self):
         dist_val = self.dist_btn_group.checkedId()
         age_id = self.age_btn_group.checkedId()
-        preset_map = {1: "kinder", 2: "elementary_low", 3: "elementary_high_teen"}
-        preset_key = preset_map.get(age_id, "elementary_low")
+        preset_map = {1: "beginner", 2: "intermediate", 3: "advanced", 4: "pro"}
+        preset_key = preset_map.get(age_id, "intermediate")
 
         duck_db_val = self.combo_duck_level.currentData()
         if duck_db_val is None:

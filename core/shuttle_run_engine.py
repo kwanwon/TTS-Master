@@ -14,30 +14,41 @@ from pydub.effects import normalize
 
 
 class ShuttleRunEngine:
-    # Age category presets: starting speed (km/h), speed increase per level (km/h), turn deceleration (seconds)
+    # 4-tier skill level presets: starting speed (km/h), speed increase per level (km/h), turn deceleration (seconds)
     PRESETS = {
-        "kinder": {
-            "name": "유치부",
-            "start_speed": 6.5,
+        "beginner": {
+            "name": "🌱 초급 (생활체육 · 유치부 · 일반회원)",
+            "start_speed": 6.0,
             "speed_inc": 0.5,
-            "turn_time": 0.75,
-            "desc": "6.5 km/h 시작 (턴 감속 0.75초 고려)"
+            "turn_time": 0.85,
+            "desc": "6.0 km/h 시작 (턴 감속 0.85초 보정, 가장 여유롭고 안전함)"
         },
-        "elementary_low": {
-            "name": "초등 저학년",
+        "intermediate": {
+            "name": "🏃 일반선수 (초등학생 표준 · 생활체육 숙련)",
+            "start_speed": 7.2,
+            "speed_inc": 0.5,
+            "turn_time": 0.65,
+            "desc": "7.2 km/h 시작 (턴 감속 0.65초 보정, 표준 도장 체력 훈련)"
+        },
+        "advanced": {
+            "name": "🥋 전문선수 (선수부 · 중고등부 · 체대입시반)",
             "start_speed": 8.0,
             "speed_inc": 0.5,
             "turn_time": 0.50,
-            "desc": "8.0 km/h 시작 (턴 감속 0.50초 고려)"
+            "desc": "8.0 km/h 시작 (턴 감속 0.50초 보정, 고강도 시합 대비)"
         },
-        "elementary_high_teen": {
-            "name": "초등 고학년 및 청소년",
+        "pro": {
+            "name": "🏆 프로선수 (공인 규격 페이서 · 엘리트 마스터)",
             "start_speed": 8.5,
             "speed_inc": 0.5,
-            "turn_time": 0.50,
-            "desc": "8.5 km/h 시작 (턴 감속 0.50초 고려)"
+            "turn_time": 0.45,
+            "desc": "8.5 km/h 시작 (턴 감속 0.45초 보정, PAPS 공인 만점 도전)"
         }
     }
+    # Backward compatibility aliases
+    PRESETS["kinder"] = PRESETS["beginner"]
+    PRESETS["elementary_low"] = PRESETS["intermediate"]
+    PRESETS["elementary_high_teen"] = PRESETS["pro"]
 
     DISTANCES = {
         5: {"name": "5m (실내 초소형)", "val": 5.0},

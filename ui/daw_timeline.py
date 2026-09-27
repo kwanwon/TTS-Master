@@ -1,4 +1,5 @@
 import os
+import math
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsTextItem,
     QGraphicsItem, QMenu, QListWidget, QListWidgetItem
@@ -10,7 +11,9 @@ BASE_PPS = 100      # 기본 pixels per second
 TRACK_HEIGHT = 40
 RULER_HEIGHT = 30
 NUM_TRACKS = 3
-TOTAL_DURATION = 300  # seconds
+DEFAULT_MIN_DURATION = 600       # 기본 최소 10분 확보
+BUFFER_AFTER_LAST_CLIP = 180     # 클립 끝 뒤 항상 3분(180초) 여유 공간 자동 확보
+TOTAL_DURATION = DEFAULT_MIN_DURATION  # 하위 호환용 기본값
 
 
 class AudioClipItem(QGraphicsRectItem):
@@ -119,6 +122,7 @@ class DAWTimeline(QGraphicsView):
 
         self.pps = BASE_PPS
         self.playhead_time = -1.0
+        self.total_duration_sec = DEFAULT_MIN_DURATION
         self._is_scrubbing = False
         self._bg_items = []
         self._playhead_line = None
@@ -132,27 +136,63 @@ class DAWTimeline(QGraphicsView):
 
         self._rebuild_background()
         self._build_playhead()
+        self.timelineChanged.connect(self._ensure_duration_for_clips)
 
-    # ── 배경 및 눈금자 ──────────────────────────────────────
+    # ── 배경 및 눈금자 (탄력적 동적 확장 및 적응형 최적화 렌더링) ─────────────────
     def _clear_bg(self):
         for item in self._bg_items:
             self._scene.removeItem(item)
         self._bg_items.clear()
 
+    def _ensure_duration_for_clips(self):
+        """클립들의 최대 길이를 감지하여 항상 뒤에 3분(180초) 이상의 여유 공간을 탄력적으로 자동 확보"""
+        max_end = 0.0
+        for item in self._scene.items():
+            if isinstance(item, AudioClipItem):
+                end_t = item.time_sec + item.duration_sec
+                if end_t > max_end:
+                    max_end = end_t
+
+        needed_duration = max(DEFAULT_MIN_DURATION, int(max_end + BUFFER_AFTER_LAST_CLIP))
+        needed_duration = int(math.ceil(needed_duration / 30.0) * 30)  # 30초 단위로 올림
+
+        if needed_duration != self.total_duration_sec:
+            self.total_duration_sec = needed_duration
+            self._rebuild_background()
+            self._build_playhead()
+
     def _rebuild_background(self):
         self._clear_bg()
         self._scene.setBackgroundBrush(QBrush(QColor("#2c3e50")))
 
-        total_w = TOTAL_DURATION * self.pps
+        total_w = self.total_duration_sec * self.pps
         total_h = RULER_HEIGHT + NUM_TRACKS * TRACK_HEIGHT + 10
         self._scene.setSceneRect(0, 0, total_w, total_h)
 
-        for i in range(TOTAL_DURATION + 1):
+        # ── 적응형 눈금자: 긴 타임라인(40분~1시간)에서도 CPU/메모리 부하 0% 보장 ──
+        if self.total_duration_sec <= 600 or self.pps >= 50:
+            major_step = 5
+            minor_step = 1
+        elif self.total_duration_sec <= 1800:
+            major_step = 15
+            minor_step = 5
+        else:
+            major_step = 30
+            minor_step = 10
+
+        for i in range(0, self.total_duration_sec + 1, minor_step):
             x = i * self.pps
-            if i % 5 == 0:
+            if i % major_step == 0:
                 line = self._scene.addLine(x, 0, x, RULER_HEIGHT,
                                            QPen(QColor("#95a5a6"), 1))
-                t = self._scene.addText(f"{i}s")
+                if i >= 60 and i % 60 == 0:
+                    time_str = f"{i//60}m"
+                elif i >= 60 and i % 60 != 0:
+                    time_str = f"{i//60}m{i%60}s"
+                else:
+                    time_str = f"{i}s"
+
+                t = self._scene.addText(time_str)
                 t.setDefaultTextColor(QColor("#bdc3c7"))
                 t.setPos(x + 2, 0)
                 font = t.font()
@@ -165,7 +205,7 @@ class DAWTimeline(QGraphicsView):
             self._bg_items.append(line)
 
         track_colors = ["#1a2738", "#1c2b1e", "#1e1a2e"]
-        track_names = ["트랙 1", "트랙 2", "트랙 3"]
+        track_names = ["트랙 1 (BGM)", "트랙 2 (훈련 트랙)", "트랙 3 (보조 트랙)"]
         for t in range(NUM_TRACKS):
             y = t * TRACK_HEIGHT + RULER_HEIGHT
             rect = self._scene.addRect(0, y, total_w, TRACK_HEIGHT,
@@ -249,6 +289,7 @@ class DAWTimeline(QGraphicsView):
     def add_clip(self, text, file_path, time_sec, track_idx, duration_sec):
         item = AudioClipItem(text, file_path, duration_sec, track_idx, time_sec, self.pps)
         self._scene.addItem(item)
+        self._ensure_duration_for_clips()
         self.timelineChanged.emit()
 
     def get_timeline_data(self):
@@ -271,6 +312,7 @@ class DAWTimeline(QGraphicsView):
                 self._scene.removeItem(item)
                 changed = True
         if changed:
+            self._ensure_duration_for_clips()
             self.timelineChanged.emit()
 
     def clear_all(self):
@@ -279,6 +321,9 @@ class DAWTimeline(QGraphicsView):
             if isinstance(item, AudioClipItem):
                 self._scene.removeItem(item)
                 changed = True
+        self.total_duration_sec = DEFAULT_MIN_DURATION
+        self._rebuild_background()
+        self._build_playhead()
         if changed:
             self.timelineChanged.emit()
 
