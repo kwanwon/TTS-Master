@@ -159,17 +159,35 @@ class SparringTrainingEngine:
                 else:
                     intro_text = "지금부터 스파링 훈련을 시작합니다. 준비해 주세요!"
 
-            intro_dur = max(2.5, round(len(intro_text) * 0.16, 2))
+            intro_dur = max(3.0, round(len(intro_text) * 0.22, 2))
             events.append({
                 "time": curr_time,
                 "type": "voice",
                 "text": f"[사전 안내] {intro_text}",
                 "duration": intro_dur,
                 "track": 2,
-                "vol": 2.0
+                "vol": 2.2
             })
-            duck_segments.append((int(curr_time * 1000), int((curr_time + intro_dur) * 1000)))
-            curr_time += intro_dur + 0.4
+            duck_segments.append((int(curr_time * 1000), int((curr_time + intro_dur + 0.5) * 1000)))
+            curr_time += intro_dur + 0.8
+
+            # ⭐ [사용자 요청] 설명 후 받기자 미트 착용 및 위치 선정 대기 시간 (n초) + "모두 준비가 되었나요?" 확인
+            prep_wait_sec = float(params.get("prep_wait_sec", 0.0))
+            if prep_wait_sec > 0:
+                curr_time += prep_wait_sec
+                ready_prompt = "모두 준비가 되었나요?"
+                ready_dur = 1.8
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[준비 확인] {ready_prompt}",
+                    "duration": ready_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + ready_dur + 0.5) * 1000)))
+                # 사용자 요청: "모두 준비가 되었나요? 딜레이 2초 후에 시작"
+                curr_time += ready_dur + 2.0
 
         # 카운트다운 (Three, Two, One / 3-2-1)
         if countdown_enabled:
@@ -206,15 +224,28 @@ class SparringTrainingEngine:
             cycles = params.get("cycles", 3)                  # 전체 순환 세트 수
             cue_text_custom = params.get("cue_text", "백스텝 후 받아차기 교차 상단")  # 기술명
 
-            cues_list = [c.strip() for c in cue_text_custom.split(",") if c.strip()]
+            # 줄바꿈(\n) 또는 쉼표(,) 모두 지원
+            cues_list = [c.strip() for line in str(cue_text_custom).splitlines() for c in line.split(",") if c.strip()]
             if not cues_list:
                 cues_list = ["백스텝 후 받아차기 교차 상단"]
 
-            cue_picker = BalancedCuePicker(cues_list, max_consecutive=2) if len(cues_list) > 1 else None
+            ordinal_names = ["첫번째 선수", "두번째 선수", "세번째 선수", "네번째 선수"]
+
             for c in range(1, cycles + 1):
                 for f in range(1, fighters_count + 1):
-                    fighter_name = f"{f}번 타자" if fighters_count > 2 else ("A선수" if f == 1 else "B선수")
-                    current_cue = cue_picker.next_cue() if cue_picker else cues_list[0]
+                    # 사용자 요청: 1:2와 1:3은 첫번째 선수, 두번째 선수, 세번째 선수 호칭 적용
+                    if fighters_count == 2:
+                        fighter_name = "A선수" if f == 1 else "B선수"
+                    else:
+                        fighter_name = ordinal_names[f - 1] if f <= len(ordinal_names) else f"{f}번째 선수"
+
+                    # 사용자 요청: 선수별로 따로 기술 지시어 매칭
+                    if len(cues_list) >= fighters_count:
+                        current_cue = cues_list[f - 1]
+                    elif len(cues_list) > 1:
+                        current_cue = cues_list[(f - 1) % len(cues_list)]
+                    else:
+                        current_cue = cues_list[0]
                     
                     # 1. 설명/기술 명칭 먼저 충분히 송출 (절대로 '출발' 단어 넣지 않음!)
                     call_text = f"{fighter_name}! {current_cue}!"
@@ -268,7 +299,7 @@ class SparringTrainingEngine:
                             next_fighter = "B선수" if f == 1 else "A선수"
                         else:
                             next_f_idx = (f % fighters_count) + 1
-                            next_fighter = f"{next_f_idx}번 타자"
+                            next_fighter = ordinal_names[next_f_idx - 1] if next_f_idx <= len(ordinal_names) else f"{next_f_idx}번째 선수"
 
                         change_msg = f"선수 교대! {next_fighter} 준비!"
                         chg_dur = max(1.8, round(len(change_msg) * 0.22, 2))

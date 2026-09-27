@@ -448,7 +448,7 @@ class SparringDialog(QDialog):
         hl_rf.addWidget(self.rb_relay_13)
         l_relay.addWidget(g_relay_f)
 
-        g_relay_t = QGroupBox("시간 및 실전 기술 설정")
+        g_relay_t = QGroupBox("시간 및 실전 훈련 설정")
         l_rt = QVBoxLayout(g_relay_t)
         
         h_rt1 = QHBoxLayout()
@@ -466,6 +466,14 @@ class SparringDialog(QDialog):
         self.sp_relay_change.setSuffix(" 초")
         h_rt1.addWidget(self.sp_relay_change)
 
+        h_rt1.addWidget(QLabel("설명 후 준비 대기 시간:"))
+        self.sp_relay_prep_wait = QSpinBox()
+        self.sp_relay_prep_wait.setRange(0, 60)
+        self.sp_relay_prep_wait.setValue(10)
+        self.sp_relay_prep_wait.setSuffix(" 초")
+        self.sp_relay_prep_wait.setToolTip("사전 설명 음성 후 받기자들이 암미트/손미트를 착용하고 위치를 잡는 준비 대기 시간입니다. (0초 설정 시 대기 없이 즉시 시작)")
+        h_rt1.addWidget(self.sp_relay_prep_wait)
+
         h_rt1.addWidget(QLabel("전체 세트:"))
         self.sp_relay_cycles = QSpinBox()
         self.sp_relay_cycles.setRange(1, 10)
@@ -476,25 +484,38 @@ class SparringDialog(QDialog):
 
         # 릴레이 훈련 기술 템플릿 선택 드롭다운
         h_rt_tmpl = QHBoxLayout()
-        h_rt_tmpl.addWidget(QLabel("📋 실전 기술 템플릿:"))
+        h_rt_tmpl.addWidget(QLabel("📋 실전 훈련 템플릿:"))
         self.combo_relay_template = QComboBox()
-        self.combo_relay_template.addItem("🥋 [실전 스파링 콤보 1] 백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단", "백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단")
-        self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 2] 앞발 컷트 후 뒷발 돌려차기 상단, 사이드 스텝 후 뒤차기 카운터", "앞발 컷트 후 뒷발 돌려차기 상단, 사이드 스텝 후 뒤차기 카운터")
-        self.combo_relay_template.addItem("🎯 [실전 스파링 콤보 3] 빠른발 몸통 페인트 후 앞발 상단 찍기, 원투 연타 후 뒷발 돌려차기", "빠른발 몸통 페인트 후 앞발 상단 찍기, 원투 연타 후 뒷발 돌려차기")
-        self.combo_relay_template.addItem("🛡️ [단일 기술 집중] 백스텝 후 받아차기 교차 상단", "백스텝 후 받아차기 교차 상단")
-        self.combo_relay_template.addItem("🔥 [연타 콤보] 1연타, 2연타, 3연타, 나래차기 연타", "1연타, 2연타, 3연타, 나래차기 연타")
+        self.combo_relay_template.addItem("🥋 [실전 3인 방족술/미트] 1번: 잡고 몸통 밀기 / 2번: 암미트 전진 몸통 / 3번: 손미트 상단 끊어차기", "tmpl_bangjok")
+        self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 1] A선수: 백스텝 받아차기 교차 상단 / B선수: 전진 몸통 후 사이드 왼발 상단", "tmpl_combo1")
+        self.combo_relay_template.addItem("🎯 [카운터 & 반격 콤보] 1번: 앞발 컷트 후 뒷발 상단 / 2번: 사이드 스텝 뒤차기 카운터", "tmpl_counter")
+        self.combo_relay_template.addItem("🛡️ [단일 기술 집중] 백스텝 후 받아차기 교차 상단", "tmpl_single")
+        self.combo_relay_template.addItem("🔥 [연타 콤보] 1연타, 2연타, 3연타, 나래차기 연타", "tmpl_speed")
         self.combo_relay_template.currentIndexChanged.connect(self._on_relay_template_changed)
         h_rt_tmpl.addWidget(self.combo_relay_template, stretch=1)
         l_rt.addLayout(h_rt_tmpl)
 
-        h_rt2 = QHBoxLayout()
-        h_rt2.addWidget(QLabel("✏️ 적용 공격 기술명:"))
-        self.txt_relay_cue = QLineEdit("백스텝 후 받아차기 교차 상단, 전진 몸통차기 후 사이드 왼발 상단")
-        self.txt_relay_cue.setPlaceholderText("쉼표(,)로 구분하여 입력 시 선수/세트별로 순환 지시됩니다.")
-        h_rt2.addWidget(self.txt_relay_cue, stretch=1)
-        l_rt.addLayout(h_rt2)
+        # 1. 훈련 종합 설명 & 받기자 미트 착용 행동요령 (사전 안내 다중 행 입력)
+        l_rt.addWidget(QLabel("📢 훈련 종합 설명 & 받기자 미트 착용 행동요령 (시작 전 사전 안내 음성):"))
+        self.txt_relay_intro = QTextEdit()
+        self.txt_relay_intro.setFixedHeight(75)
+        self.txt_relay_intro.setPlaceholderText("시작 전 선수와 받기자들에게 송출할 종합 훈련 안내 및 미트 착용 요령을 입력하세요 (엔터로 줄바꿈 가능)")
+        self.txt_relay_intro.setPlainText("1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 2번 받기자 암미트 착용, 3번 조금씩 거리 좁히며 빠른발 상단 끊어차기!, 3번 받기자 손미트 착용, 빠르게 준비해 주세요. 플레이어는 패턴을 숙지해 주세요.")
+        l_rt.addWidget(self.txt_relay_intro)
 
-        lbl_relay_hint = QLabel("※ 쉼표(,)로 구분해 여러 기술을 입력하면 A선수, B선수에게 차례로 다양한 기술을 지시합니다.")
+        lbl_prep_hint = QLabel("※ 설명 음성이 끝난 뒤 위 '설명 후 준비 대기 시간(n초)' 동안 받기자들이 미트를 착용하고, '모두 준비가 되었나요?' 안내 후 2초 뒤 본 훈련이 시작됩니다.")
+        lbl_prep_hint.setStyleSheet("color: #2563eb; font-size: 11px; font-weight: 500;")
+        l_rt.addWidget(lbl_prep_hint)
+
+        # 2. 실제 진행 시 선수별 지시 기술명 (엔터 줄바꿈 입력)
+        l_rt.addWidget(QLabel("🥊 실제 진행 시 선수별 지시 기술명 (줄바꿈(엔터)으로 선수별 개별 기술 구분):"))
+        self.txt_relay_cue = QTextEdit()
+        self.txt_relay_cue.setFixedHeight(75)
+        self.txt_relay_cue.setPlaceholderText("각 줄마다 선수가 타격할 기술명을 입력하세요.\n예:\n한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
+        self.txt_relay_cue.setPlainText("한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
+        l_rt.addWidget(self.txt_relay_cue)
+
+        lbl_relay_hint = QLabel("※ 줄바꿈(엔터)으로 입력 시 1:2 / 1:3 릴레이에서 [첫번째 선수], [두번째 선수], [세번째 선수]에게 차례로 개별 기술을 각각 지시합니다.")
         lbl_relay_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_rt.addWidget(lbl_relay_hint)
 
@@ -999,9 +1020,33 @@ class SparringDialog(QDialog):
             self.txt_reac_cues.setText(tmpl_data)
 
     def _on_relay_template_changed(self, idx):
-        tmpl_data = self.combo_relay_template.currentData()
-        if tmpl_data:
-            self.txt_relay_cue.setText(tmpl_data)
+        tmpl_key = self.combo_relay_template.currentData()
+        templates = {
+            "tmpl_bangjok": (
+                "1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 2번 받기자 암미트 착용, 3번 조금씩 거리 좁히며 빠른발 상단 끊어차기!, 3번 받기자 손미트 착용, 빠르게 준비해 주세요. 플레이어는 패턴을 숙지해 주세요.",
+                "한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기"
+            ),
+            "tmpl_combo1": (
+                "지금부터 실전 스파링 발차기 릴레이 훈련을 시작합니다. 지시하는 기술을 듣고 신호음에 맞춰 빠르고 정확하게 타격하세요. 모두 준비해 주세요!",
+                "백스텝 후 받아차기 교차 상단\n전진 몸통차기 후 사이드 왼발 상단"
+            ),
+            "tmpl_counter": (
+                "지금부터 카운터 반격 스파링 훈련을 시작합니다. 상대의 움직임을 읽고 정확한 타이밍에 카운터를 꽂으세요. 모두 준비해 주세요!",
+                "앞발 컷트 후 뒷발 상단\n사이드 빠지며 뒤차기 카운터"
+            ),
+            "tmpl_single": (
+                "지금부터 단일 기술 집중 스파링 훈련을 시작합니다. 신호음에 맞춰 폭발적인 스피드로 타격하세요. 모두 준비해 주세요!",
+                "백스텝 후 받아차기 교차 상단"
+            ),
+            "tmpl_speed": (
+                "지금부터 스피드 연타 스파링 훈련을 시작합니다. 쉬지 않고 전력으로 미트를 타격하세요. 모두 준비해 주세요!",
+                "1연타\n2연타\n3연타\n나래차기 연타"
+            )
+        }
+        if tmpl_key in templates:
+            intro_t, cues_t = templates[tmpl_key]
+            self.txt_relay_intro.setPlainText(intro_t)
+            self.txt_relay_cue.setPlainText(cues_t)
 
     def _on_step_tmpl_changed(self, idx):
         tmpl_data = self.combo_step_tmpl.currentData()
@@ -1089,8 +1134,10 @@ class SparringDialog(QDialog):
             params["fighters_count"] = fighters
             params["strike_sec"] = float(self.sp_relay_strike.value())
             params["change_sec"] = float(self.sp_relay_change.value())
+            params["prep_wait_sec"] = float(self.sp_relay_prep_wait.value())
             params["cycles"] = self.sp_relay_cycles.value()
-            params["cue_text"] = self.txt_relay_cue.text().strip() or "백스텝 후 받아차기 교차 상단"
+            params["intro_text"] = self.txt_relay_intro.toPlainText().strip()
+            params["cue_text"] = self.txt_relay_cue.toPlainText().strip() or "백스텝 후 받아차기 교차 상단"
 
         elif mode == "reaction":
             params["duration_sec"] = float(self.sp_reac_dur.value())
