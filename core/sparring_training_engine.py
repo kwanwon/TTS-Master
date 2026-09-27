@@ -351,7 +351,7 @@ class SparringTrainingEngine:
                 # 3. 타격/발차기 트리거 신호 발동 (신호음 or 음성 구령)
                 current_trigger = trigger_sound
                 if current_trigger == "random_mix":
-                    current_trigger = random.choice(["whistle", "beep", "drum", "voice_start", "voice_go"])
+                    current_trigger = random.choice(["whistle", "beep", "drum", "voice_start", "voice_go", "voice_bang"])
 
                 if current_trigger == "whistle":
                     events.append({
@@ -393,7 +393,7 @@ class SparringTrainingEngine:
                     events.append({
                         "time": curr_time,
                         "type": "voice",
-                        "text": f"[트리거 ({rand_gap}초 대기 후)] 탕!",
+                        "text": f"[트리거 ({rand_gap}초 대기 후)] 시작!",
                         "duration": 0.8,
                         "track": 2,
                         "vol": 3.0
