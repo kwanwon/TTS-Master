@@ -1,10 +1,10 @@
 """
-Sparring and Kicking Training Engine (겨루기 & 발차기 트레이닝 오디오 엔진)
+Sparring and Kicking Training Engine (스파링 발차기 트레이닝 오디오 엔진)
 Supports flexible dojo training modes:
 1. RELAY: 1:1, 1:2, 1:3 turn-based pad kicking (미트 순환 발차기)
 2. REACTION: Rhythm step + random whistle/cue for counter kicks (받아차기 / 반사신경)
-3. COMBO: Step + 1-hit, 2-hit, 3-hit continuous kicks (스텝 + 1연타/2연타)
-4. ROUNDS: Sparring rounds with warning beeps and rest cues (정규 겨루기 라운드)
+3. COMBO: Step + continuous strike combo (스텝 + 콤비네이션 연타)
+4. ROUNDS: Sparring rounds with warning beeps and rest cues (정규 스파링 라운드)
 
 All routines support multiple BGM crossfading and auto-ducking.
 """
@@ -135,7 +135,25 @@ class SparringTrainingEngine:
                         "whistle": "종료 휘슬"
                     }
                     stop_label = stop_name_map.get(params.get("stop_signal", "voice_kalyeo"), "갈려")
-                    intro_text = f"지금부터 스텝 콤비네이션 연타 훈련을 시작합니다. 지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, '{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
+                    raw_kicks = params.get("kick_types", [])
+                    kick_list = [k.strip() for k in raw_kicks if k and k.strip()] if isinstance(raw_kicks, list) else [k.strip() for k in str(raw_kicks).split(",") if k.strip()]
+                    
+                    if kick_list:
+                        kick_desc = ", ".join(kick_list[:3])
+                        if len(kick_list) > 3:
+                            kick_desc += f" 외 {len(kick_list)-3}개"
+                        intro_text = (
+                            f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
+                            f"이번 집중 훈련 공격 기술은 '{kick_desc}' 입니다. "
+                            f"지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, "
+                            f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
+                        )
+                    else:
+                        intro_text = (
+                            f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
+                            f"지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, "
+                            f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
+                        )
                 elif mode == "rounds":
                     intro_text = "지금부터 정규 스파링 라운드 훈련을 시작합니다. 양 선수 준비해 주세요!"
                 else:
@@ -446,6 +464,9 @@ class SparringTrainingEngine:
 
             start_signal = params.get("start_signal", "whistle")   # whistle / beep / drum
             stop_signal = params.get("stop_signal", "voice_kalyeo") # voice_kalyeo / voice_stop / voice_end / beep / whistle
+            kick_announce_mode = params.get("kick_announce_mode", "intro_only")  # intro_only / each_set
+            raw_kicks = params.get("kick_types", [])
+            kick_types = [k.strip() for k in raw_kicks if k and k.strip()] if isinstance(raw_kicks, list) else [k.strip() for k in str(raw_kicks).split(",") if k.strip()]
 
             start_sound_file = os.path.join("effects", "whistle.wav")
             start_sound_label = "경기용 휘슬 (삐익-!)"
@@ -459,12 +480,18 @@ class SparringTrainingEngine:
             for s in range(1, sets_count + 1):
                 step_name = step_types[(s - 1) % len(step_types)]
 
-                # 1. 스텝 지시 음성 (군더더기 없이 스텝 명칭만 또렷하게 지시: 예 "제자리 스텝!")
-                cue_dur = max(0.8, round(len(step_name) * 0.18, 2))
+                # 1. 스텝 지시 음성 (intro_only 시 스텝명만 또렷하게 지시, each_set 시 기술명 함께 호명)
+                if kick_announce_mode == "each_set" and kick_types:
+                    kick_name = kick_types[(s - 1) % len(kick_types)]
+                    cue_text = f"[{s}세트] {step_name}! {kick_name}!"
+                else:
+                    cue_text = f"[{s}세트] {step_name}!"
+
+                cue_dur = max(0.8, round(len(cue_text) * 0.16, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
-                    "text": f"[{s}세트] {step_name}!",
+                    "text": cue_text,
                     "duration": cue_dur,
                     "track": 2,
                     "vol": 2.5

@@ -1,10 +1,10 @@
 """
-Sparring & Kicking Training Dialog (겨루기 & 발차기 트레이닝 음원 생성 마법사)
+Sparring & Kicking Training Dialog (스파링 발차기 트레이닝 음원 생성 마법사)
 Supports customized training for dojos:
 - 1:1, 1:2, 1:3 Relay kicking (다자간 미트 순환)
-- Reaction kicking (스텝 & 1연타/2연타/받아차기 반사 반응)
+- Reaction kicking (스텝 & 실전 반사 반응)
 - Combo interval kicking (스텝 + 콤비네이션 연타)
-- Sparring round simulator (정규 겨루기 라운드)
+- Sparring round simulator (정규 스파링 라운드)
 
 Allows full customization of cues, times, BGM playlist, and auto-ducking.
 """
@@ -487,7 +487,7 @@ class SparringDialog(QDialog):
         btn_preset_speed.setStyleSheet("background-color: #fee2e2; color: #991b1b; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
         btn_preset_speed.clicked.connect(lambda: self._apply_reac_preset(rec=0.5, min_w=0.6, max_w=1.6))
         
-        btn_preset_standard = QPushButton("🥋 실전 겨루기 (표준)")
+        btn_preset_standard = QPushButton("🥋 실전 스파링 (표준)")
         btn_preset_standard.setStyleSheet("background-color: #e0f2fe; color: #0369a1; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
         btn_preset_standard.clicked.connect(lambda: self._apply_reac_preset(rec=0.8, min_w=1.0, max_w=2.5))
 
@@ -620,7 +620,7 @@ class SparringDialog(QDialog):
         h_tmpl_step = QHBoxLayout()
         h_tmpl_step.addWidget(QLabel("📋 스텝 템플릿:"))
         self.combo_step_tmpl = QComboBox()
-        self.combo_step_tmpl.addItem("🥋 [태권도 실전 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔", 
+        self.combo_step_tmpl.addItem("🥋 [실전 스파링 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔", 
             "제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
         self.combo_step_tmpl.addItem("⚡ [스피드 순발력] 제자리 ➔ 사이드 ➔ 지그재그 ➔ 앞발 발바꿔 ➔ 페이크",
             "제자리 스텝, 사이드 스텝, 지그재그 스텝, 앞발 스텝 발바꿔, 페이크 스텝")
@@ -636,11 +636,46 @@ class SparringDialog(QDialog):
         self.txt_combo_steps.setPlaceholderText("쉼표로 구분하여 자유롭게 스텝 종류를 입력하세요")
         h_step_txt.addWidget(self.txt_combo_steps, stretch=1)
         l_cst.addLayout(h_step_txt)
-
-        lbl_step_hint = QLabel("※ 처음에 전체 훈련 방식 안내 후, [스텝 지시] ➔ [삐익(신호음)] ➔ [전력 연타] ➔ [갈려/중지/종료음] 순서로 군더더기 없이 진행됩니다.")
-        lbl_step_hint.setStyleSheet("color: #64748b; font-size: 11px;")
-        l_cst.addWidget(lbl_step_hint)
         l_combo.addWidget(g_combo_steps)
+
+        # 4. 집중 훈련 발차기/공격 기술 설정 (사전 안내 방송 및 훈련 목표)
+        g_combo_kicks = QGroupBox("4. 집중 훈련 발차기/공격 기술 (사전 안내 및 타격 목표)")
+        l_ckk = QVBoxLayout(g_combo_kicks)
+        
+        h_tmpl_kick = QHBoxLayout()
+        h_tmpl_kick.addWidget(QLabel("📋 공격 기술 템플릿:"))
+        self.combo_kick_tmpl = QComboBox()
+        self.combo_kick_tmpl.addItem("🥋 [실전 스파링 콤보] 전진 몸통 후 사이드 상단, 백스텝 후 받아차기/교차 상단, 전진 몸통 3연타",
+            "전진 몸통공격 후 사이드 스텝 상단, 백스텝 후 뒷발 받아차기 공격과 교차 상단 공격, 전진 몸통 3연타")
+        self.combo_kick_tmpl.addItem("⚡ [스피드 연타 공격] 빠른 원투 몸통연타 후 상단 돌려차기, 앞발 나래차기 후 뒷발 상단, 제자리 3연타",
+            "빠른 원투 몸통연타 후 상단 돌려차기, 앞발 나래차기 후 뒷발 상단, 제자리 3연타")
+        self.combo_kick_tmpl.addItem("🛡️ [카운터 & 반격 공격] 백스텝 후 받아차기, 앞발 컷트 후 뒤차기 카운터, 사이드 빠지며 상단 공격",
+            "백스텝 후 받아차기, 앞발 컷트 후 뒤차기 카운터, 사이드 빠지며 상단 공격")
+        self.combo_kick_tmpl.addItem("🏃‍♂️ [기본 공격 연타] 몸통 돌려차기 2연타, 앞발 컷트 후 뒷발 상단, 전진 3연타",
+            "몸통 돌려차기 2연타, 앞발 컷트 후 뒷발 상단, 전진 3연타")
+        self.combo_kick_tmpl.currentIndexChanged.connect(self._on_kick_tmpl_changed)
+        h_tmpl_kick.addWidget(self.combo_kick_tmpl, stretch=1)
+        l_ckk.addLayout(h_tmpl_kick)
+
+        h_kick_txt = QHBoxLayout()
+        h_kick_txt.addWidget(QLabel("✏️ 집중 훈련 기술:"))
+        self.txt_combo_kicks = QLineEdit("전진 몸통공격 후 사이드 스텝 상단, 백스텝 후 뒷발 받아차기 공격과 교차 상단 공격, 전진 몸통 3연타")
+        self.txt_combo_kicks.setPlaceholderText("쉼표로 구분하여 자유롭게 집중 공격 기술을 입력하세요")
+        h_kick_txt.addWidget(self.txt_combo_kicks, stretch=1)
+        l_ckk.addLayout(h_kick_txt)
+
+        h_kick_mode = QHBoxLayout()
+        h_kick_mode.addWidget(QLabel("📢 기술 안내 방식:"))
+        self.combo_kick_mode = QComboBox()
+        self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명 (본 훈련은 스텝 지시에만 집중 - 추천)", "intro_only")
+        self.combo_kick_mode.addItem("🗣️ 시작 전 사전 안내 + 매 세트 스텝 지시 시 기술명 함께 호명", "each_set")
+        h_kick_mode.addWidget(self.combo_kick_mode, stretch=1)
+        l_ckk.addLayout(h_kick_mode)
+
+        lbl_step_hint = QLabel("※ 앞부분 시작 설명에서 어떤 발차기 공격을 집중적으로 할 것인지 명확히 안내한 후, 본 훈련에서는 군더더기 없이 [스텝 지시] ➔ [삐익(신호음)] ➔ [전력 연타] ➔ [갈려/중지/종료음] 순서로 실전 스파링 훈련이 진행됩니다.")
+        lbl_step_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        l_ckk.addWidget(lbl_step_hint)
+        l_combo.addWidget(g_combo_kicks)
         l_combo.addStretch()
         self.tabs.addTab(tab_combo, "🔥 스텝 + 콤비네이션 연타")
 
@@ -881,6 +916,11 @@ class SparringDialog(QDialog):
         if tmpl_data:
             self.txt_combo_steps.setText(tmpl_data)
 
+    def _on_kick_tmpl_changed(self, idx):
+        tmpl_data = self.combo_kick_tmpl.currentData()
+        if tmpl_data:
+            self.txt_combo_kicks.setText(tmpl_data)
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -971,6 +1011,9 @@ class SparringDialog(QDialog):
             params["step_types"] = [s.strip() for s in raw_steps if s.strip()]
             params["start_signal"] = self.combo_start_signal.currentData() or "whistle"
             params["stop_signal"] = self.combo_stop_signal.currentData() or "voice_kalyeo"
+            raw_kicks = self.txt_combo_kicks.text().split(",")
+            params["kick_types"] = [k.strip() for k in raw_kicks if k.strip()]
+            params["kick_announce_mode"] = self.combo_kick_mode.currentData() or "intro_only"
 
         elif mode == "rounds":
             params["round_sec"] = float(self.sp_rnd_time.value())
