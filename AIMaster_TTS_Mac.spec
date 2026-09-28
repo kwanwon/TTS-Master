@@ -48,4 +48,11 @@ app = BUNDLE(
     name='AIMaster_TTS_Mac.app',
     icon='assets/icon.icns',
     bundle_identifier='com.aimaster.tts',
+    info_plist={
+        'CFBundleDisplayName': 'AIMaster_TTS_Mac',
+        'CFBundleName': 'AIMaster_TTS_Mac',
+        'CFBundleIconFile': 'icon.icns',
+        'CFBundleIconName': 'icon',
+        'NSHighResolutionCapable': True,
+    },
 )
