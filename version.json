@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
+  "version": "1.3.1",
   "release_date": "2026-09-28",
   "app_name": "AIMaster_TTS",
-  "description": "오디오 내보내기 및 파일 직접 저장 시 확장자(.wav/.mp3) 미입력 예외 방어 강화 - 사용자가 파일 이름만 입력해도 자동으로 안전하게 포맷을 감지하여 WAV로 보정 및 ffmpeg 에러 234 완벽 해결"
+  "description": "스파링/미트 훈련 마법사 실행 시 QTextEdit import 누락으로 인한 강제 종료(NameError 크래시) 완벽 해결 및 마법사 실행 슬롯 예외 방어 강화"
 }

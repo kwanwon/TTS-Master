@@ -797,92 +797,102 @@ class AudioEditorTab(QWidget):
 
     def open_shuttle_run_wizard(self):
         """🏃‍♂️ 실내 셔틀런 음원 자동 생성 마법사 열기 및 타임라인 로드"""
-        tts_eng = self.main_window.tts_engine if self.main_window else None
-        dlg = ShuttleRunDialog(parent=self, tts_engine=tts_eng)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
-            res = dlg.generated_result
-            clips = res.get("timeline_clips", [])
-            if not clips:
-                return
+        try:
+            tts_eng = self.main_window.tts_engine if self.main_window else None
+            dlg = ShuttleRunDialog(parent=self, tts_engine=tts_eng)
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
+                res = dlg.generated_result
+                clips = res.get("timeline_clips", [])
+                if not clips:
+                    return
 
-            # 기존 타임라인 정리 여부 확인
-            if self.timeline_view.get_timeline_data():
-                r = QMessageBox.question(
-                    self, "타임라인 정리",
-                    "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 셔틀런 음원으로 교체하시겠습니까?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
+                # 기존 타임라인 정리 여부 확인
+                if self.timeline_view.get_timeline_data():
+                    r = QMessageBox.question(
+                        self, "타임라인 정리",
+                        "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 셔틀런 음원으로 교체하시겠습니까?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.Yes
+                    )
+                    if r == QMessageBox.StandardButton.Yes:
+                        self.timeline_view.clear_all()
+
+                # 클립들을 타임라인에 배치
+                for c in clips:
+                    self.timeline_view.add_clip(
+                        c["text"],
+                        c["file"],
+                        c["time"],
+                        c["track"],
+                        c["duration"]
+                    )
+
+                # 플레이어 길이 및 믹싱 트리거
+                self.bgm_length = res.get("total_duration_sec", 60.0)
+                self.current_time = 0.0
+                self.update_ui_time()
+                self.trigger_auto_mix()
+                
+                layout_info = "트랙 1: 배경음악(BGM) | 트랙 2: 훈련 트랙 (신호음+구령 순차 정렬)" if res.get("track_layout") == "single" else "트랙 1: 배경음악(BGM) | 트랙 2: 신호음 | 트랙 3: 음성 구령"
+                QMessageBox.information(
+                    self, "로드 완료",
+                    f"🎉 {int(res['distance'])}m {res['target_stages']}단계 셔틀런 트랙이 타임라인에 완벽히 로드되었습니다!\n"
+                    f"{layout_info}\n\n"
+                    "소리가 엉키지 않고 멘트와 신호음이 순차적으로 정렬되었습니다.\n"
+                    "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
                 )
-                if r == QMessageBox.StandardButton.Yes:
-                    self.timeline_view.clear_all()
-
-            # 클립들을 타임라인에 배치
-            for c in clips:
-                self.timeline_view.add_clip(
-                    c["text"],
-                    c["file"],
-                    c["time"],
-                    c["track"],
-                    c["duration"]
-                )
-
-            # 플레이어 길이 및 믹싱 트리거
-            self.bgm_length = res.get("total_duration_sec", 60.0)
-            self.current_time = 0.0
-            self.update_ui_time()
-            self.trigger_auto_mix()
-            
-            layout_info = "트랙 1: 배경음악(BGM) | 트랙 2: 훈련 트랙 (신호음+구령 순차 정렬)" if res.get("track_layout") == "single" else "트랙 1: 배경음악(BGM) | 트랙 2: 신호음 | 트랙 3: 음성 구령"
-            QMessageBox.information(
-                self, "로드 완료",
-                f"🎉 {int(res['distance'])}m {res['target_stages']}단계 셔틀런 트랙이 타임라인에 완벽히 로드되었습니다!\n"
-                f"{layout_info}\n\n"
-                "소리가 엉키지 않고 멘트와 신호음이 순차적으로 정렬되었습니다.\n"
-                "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
-            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "마법사 실행 오류", f"셔틀런 마법사 실행 중 오류가 발생했습니다:\n{e}")
 
     def open_sparring_wizard(self):
         """🥋 스파링 훈련 마법사 열기 및 타임라인 로드"""
-        tts_eng = self.main_window.tts_engine if self.main_window else None
-        dlg = SparringDialog(parent=self, tts_engine=tts_eng)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
-            res = dlg.generated_result
-            clips = res.get("timeline_clips", [])
-            if not clips:
-                return
+        try:
+            tts_eng = self.main_window.tts_engine if self.main_window else None
+            dlg = SparringDialog(parent=self, tts_engine=tts_eng)
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
+                res = dlg.generated_result
+                clips = res.get("timeline_clips", [])
+                if not clips:
+                    return
 
-            # 기존 타임라인 정리 여부 확인
-            if self.timeline_view.get_timeline_data():
-                r = QMessageBox.question(
-                    self, "타임라인 정리",
-                    "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 훈련 음원으로 교체하시겠습니까?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
+                # 기존 타임라인 정리 여부 확인
+                if self.timeline_view.get_timeline_data():
+                    r = QMessageBox.question(
+                        self, "타임라인 정리",
+                        "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 훈련 음원으로 교체하시겠습니까?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.Yes
+                    )
+                    if r == QMessageBox.StandardButton.Yes:
+                        self.timeline_view.clear_all()
+
+                # 클립들을 타임라인에 배치
+                for c in clips:
+                    self.timeline_view.add_clip(
+                        c["text"],
+                        c["file"],
+                        c["time"],
+                        c["track"],
+                        c["duration"]
+                    )
+
+                # 플레이어 길이 및 믹싱 트리거
+                self.bgm_length = res.get("total_duration_sec", 60.0)
+                self.current_time = 0.0
+                self.update_ui_time()
+                self.trigger_auto_mix()
+                
+                mode_name = res.get("mode_name", "스파링 훈련")
+                QMessageBox.information(
+                    self, "로드 완료",
+                    f"🎉 [{mode_name}] 트랙이 타임라인에 완벽히 로드되었습니다!\n"
+                    "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(호각/비프) | 트랙 3: 훈련 구령 음성\n\n"
+                    "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
                 )
-                if r == QMessageBox.StandardButton.Yes:
-                    self.timeline_view.clear_all()
-
-            # 클립들을 타임라인에 배치
-            for c in clips:
-                self.timeline_view.add_clip(
-                    c["text"],
-                    c["file"],
-                    c["time"],
-                    c["track"],
-                    c["duration"]
-                )
-
-            # 플레이어 길이 및 믹싱 트리거
-            self.bgm_length = res.get("total_duration_sec", 60.0)
-            self.current_time = 0.0
-            self.update_ui_time()
-            self.trigger_auto_mix()
-            
-            mode_name = res.get("mode_name", "스파링 훈련")
-            QMessageBox.information(
-                self, "로드 완료",
-                f"🎉 [{mode_name}] 트랙이 타임라인에 완벽히 로드되었습니다!\n"
-                "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(호각/비프) | 트랙 3: 훈련 구령 음성\n\n"
-                "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
-            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "마법사 실행 오류", f"스파링 마법사 실행 중 오류가 발생했습니다:\n{e}")
 
