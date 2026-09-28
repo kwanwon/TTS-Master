@@ -945,6 +945,9 @@ class MainWindow(QMainWindow):
         if not save_path:
             return
             
+        if not os.path.splitext(save_path)[1]:
+            save_path += ".wav"
+            
         self.last_dir = os.path.dirname(save_path)
         self.auto_save_state()
         

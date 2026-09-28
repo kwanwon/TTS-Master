@@ -1219,6 +1219,8 @@ class SparringDialog(QDialog):
                     )
                     if save_path:
                         import shutil
+                        if not os.path.splitext(save_path)[1]:
+                            save_path += ".wav"
                         shutil.copy(result_data["master_audio_path"], save_path)
                         QMessageBox.information(self, "저장 완료", f"파일이 성공적으로 저장되었습니다:\n{save_path}")
                 self.accept()

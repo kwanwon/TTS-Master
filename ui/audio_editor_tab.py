@@ -68,7 +68,12 @@ class AudioProcessorThread(QThread):
                     self.progress.emit(prog)
                 
                 self.progress.emit(95)
-                bgm.export(output_file, format=output_file.split('.')[-1])
+                base, ext = os.path.splitext(output_file)
+                export_fmt = ext.lstrip('.').lower()
+                if export_fmt not in ('wav', 'mp3', 'ogg', 'm4a', 'flac'):
+                    export_fmt = 'wav'
+                    output_file = f"{output_file}.wav"
+                bgm.export(output_file, format=export_fmt)
                 self.progress.emit(100)
                 
                 if self.mode == "preview":
@@ -701,11 +706,25 @@ class AudioEditorTab(QWidget):
             QMessageBox.warning(self, "경고", "저장할 오디오가 없습니다.")
             return
             
-        fmt = self.format_combo.currentText()
-        output_file, _ = QFileDialog.getSaveFileName(self, "최종 믹싱 오디오 저장", f"{self.last_dir}/final_mixed.{fmt}", f"Audio Files (*.{fmt})", options=QFileDialog.Option.DontUseNativeDialog)
+        fmt = self.format_combo.currentText().strip().lower()
+        if not fmt:
+            fmt = "wav"
+            
+        default_name = f"final_mixed.{fmt}"
+        default_full_path = os.path.join(self.last_dir, default_name) if self.last_dir else default_name
+        output_file, _ = QFileDialog.getSaveFileName(
+            self, "최종 믹싱 오디오 저장", default_full_path,
+            f"Audio Files (*.{fmt})", options=QFileDialog.Option.DontUseNativeDialog
+        )
         
         if output_file:
             self.last_dir = os.path.dirname(output_file)
+            base, ext = os.path.splitext(output_file)
+            if not ext:
+                output_file = f"{output_file}.{fmt}"
+            elif ext.lstrip('.').lower() not in ('wav', 'mp3', 'ogg', 'm4a', 'flac'):
+                output_file = f"{output_file}.{fmt}"
+
             params = {
                 'timeline': timeline_data,
                 'output': output_file,
