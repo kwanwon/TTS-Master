@@ -593,17 +593,33 @@ class SchedulerTab(QWidget):
         except: pass
         
     def save_to_file(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "스케줄 파일 저장", "", "JSON Files (*.json)", options=QFileDialog.Option.DontUseNativeDialog)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "스케줄 파일 저장", "",
+            "JSON Files (*.json);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog
+        )
         if file_path:
-            state = self._get_state_dict()
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(state, f, ensure_ascii=False, indent=4)
-            QMessageBox.information(self, "성공", "스케줄이 성공적으로 저장되었습니다.")
+            if not os.path.splitext(file_path)[1]:
+                file_path += ".json"
+            try:
+                state = self._get_state_dict()
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(state, f, ensure_ascii=False, indent=4)
+                QMessageBox.information(self, "성공", f"스케줄이 성공적으로 저장되었습니다:\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "저장 오류", f"스케줄 파일 저장 중 오류가 발생했습니다:\n{e}")
             
     def load_from_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "스케줄 파일 불러오기", "", "JSON Files (*.json)", options=QFileDialog.Option.DontUseNativeDialog)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "스케줄 파일 불러오기", "",
+            "All Files (*);;JSON Files (*.json)",
+            options=QFileDialog.Option.DontUseNativeDialog
+        )
         if file_path:
-            with open(file_path, "r", encoding="utf-8") as f:
-                state = json.load(f)
-            self._apply_state_dict(state)
-            QMessageBox.information(self, "성공", "스케줄을 성공적으로 불러왔습니다.")
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                self._apply_state_dict(state)
+                QMessageBox.information(self, "성공", f"스케줄을 성공적으로 불러왔습니다:\n{os.path.basename(file_path)}")
+            except Exception as e:
+                QMessageBox.critical(self, "불러오기 오류", f"스케줄 파일 형식이 올바르지 않거나 읽을 수 없습니다:\n{e}")
