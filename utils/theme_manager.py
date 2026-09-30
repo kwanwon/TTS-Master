@@ -160,6 +160,17 @@ def get_dark_stylesheet() -> str:
             margin-bottom: -5px;
             border-radius: 8px;
         }
+
+        /* ── QToolTip (선명하고 큰 고대비 말풍선 도움말) ── */
+        QToolTip {
+            background-color: #0f172a;
+            color: #f8fafc;
+            border: 1.5px solid #38bdf8;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
+        }
     """
 
 
@@ -313,6 +324,17 @@ def get_light_stylesheet() -> str:
             margin-top: -5px;
             margin-bottom: -5px;
             border-radius: 8px;
+        }
+
+        /* ── QToolTip (선명하고 큰 고대비 말풍선 도움말) ── */
+        QToolTip {
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 1.5px solid #0284c7;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
         }
     """
 

@@ -16,6 +16,7 @@ from ui.daw_timeline import DAWTimeline, AssetListWidget
 from utils.effects_generator import ensure_default_effects
 from ui.shuttle_run_dialog import ShuttleRunDialog
 from ui.sparring_dialog import SparringDialog
+from ui.warmup_dialog import WarmupDialog
 
 class AudioProcessorThread(QThread):
     progress = pyqtSignal(int)
@@ -174,6 +175,7 @@ class AudioEditorTab(QWidget):
             }
             QPushButton:hover { background-color: #0369a1; }
         """)
+        self.btn_shuttle_run.setToolTip("🏃‍♂️ 실내 왕복달리기(셔틀런) 체력측정 및 훈련용 비프음+구령 음원을 자동 생성합니다.")
         self.btn_shuttle_run.clicked.connect(self.open_shuttle_run_wizard)
 
         # 🥋 스파링 훈련 마법사 버튼
@@ -189,7 +191,24 @@ class AudioEditorTab(QWidget):
             }
             QPushButton:hover { background-color: #9d174d; }
         """)
+        self.btn_sparring.setToolTip("🥋 1:1/1:2/1:3 미트 릴레이, 반사 반응, 콤비네이션 연타, 라운드 스파링 훈련 음원을 자동 생성합니다.")
         self.btn_sparring.clicked.connect(self.open_sparring_wizard)
+
+        # 🧘‍♂️ 준비운동·스트레칭 마법사 버튼
+        self.btn_warmup = QPushButton("🧘‍♂️ 준비운동·스트레칭 마법사")
+        self.btn_warmup.setStyleSheet("""
+            QPushButton {
+                background-color: #0d9488;
+                color: white;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 4px;
+                border: 1px solid #0f766e;
+            }
+            QPushButton:hover { background-color: #0f766e; }
+        """)
+        self.btn_warmup.setToolTip("🧘‍♂️ 도장 정통 전신 체조, 8박자 구령, 등배운동, 런지, 요가, 필라테스 등 사범 직강 준비운동 음원을 자동 생성합니다.")
+        self.btn_warmup.clicked.connect(self.open_warmup_wizard)
         
         self.time_lbl = QLabel("00:00.0 / 00:00.0")
         self.time_lbl.setFixedWidth(120)
@@ -208,6 +227,7 @@ class AudioEditorTab(QWidget):
         player_layout.addWidget(btn_bgm_load)
         player_layout.addWidget(self.btn_shuttle_run)
         player_layout.addWidget(self.btn_sparring)
+        player_layout.addWidget(self.btn_warmup)
         player_layout.addWidget(self.bgm_lbl)
         player_layout.addWidget(self.time_lbl)
         player_layout.addWidget(self.slider)
@@ -895,4 +915,54 @@ class AudioEditorTab(QWidget):
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "마법사 실행 오류", f"스파링 마법사 실행 중 오류가 발생했습니다:\n{e}")
+
+    def open_warmup_wizard(self):
+        """🧘‍♂️ 준비운동·스트레칭·요가 마법사 열기 및 타임라인 로드"""
+        try:
+            tts_eng = self.main_window.tts_engine if self.main_window else None
+            dlg = WarmupDialog(parent=self, tts_engine=tts_eng)
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
+                res = dlg.generated_result
+                clips = res.get("timeline_clips", [])
+                if not clips:
+                    return
+
+                # 기존 타임라인 정리 여부 확인
+                if self.timeline_view.get_timeline_data():
+                    r = QMessageBox.question(
+                        self, "타임라인 정리",
+                        "현재 타임라인에 기존 클립들이 있습니다.\n기존 클립을 모두 지우고 새 준비운동 음원으로 교체하시겠습니까?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.Yes
+                    )
+                    if r == QMessageBox.StandardButton.Yes:
+                        self.timeline_view.clear_all()
+
+                # 클립들을 타임라인에 배치
+                for c in clips:
+                    self.timeline_view.add_clip(
+                        c["text"],
+                        c["file"],
+                        c["time"],
+                        c["track"],
+                        c["duration"]
+                    )
+
+                # 플레이어 길이 및 믹싱 트리거
+                self.bgm_length = res.get("total_duration_sec", 60.0)
+                self.current_time = 0.0
+                self.update_ui_time()
+                self.trigger_auto_mix()
+
+                routine_name = res.get("routine_name", "준비운동")
+                QMessageBox.information(
+                    self, "로드 완료",
+                    f"🎉 [{routine_name}] 트랙이 타임라인에 완벽히 로드되었습니다!\n"
+                    "트랙 1: 배경음악(BGM) | 트랙 2: 신호음(차임벨) | 트랙 3: 사범 멘트 & 8박자 구령\n\n"
+                    "[▶️ 재생] 버튼을 눌러 소리를 확인해 보세요."
+                )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "마법사 실행 오류", f"준비운동 마법사 실행 중 오류가 발생했습니다:\n{e}")
 
