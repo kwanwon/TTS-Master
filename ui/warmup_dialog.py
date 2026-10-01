@@ -174,11 +174,15 @@ class WarmupSynthThread(QThread):
             valid_bgm = [p for p in self.bgm_paths if os.path.exists(p)]
             if valid_bgm and bgm_vol_pct > 0:
                 self.progress.emit(65, "배경음악 루프 생성 및 오토 더킹(Auto-Ducking) 적용 중...")
-                bgm_raw = ShuttleRunEngine.build_continuous_bgm(valid_bgm, total_duration_sec, crossfade_ms=3000)
+                bgm_raw = ShuttleRunEngine.build_seamless_bgm(
+                    valid_bgm,
+                    target_duration_ms=total_duration_ms,
+                    crossfade_ms=2000
+                )
                 bgm_raw = bgm_raw + bgm_vol_db
 
                 if auto_ducking and duck_segments:
-                    bgm_raw = ShuttleRunEngine.apply_ducking_to_bgm(bgm_raw, duck_segments, duck_db=duck_db_val)
+                    bgm_raw = ShuttleRunEngine.apply_auto_ducking(bgm_raw, duck_segments, duck_db=duck_db_val)
 
                 bgm_track_audio = bgm_raw[:total_duration_ms]
                 bgm_clip_path = os.path.join("projects", "temp_tts", "warmup_bgm_track.wav")

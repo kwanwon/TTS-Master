@@ -1,6 +1,6 @@
 {
-  "version": "1.4.1",
-  "release_date": "2026-09-30",
+  "version": "1.4.2",
+  "release_date": "2026-10-01",
   "app_name": "AIMaster_TTS",
-  "description": "스케줄 파일 저장 시 .json 확장자 자동 부착 보정 및 불러오기 시 확장자 생략 파일도 모두 선택/로드 가능하도록 파일 필터 전면 개방"
+  "description": "준비운동·스트레칭 마법사 BGM 추가 시 발생하던 ShuttleRunEngine 메서드 참조 오타(build_continuous_bgm)를 정규 메서드로 수정하여 BGM 오토더킹 및 음원 합성 정상화"
 }
