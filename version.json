@@ -1,6 +1,6 @@
 {
-  "version": "1.4.2",
+  "version": "1.4.3",
   "release_date": "2026-10-01",
   "app_name": "AIMaster_TTS",
-  "description": "준비운동·스트레칭 마법사 BGM 추가 시 발생하던 ShuttleRunEngine 메서드 참조 오타(build_continuous_bgm)를 정규 메서드로 수정하여 BGM 오토더킹 및 음원 합성 정상화"
+  "description": "준비운동 음성 뒤엉킴 방지(Cascade Realign), 점핑잭/버피 케이던스 구령 박자 동기화, 도장 근지구력 체력단련 동작 11종 추가, 나만의 템플릿 JSON 저장 및 불러오기 기능 추가"
 }

@@ -15,6 +15,7 @@ import os
 import io
 import math
 import copy
+import json
 import asyncio
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
@@ -153,6 +154,12 @@ class WarmupSynthThread(QThread):
                             ev["duration"] = round(len(AudioSegment.from_file(full_p)) / 1000.0, 2)
                         except Exception:
                             pass
+
+            # 3-1. [핵심 음성 겹침 방지 엔진]
+            # 실제 측정된 물리적 오디오 길이를 기반으로 타임스탬프를 순차 재배치하여 음성 겹침/뒤엉킴 0% 보장!
+            trans_gap = self.params.get("trans_gap_sec", 0.5)
+            events, duck_segments, total_duration_sec = WarmupEngine.cascade_realign_events(events, trans_gap_sec=trans_gap)
+            total_duration_ms = int(total_duration_sec * 1000)
 
             self.progress.emit(60, "배경음악(BGM) 루프 및 믹싱 캔버스 준비 중...")
 
@@ -314,8 +321,8 @@ class WarmupDialog(QDialog):
         content_layout.setSpacing(14)
 
         # --- A. 코스 프리셋 선택 ---
-        grp_preset = QGroupBox("1. 🎯 코스 프리셋 선택 (매일 지루하지 않은 테마)")
-        grp_preset.setToolTip("수업 목적이나 요일별 테마에 맞는 준비운동 루틴을 원클릭으로 불러옵니다.")
+        grp_preset = QGroupBox("1. 🎯 코스 프리셋 선택 및 사용자 템플릿 관리 (매일 지루하지 않은 테마)")
+        grp_preset.setToolTip("수업 목적이나 요일별 테마에 맞는 준비운동 루틴을 원클릭으로 불러오거나, 나만의 템플릿을 저장/불러오기 합니다.")
         l_preset = QVBoxLayout(grp_preset)
 
         h_pre = QHBoxLayout()
@@ -327,6 +334,17 @@ class WarmupDialog(QDialog):
         self.combo_preset.addItem("✏️ [사용자 정의] 내 마음대로 직접 구성 (Custom)", "custom")
         self.combo_preset.currentIndexChanged.connect(self.on_preset_changed)
         h_pre.addWidget(self.combo_preset, 1)
+
+        btn_save_tpl = QPushButton("💾 내 템플릿 저장")
+        btn_save_tpl.setToolTip("현재 체크된 동작, 순서, 사범 멘트, 템포 설정을 JSON 파일로 저장하여 언제든 다시 불러올 수 있습니다.")
+        btn_save_tpl.clicked.connect(self.save_custom_template)
+        h_pre.addWidget(btn_save_tpl)
+
+        btn_load_tpl = QPushButton("📂 내 템플릿 불러오기")
+        btn_load_tpl.setToolTip("저장해둔 나만의 준비운동 템플릿(JSON) 파일을 불러와 즉시 세팅합니다.")
+        btn_load_tpl.clicked.connect(self.load_custom_template)
+        h_pre.addWidget(btn_load_tpl)
+
         l_preset.addLayout(h_pre)
 
         self.lbl_preset_desc = QLabel()
@@ -653,9 +671,15 @@ class WarmupDialog(QDialog):
             if ctype == "8count_x4":
                 ctype_desc = "8박자 x 4회"
             elif ctype == "forward_back_8count":
-                ctype_desc = "손바닥/팔꿈치/뒤로 8박"
-            elif ctype == "reps_10":
-                ctype_desc = "10회 카운트"
+                ctype_desc = "등배운동 (손바닥/팔꿈치/뒤로)"
+            elif ctype in ("cadence_10reps", "reps_10"):
+                ctype_desc = "케이던스 10회 (하나,둘,셋,하나!)"
+            elif ctype == "single_rep_10":
+                ctype_desc = "단일 10회 (하나!... 둘!...)"
+            elif ctype == "alternate_20reps":
+                ctype_desc = "교대 20회 (왼발/오른발)"
+            elif ctype == "bridge_pattern":
+                ctype_desc = "브릿지 (3초-3초-10초)"
             elif "hold" in ctype:
                 ctype_desc = "15초 정적 유지"
             elif "breathing" in ctype:
@@ -684,6 +708,112 @@ class WarmupDialog(QDialog):
                         mov[f"instruction_{lang}"] = new_txt
                     else:
                         mov[f"short_cue_{lang}"] = new_txt
+
+    def save_custom_template(self):
+        """현재 편집 중인 루틴 전체(동작 목록, 순서, 멘트, 템포, 시작/종료멘트)를 JSON 템플릿 파일로 저장"""
+        self.save_table_changes_to_memory()
+
+        default_name = "나만의_준비운동_루틴.json"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "나만의 준비운동 템플릿 저장",
+            default_name,
+            "JSON Files (*.json)",
+            options=QFileDialog.Option.DontUseNativeDialog
+        )
+        if not save_path:
+            return
+
+        if not save_path.endswith(".json"):
+            save_path += ".json"
+
+        data = {
+            "template_name": self.combo_preset.currentText(),
+            "language": "kr" if self.rb_lang_kr.isChecked() else "en",
+            "coaching_mode": "detailed" if self.rb_mode_detailed.isChecked() else "quick",
+            "tempo_bpm": self.slider_tempo.value(),
+            "signal_type": self.combo_signal.currentData() or "bell",
+            "start_cue": self.txt_start_cue.text().strip(),
+            "end_cue": self.txt_end_cue.text().strip(),
+            "movements": self.current_movements
+        }
+
+        try:
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            QMessageBox.information(
+                self, "저장 완료",
+                f"🎉 나만의 준비운동 템플릿이 성공적으로 저장되었습니다!\n파일: {os.path.basename(save_path)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "저장 오류", f"템플릿 저장 중 오류가 발생했습니다:\n{str(e)}")
+
+    def load_custom_template(self):
+        """외부 JSON 템플릿 파일을 불러와 UI 및 동작 리스트에 즉시 반영"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "준비운동 템플릿 불러오기",
+            "",
+            "JSON Files (*.json)",
+            options=QFileDialog.Option.DontUseNativeDialog
+        )
+        if not file_path or not os.path.exists(file_path):
+            return
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            loaded_moves = data.get("movements", [])
+            if not loaded_moves:
+                QMessageBox.warning(self, "형식 오류", "템플릿 파일 내에 동작(movements) 데이터가 없습니다.")
+                return
+
+            self.current_movements = loaded_moves
+
+            # 언어 복원
+            if data.get("language") == "en":
+                self.rb_lang_en.setChecked(True)
+            else:
+                self.rb_lang_kr.setChecked(True)
+
+            # 진행 모드 복원
+            if data.get("coaching_mode") == "quick":
+                self.rb_mode_quick.setChecked(True)
+            else:
+                self.rb_mode_detailed.setChecked(True)
+
+            # 템포 복원
+            if "tempo_bpm" in data:
+                self.slider_tempo.setValue(data["tempo_bpm"])
+
+            # 신호음 복원
+            if "signal_type" in data:
+                idx = self.combo_signal.findData(data["signal_type"])
+                if idx >= 0:
+                    self.combo_signal.setCurrentIndex(idx)
+
+            # 멘트 복원
+            if "start_cue" in data:
+                self.txt_start_cue.setText(data["start_cue"])
+            if "end_cue" in data:
+                self.txt_end_cue.setText(data["end_cue"])
+
+            # 프리셋 콤보박스를 [사용자 정의]로 변경
+            custom_idx = self.combo_preset.findData("custom")
+            if custom_idx >= 0:
+                self.combo_preset.blockSignals(True)
+                self.combo_preset.setCurrentIndex(custom_idx)
+                self.combo_preset.blockSignals(False)
+            tpl_name = data.get("template_name", os.path.basename(file_path))
+            self.lbl_preset_desc.setText(f"📂 외부 템플릿 로드됨: {tpl_name}")
+
+            self.refresh_table_display()
+            QMessageBox.information(
+                self, "불러오기 완료",
+                f"✅ '{tpl_name}' 템플릿을 성공적으로 불러왔습니다!\n동작 목록과 설정이 화면에 반영되었습니다."
+            )
+
+        except Exception as e:
+            QMessageBox.critical(self, "불러오기 오류", f"템플릿 파일을 읽는 중 오류가 발생했습니다:\n{str(e)}")
 
     def move_item_up(self):
         row = self.table_moves.currentRow()
