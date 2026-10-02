@@ -62,6 +62,159 @@ class BalancedCuePicker:
         return candidate
 
 
+# ── 도장 고강도 기능성 서킷 인터벌 4대 테마 프리셋 ──
+CIRCUIT_INTERVAL_THEMES = {
+    "power_agility": {
+        "name_kr": "⚡ [순발력 & 파워 점프 인터벌] 턱점프·앞차기·스쿼트점프·버피",
+        "name_mix": "⚡ 순발력 & 파워 점프 인터벌 (하이니 점프 & 프론트 킥)",
+        "name_dual": "⚡ 순발력 & 파워 인터벌 (Power & Agility)",
+        "name_en": "⚡ Explosive Power & Jump Interval",
+        "desc": "무릎 당겨 점프, 폭발적 앞차기 연속 타격, 쪼그려 점프, 전신 버피를 순환하여 폭발적 순발력 극대화",
+        "exercises": [
+            {
+                "kr": "무릎 당겨 높이 점프! 무릎을 가슴까지 터치!",
+                "mix": "하이니 점프(High knee jump)! 무릎 가슴 터치 렛츠 고!",
+                "dual": "무릎 당겨 높이 점프! - Jump high and tuck knees to chest!",
+                "en": "High knee tuck jumps, pull knees to chest!",
+                "tip": "제자리에서 높이 뛰어올라 공중에서 양 무릎을 가슴 높이까지 끌어당깁니다."
+            },
+            {
+                "kr": "폭발적 앞차기 연속 타격! 좌우 빠르게 차올리기!",
+                "mix": "프론트 킥 투 더 페이스(Front kick)! 빠르게 레프트 라이트 킥!",
+                "dual": "폭발적 앞차기 연속 타격! - Explosive front kicks left and right!",
+                "en": "Explosive front kicks, power and speed!",
+                "tip": "가드 올리고 좌우 번갈아 얼굴 높이로 전력 앞차기를 연속 타격합니다."
+            },
+            {
+                "kr": "쪼그려 점프뛰기! 깊게 앉았다가 높이 점프!",
+                "mix": "스쿼트 점프(Squat jump)! 딥 다운 앤 점프 하이!",
+                "dual": "쪼그려 점프뛰기! - Squat down deep and jump high!",
+                "en": "Squat jumps, push from your heels and jump!",
+                "tip": "엉덩이를 뒤로 빼며 깊게 앉았다가 허벅지와 둔근 탄력으로 높이 뛰어오릅니다."
+            },
+            {
+                "kr": "전신 버피 테스트! 엎드려, 뻗쳐, 모아, 점프!",
+                "mix": "버피 점프(Burpee jump)! 다운, 백, 인, 점프 하이!",
+                "dual": "전신 버피 점프! - Burpees, down, back, and jump!",
+                "en": "Full burpee jumps, maximum power and speed!",
+                "tip": "손 짚고 엎드려 뻗쳤다 다시 모아 공중으로 높이 점프합니다."
+            }
+        ]
+    },
+    "footwork_speed": {
+        "name_kr": "🏃‍♂️ [민첩성 & 스텝 셔틀 인터벌] 사이드스텝·스위치·지그재그·발구르기",
+        "name_mix": "🏃‍♂️ 민첩성 & 스피드 스텝 인터벌 (사이드 스텝 & 패스트 피트)",
+        "name_dual": "🏃‍♂️ 민첩성 & 스피드 스텝 (Footwork & Agility)",
+        "name_en": "🏃‍♂️ Fast Footwork & Agility Interval",
+        "desc": "사이드 스텝 바닥 터치, 앞발/뒷발 빠른 스위치, 지그재그 회피 스텝, 초고속 발구르기",
+        "exercises": [
+            {
+                "kr": "사이드 스텝 좌우 콘 터치! 빠르게 바닥 터치!",
+                "mix": "사이드 스텝 터치(Side step touch)! 좌우 빠르게 핸드 터치!",
+                "dual": "사이드 스텝 좌우 터치! - Side step shuffle and touch the floor!",
+                "en": "Side step shuffles, touch the ground quick!",
+                "tip": "자세를 낮추고 좌우로 민첩하게 2스텝 이동하여 바닥을 터치합니다."
+            },
+            {
+                "kr": "앞발 뒷발 빠른 스위치! 자세 바꾸며 전격 발바꿔!",
+                "mix": "스위치 스텝(Switch step)! 레그 체인지 빠르게 스위치!",
+                "dual": "앞발 뒷발 빠른 발바꿔! - Fast switch footwork, change stance!",
+                "en": "Fast stance switch, keep light on your feet!",
+                "tip": "대련 자세에서 양발을 동시에 띄워 앞뒤 발을 초고속으로 전환합니다."
+            },
+            {
+                "kr": "지그재그 회피 스텝 앤 고! 각도 꺾으며 전진!",
+                "mix": "지그재그 스텝(Zigzag step)! 앵글 꺾고 전진 무브!",
+                "dual": "지그재그 회피 스텝! - Zigzag footwork, change angles quickly!",
+                "en": "Zigzag evasion footwork, move sharp and crisp!",
+                "tip": "상대의 공격선을 벗어나 대각선으로 좌우 방향을 꺾으며 민첩하게 이동합니다."
+            },
+            {
+                "kr": "제자리 초고속 발구르기 후 턴! 빠르게 발 구르기!",
+                "mix": "패스트 피트(Fast feet)! 제자리 빠르게 구르고 턴!",
+                "dual": "초고속 발구르기! - Fast feet on the spot, quick turn!",
+                "en": "Fast feet sprint on the spot, turn and react!",
+                "tip": "발끝으로 지면을 초고속으로 두드리며 순발력과 발목 탄력을 극대화합니다."
+            }
+        ]
+    },
+    "bodyweight_core": {
+        "name_kr": "💪 [도장 전신 근력 & 코어 인터벌] 마운틴클라이머·푸시업·플랭크·V업",
+        "name_mix": "💪 도장 근력 & 코어 인터벌 (푸시업 & 마운틴 클라이머)",
+        "name_dual": "💪 전신 근력 & 코어 인터벌 (Bodyweight Strength & Core)",
+        "name_en": "💪 Dojo Strength & Core HIIT",
+        "desc": "마운틴 클라이머 전력 질주, 손바닥 푸시업, 플랭크 버티기, V업 복근 운동",
+        "exercises": [
+            {
+                "kr": "마운틴 클라이머! 엎드려 무릎 가슴으로 전력 달리기!",
+                "mix": "마운틴 클라이머(Mountain climber)! 무릎 체스트로 런(Run)!",
+                "dual": "엎드려 무릎 달리기! - Mountain climbers, drive knees fast!",
+                "en": "Mountain climbers, sprint knees to chest!",
+                "tip": "엎드려 뻗쳐 자세에서 무릎을 번갈아 가슴 쪽으로 빠르게 차올립니다."
+            },
+            {
+                "kr": "손바닥 팔굽혀펴기! 가슴 바닥까지 깊게 전력 수행!",
+                "mix": "푸시업(Push-ups)! 체스트 바닥까지 다운 앤 업!",
+                "dual": "손바닥 팔굽혀펴기! - Push-ups, chest to the floor!",
+                "en": "Standard push-ups, keep straight and powerful!",
+                "tip": "몸을 일직선으로 유지하며 가슴이 바닥에 닿을 때까지 힘차게 밀어냅니다."
+            },
+            {
+                "kr": "코어 플랭크 버티기! 복근 엉덩이 힘 꽉 주고 버티기!",
+                "mix": "플랭크 코어 홀드(Plank hold)! 락처럼 단단하게 홀드!",
+                "dual": "플랭크 코어 버티기! - Plank hold, squeeze core tight!",
+                "en": "Plank hold, keep your core locked and breathing!",
+                "tip": "팔꿈치를 바닥에 대고 몸을 널빤지처럼 일직선으로 만들어 흔들림 없이 버팁니다."
+            },
+            {
+                "kr": "누워서 V업 복근 치기! 손끝 발끝 모아올리기!",
+                "mix": "V업 싯업(V-up sit-ups)! 손끝 발끝 터치 앤 다운!",
+                "dual": "누워서 V업 복근 치기! - V-ups, touch toes with hands!",
+                "en": "V-ups, fold your body and touch toes!",
+                "tip": "누운 상태에서 상체와 다리를 동시에 V자로 들어 올려 손끝으로 발끝을 터치합니다."
+            }
+        ]
+    },
+    "combat_reaction": {
+        "name_kr": "🥋 [대련 실전 & 반사신경 인터벌] 신호음 반응 나래차기·카운터·연타",
+        "name_mix": "🥋 대련 실전 & 반사신경 인터벌 (스텝 & 카운터 킥)",
+        "name_dual": "🥋 대련 실전 & 반사신경 (Combat Reaction & Kicks)",
+        "name_en": "🥋 Sparring Reaction & Combo Interval",
+        "desc": "스텝 뛰다 신호음에 즉시 반응 나래차기, 앞발 컷트 후 상단, 백스텝 카운터 뒤차기, 전진 3연타",
+        "exercises": [
+            {
+                "kr": "스텝 유지 중 신호음에 즉시 반응 나래차기! 번개 타격!",
+                "mix": "스텝 뛰다 삑 신호에 나래차기(Double kick)! 라이트닝 타격!",
+                "dual": "신호음에 반응 나래차기! - Step and double kick on whistle!",
+                "en": "Step and react with double fast kicks on signal!",
+                "tip": "경쾌하게 스텝을 뛰다 휘슬 소리가 나면 0.1초 만에 공중 연타 나래차기를 꽂아 넣습니다."
+            },
+            {
+                "kr": "앞발 컷트 견제 후 뒷발 돌려차기 상단! 연속 콤보!",
+                "mix": "앞발 컷트(Cut) 후 백 레그 하이 킥(High kick)! 콤보!",
+                "dual": "앞발 컷트 후 상단 돌려차기! - Front foot cut then high round kick!",
+                "en": "Front foot cut check, then powerful high roundhouse kick!",
+                "tip": "앞발로 상대 진입을 저지하고 즉시 뒷발을 끌어올려 머리 높이로 돌려찹니다."
+            },
+            {
+                "kr": "백스텝 회피 후 전격 카운터 뒤차기! 강력한 반격!",
+                "mix": "백스텝(Back step) 회피 후 카운터 백킥(Back kick)! 스트롱 반격!",
+                "dual": "백스텝 후 카운터 뒤차기! - Back step and counter back kick!",
+                "en": "Back step dodge and explosive counter back kick!",
+                "tip": "상대의 공격 타이밍에 맞춰 뒤로 한 걸음 빠진 뒤 몸을 회전하며 뒤꿈치로 명치를 꽂습니다."
+            },
+            {
+                "kr": "전진 원투 몸통 3연타 폭풍 타격! 밀고 들어가기!",
+                "mix": "원투쓰리 콤보 3연타! 전진하며 스트롱 바디 킥!",
+                "dual": "전진 3연타 폭풍 타격! - Push forward with three continuous kicks!",
+                "en": "Continuous three-strike combo, push forward aggressively!",
+                "tip": "스텝을 밀고 들어가며 원투쓰리 3연타를 쉼 없이 몰아붙여 타격합니다."
+            }
+        ]
+    }
+}
+
+
 class SparringTrainingEngine:
     # Training presets
     TRAINING_MODES = {
@@ -80,6 +233,10 @@ class SparringTrainingEngine:
         "rounds": {
             "name": "정규 스파링 라운드 타이머 시뮬레이터",
             "desc": "경기 라운드(예: 1분 30초) + 휴식(30초) + 라운드 종료 10초 전 경고"
+        },
+        "circuit": {
+            "name": "🔥 도장 기능성 서킷 인터벌 (HIIT & Tabata)",
+            "desc": "순발력, 민첩성, 근력, 반사신경, 대련 스텝/발차기 4대 기능 결합 고강도 인터벌"
         }
     }
 
@@ -748,6 +905,186 @@ class SparringTrainingEngine:
                     curr_time += 4.0
 
             total_duration_sec = curr_time + 3.0
+
+        # ── Mode 5: 도장 고강도 기능성 서킷 인터벌 (HIIT & Tabata) ──
+        elif mode == "circuit":
+            work_sec = float(params.get("work_sec", 20.0))    # 운동 시간 (기본 20초)
+            rest_sec = float(params.get("rest_sec", 10.0))    # 휴식 시간 (기본 10초)
+            total_sets = int(params.get("sets_count", 8))     # 총 세트 수 (기본 8세트)
+            theme_key = params.get("theme_key", "power_agility")
+            lang = params.get("language_mode", "kr")          # kr / mix_kids / dual_step / en_advanced
+
+            theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES["power_agility"])
+            exercises = params.get("custom_exercises", [])
+            if not exercises:
+                exercises = theme_data["exercises"]
+
+            lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
+            theme_title = theme_data.get(f"name_{lang_key}", theme_data["name_kr"])
+
+            # 사전 안내 (모드 5 전용 맞춤)
+            if intro_enabled:
+                if lang == "mix_kids":
+                    intro_text = f"지금부터 도장 하이 파워 인터벌(HIIT) 스타트! 이번 테마는 {theme_title}입니다. 운동 타임에 전력으로 무브하고, 레스트(Rest) 타임에 호흡 릴랙스! 준비해 주세요!"
+                elif lang == "dual_step":
+                    intro_text = f"지금부터 고강도 서킷 인터벌 훈련을 시작합니다. - High intensity interval training! 테마는 '{theme_title}'입니다. 운동 시간에 전력으로 집중하고, 휴식 시간에 호흡을 가다듬으세요. 모두 준비!"
+                elif lang in ("en", "en_advanced"):
+                    intro_text = f"Attention team! Today's circuit interval training theme is {theme_title}. Give your 100 percent during work intervals, and breathe deep during rest! Line up and get ready!"
+                else:
+                    intro_text = f"지금부터 도장 고강도 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 운동 시간 동안 전력으로 수행하고, 휴식 시간 동안 호흡을 가다듬으세요. 모두 준비해 주세요!"
+
+                intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[인터벌 사전 안내] {intro_text}",
+                    "duration": intro_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + intro_dur + 0.5) * 1000)))
+                curr_time += intro_dur + 1.2
+
+            # 카운트다운 (Ready, Three, Two, One)
+            if countdown_enabled:
+                cd_text = "[카운트다운] Three, Two, One"
+                cd_dur = 4.3
+                events.append({
+                    "time": curr_time,
+                    "type": "countdown",
+                    "text": cd_text,
+                    "cd_style": cd_style,
+                    "sound_file": os.path.join("effects", "countdown.wav"),
+                    "duration": cd_dur,
+                    "track": 2,
+                    "vol": 2.0
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
+                curr_time += cd_dur + 1.0
+
+            # 세트 반복 루프
+            for s in range(1, total_sets + 1):
+                ex_idx = (s - 1) % len(exercises)
+                cur_ex = exercises[ex_idx]
+                if isinstance(cur_ex, dict):
+                    ex_name = cur_ex.get(lang_key, cur_ex.get("kr", "전력 수행!"))
+                else:
+                    ex_name = str(cur_ex)
+
+                # 1. 동작 호명 및 준비
+                call_text = f"[{s}세트] {ex_name}!"
+                call_dur = max(1.5, round(len(call_text) * 0.20, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": call_text,
+                    "duration": call_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
+                curr_time += call_dur + 0.3
+
+                # 2. 운동 시작 휘슬 (삐익~!)
+                events.append({
+                    "time": curr_time,
+                    "type": "whistle",
+                    "text": f"[{s}세트 시작 휘슬] 삐익~!",
+                    "sound_file": os.path.join("effects", "whistle.wav"),
+                    "duration": 0.35,
+                    "track": 1,
+                    "vol": 3.0
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.6) * 1000)))
+                curr_time += 0.4
+
+                # 3. 운동 진행 및 종료 3초 전 카운트다운 비프
+                if work_sec >= 7:
+                    warn_time = curr_time + work_sec - 3.0
+                    for b in range(3):
+                        b_t = warn_time + b * 1.0
+                        events.append({
+                            "time": b_t,
+                            "type": "beep",
+                            "text": f"[마무리 알림 {3-b}]",
+                            "sound_file": os.path.join("effects", "beep.wav"),
+                            "duration": 0.25,
+                            "track": 1,
+                            "vol": 1.5
+                        })
+                        duck_segments.append((int(b_t * 1000), int((b_t + 0.3) * 1000)))
+
+                curr_time += work_sec
+
+                # 4. 세트 종료 신호 (벨 / 호각)
+                is_final_set = (s == total_sets)
+                if not is_final_set:
+                    # 휴식 전환 벨
+                    events.append({
+                        "time": curr_time,
+                        "type": "bell",
+                        "text": f"[{s}세트 종료] 갈려! 휴식!",
+                        "sound_file": os.path.join("effects", "stage_bell.wav"),
+                        "duration": 0.8,
+                        "track": 1,
+                        "vol": 2.2
+                    })
+
+                    # 휴식 안내 멘트
+                    if lang == "mix_kids":
+                        rest_ment = "릴랙스 휴식! 딥 브레스 쉬고 다음 동작 웨이트!"
+                    elif lang == "dual_step":
+                        rest_ment = "휴식! 호흡 가다듬으세요. - Rest, catch your breath!"
+                    elif lang in ("en", "en_advanced"):
+                        rest_ment = "Rest and breathe! Next exercise coming up!"
+                    else:
+                        rest_ment = "휴식! 호흡 가다듬고 다음 동작 준비하세요."
+
+                    r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
+                    events.append({
+                        "time": curr_time + 0.5,
+                        "type": "voice",
+                        "text": f"[휴식] {rest_ment}",
+                        "duration": r_dur,
+                        "track": 2,
+                        "vol": 2.2
+                    })
+                    duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + r_dur) * 1000)))
+                    curr_time += rest_sec
+                else:
+                    # 마지막 세트 완료
+                    events.append({
+                        "time": curr_time,
+                        "type": "bell",
+                        "text": "[최종 세트 종료] 훈련 완료!",
+                        "sound_file": os.path.join("effects", "stage_bell.wav"),
+                        "duration": 1.2,
+                        "track": 1,
+                        "vol": 2.5
+                    })
+                    curr_time += 1.0
+
+            # 5. 인터벌 훈련 완료 멘트
+            if lang == "mix_kids":
+                final_outro = "고강도 인터벌 훈련 종료! 굿 잡! 모두 수고했습니다! 워터(Water) 물 한잔 마시고 호흡을 릴랙스 가다듬으세요!"
+            elif lang == "dual_step":
+                final_outro = "인터벌 훈련 종료! 모두 수고하셨습니다! - Great workout everyone! Drink some water and relax!"
+            elif lang in ("en", "en_advanced"):
+                final_outro = "Interval training complete! Outstanding effort team! Drink water, catch your breath, and wait for next instruction!"
+            else:
+                final_outro = "고강도 인터벌 훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+
+            outro_dur = max(3.5, round(len(final_outro) * 0.22, 2))
+            events.append({
+                "time": curr_time + 0.5,
+                "type": "voice",
+                "text": f"[훈련 종료] {final_outro}",
+                "duration": outro_dur,
+                "track": 2,
+                "vol": 2.5
+            })
+            duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + outro_dur + 0.5) * 1000)))
+            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0
         else:
             total_duration_sec = 60.0
 

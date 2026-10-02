@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-from core.sparring_training_engine import SparringTrainingEngine
+from core.sparring_training_engine import SparringTrainingEngine, CIRCUIT_INTERVAL_THEMES
 from core.shuttle_run_engine import ShuttleRunEngine
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
@@ -393,8 +393,8 @@ class SparringDialog(QDialog):
     def __init__(self, parent=None, tts_engine=None):
         super().__init__(parent)
         self.tts_engine = tts_engine
-        self.setWindowTitle("🥋 스파링 훈련 마법사")
-        self.resize(700, 780)
+        self.setWindowTitle("🥋 스파링 & 기능성 인터벌 마법사 (HIIT·순발력·민첩성·대련)")
+        self.resize(720, 800)
         self.bgm_playlist: List[str] = []
         self.generated_result = None
 
@@ -407,11 +407,11 @@ class SparringDialog(QDialog):
         header_box = QGroupBox()
         header_box.setStyleSheet("background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 6px;")
         hb_layout = QVBoxLayout(header_box)
-        title_lbl = QLabel("🥋 맞춤형 실전 스파링 & 미트 발차기 훈련 음원 마법사")
+        title_lbl = QLabel("🥋 맞춤형 실전 스파링 & 기능성 인터벌(HIIT) 훈련 음원 마법사")
         title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #9d174d;")
         desc_lbl = QLabel(
-            "오늘의 훈련 목표(1:1 / 1:2 / 1:3 릴레이 미트, 스텝 & 실전 반응, 콤비네이션 연타, 정규 스파링 라운드)에 맞춰\n"
-            "구령과 신호음, 신나는 BGM을 자유자재로 설정하고 오토덕킹으로 깔끔하게 자동 합성합니다."
+            "오늘의 훈련 목표(기능성 서킷 인터벌, 1:1/1:2/1:3 릴레이 미트, 스텝 반응, 연타 콤보, 스파링 라운드)에 맞춰\n"
+            "순발력, 민첩성, 근력, 반사신경, 발차기 기술과 수준별(유치부 한영믹스/초등부/원어민) 구령을 자동 합성합니다."
         )
         desc_lbl.setStyleSheet("color: #475569; font-size: 12px;")
         hb_layout.addWidget(title_lbl)
@@ -425,8 +425,97 @@ class SparringDialog(QDialog):
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
 
-        # 4가지 훈련 모드 탭
+        # 5가지 훈련 모드 탭 (기능성 인터벌 신설)
         self.tabs = QTabWidget()
+
+        # ── 탭 0: 🔥 기능성 서킷 인터벌 (HIIT & Tabata) ──
+        tab_circuit = QWidget()
+        l_circuit = QVBoxLayout(tab_circuit)
+
+        circuit_info = QLabel("💡 순발력·민첩성·근력·반사신경·스파링 스텝 및 발차기가 결합된 도장 전용 고강도 서킷 인터벌(HIIT & Tabata) 음원을 생성합니다.")
+        circuit_info.setStyleSheet("background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #be123c; font-size: 12px;")
+        l_circuit.addWidget(circuit_info)
+
+        # 1. 훈련 테마 선택
+        g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택")
+        l_ct = QVBoxLayout(g_c_theme)
+        self.combo_circuit_theme = QComboBox()
+        self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성] 무릎 당겨 높이 점프·버피 점프·스케이터 점프·스쿼트 폭풍 펀치", "power_agility")
+        self.combo_circuit_theme.addItem("🏃 [스파링 풋워크 & 스피드] 앞뒤 풋워크 3단 타격·사이드 스텝 컷트·업다운 런지 킥·나래차기 스피드", "footwork_speed")
+        self.combo_circuit_theme.addItem("💪 [근력 & 코어 전신 서킷] 마운틴 클라이머 무릎 달리기·손바닥 팔굽혀펴기·코어 플랭크 버티기·누워서 V업", "bodyweight_core")
+        self.combo_circuit_theme.addItem("🥋 [대련 실전 & 반사신경 인터벌] 신호음 반응 나래차기·앞발 컷트 후 상단·백스텝 카운터 뒤차기·전진 3연타", "combat_reaction")
+        self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
+        l_ct.addWidget(self.combo_circuit_theme)
+        l_circuit.addWidget(g_c_theme)
+
+        # 2. 연령/수준별 맞춤 구령 언어 선택
+        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어")
+        l_cl = QVBoxLayout(g_c_lang)
+        self.combo_circuit_lang = QComboBox()
+        self.combo_circuit_lang.addItem("👶 유치부·7세 미만 기초 [한-영 단어 믹스] (한국어 + 핵심 영어단어 조합)", "mix_kids")
+        self.combo_circuit_lang.addItem("🎒 초등부 순차 구령 [한국어 선행 + 쉬운 영어] (동작 후 영어 멘트)", "dual_step")
+        self.combo_circuit_lang.addItem("🇰🇷 일반부·정규 도장 [표준 한국어 구령]", "kr")
+        self.combo_circuit_lang.addItem("🇺🇸 상급반·국제 지도 [원어민 영어 전용 Full English]", "en_advanced")
+        self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
+        l_cl.addWidget(self.combo_circuit_lang)
+        l_circuit.addWidget(g_c_lang)
+
+        # 3. 시간 및 세트 설정
+        g_c_time = QGroupBox("3. 인터벌 시간 및 세트 설정")
+        l_ctime = QVBoxLayout(g_c_time)
+
+        h_ct1 = QHBoxLayout()
+        h_ct1.addWidget(QLabel("운동(전력) 시간:"))
+        self.sp_circuit_work = QSpinBox()
+        self.sp_circuit_work.setRange(5, 120)
+        self.sp_circuit_work.setValue(20)
+        self.sp_circuit_work.setSuffix(" 초")
+        h_ct1.addWidget(self.sp_circuit_work)
+
+        h_ct1.addWidget(QLabel("휴식(숨고르기) 시간:"))
+        self.sp_circuit_rest = QSpinBox()
+        self.sp_circuit_rest.setRange(5, 60)
+        self.sp_circuit_rest.setValue(10)
+        self.sp_circuit_rest.setSuffix(" 초")
+        h_ct1.addWidget(self.sp_circuit_rest)
+
+        h_ct1.addWidget(QLabel("총 세트 수:"))
+        self.sp_circuit_sets = QSpinBox()
+        self.sp_circuit_sets.setRange(1, 30)
+        self.sp_circuit_sets.setValue(8)
+        self.sp_circuit_sets.setSuffix(" 세트")
+        h_ct1.addWidget(self.sp_circuit_sets)
+        l_ctime.addLayout(h_ct1)
+
+        # 빠른 프리셋 버튼
+        h_c_preset = QHBoxLayout()
+        h_c_preset.addWidget(QLabel("⚡ 빠른 세팅:"))
+        btn_tabata = QPushButton("타바타 정석 (20초/10초/8세트)")
+        btn_tabata.clicked.connect(lambda: self._set_circuit_time_preset(20, 10, 8))
+        btn_speed = QPushButton("도장 스피드 (15초/10초/6세트)")
+        btn_speed.clicked.connect(lambda: self._set_circuit_time_preset(15, 10, 6))
+        btn_power = QPushButton("체력 강화 (30초/15초/8세트)")
+        btn_power.clicked.connect(lambda: self._set_circuit_time_preset(30, 15, 8))
+        h_c_preset.addWidget(btn_tabata)
+        h_c_preset.addWidget(btn_speed)
+        h_c_preset.addWidget(btn_power)
+        l_ctime.addLayout(h_c_preset)
+        l_circuit.addWidget(g_c_time)
+
+        # 4. 세부 훈련 동작 구성 및 사범 지도 팁
+        g_c_moves = QGroupBox("4. 세부 훈련 동작 구성 및 사범 지도 팁 (직접 편집 가능)")
+        l_cm = QVBoxLayout(g_c_moves)
+        self.txt_circuit_moves = QTextEdit()
+        self.txt_circuit_moves.setMaximumHeight(150)
+        l_cm.addWidget(self.txt_circuit_moves)
+
+        lbl_moves_hint = QLabel("※ 운동 시간마다 위 4가지 동작이 순환 지시되며, 3초 전 카운트다운 비프음과 휴식 신호음이 자동 합성됩니다.")
+        lbl_moves_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        l_cm.addWidget(lbl_moves_hint)
+        l_circuit.addWidget(g_c_moves)
+        l_circuit.addStretch()
+
+        self.tabs.addTab(tab_circuit, "🔥 기능성 서킷 인터벌 (HIIT)")
 
         # ── 탭 1: 1:1, 1:2, 1:3 릴레이 미트 ──
         tab_relay = QWidget()
@@ -985,6 +1074,36 @@ class SparringDialog(QDialog):
         btn_box.addWidget(btn_cancel)
         main_layout.addLayout(btn_box)
 
+        # 서킷 훈련 텍스트 초기화
+        self._update_circuit_moves_text()
+
+    def _set_circuit_time_preset(self, work: int, rest: int, sets: int):
+        self.sp_circuit_work.setValue(work)
+        self.sp_circuit_rest.setValue(rest)
+        self.sp_circuit_sets.setValue(sets)
+
+    def _on_circuit_theme_changed(self, idx):
+        self._update_circuit_moves_text()
+
+    def _on_circuit_lang_changed(self, idx):
+        self._update_circuit_moves_text()
+
+    def _update_circuit_moves_text(self):
+        theme_key = self.combo_circuit_theme.currentData() or "power_agility"
+        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+        theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES.get("power_agility", {}))
+        exercises = theme_data.get("exercises", [])
+
+        lang_field = "mix" if lang_mode == "mix_kids" else ("dual" if lang_mode == "dual_step" else ("en" if lang_mode == "en_advanced" else "kr"))
+
+        lines = []
+        for i, ex in enumerate(exercises, 1):
+            text = ex.get(lang_field, ex.get("kr", ""))
+            tip = ex.get("tip", "")
+            lines.append(f"{i}번. {text}  (지도 팁: {tip})")
+
+        self.txt_circuit_moves.setPlainText("\n".join(lines))
+
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, "배경음악(BGM) 다중 선택 (여러 곡 가능)", "",
@@ -1108,8 +1227,8 @@ class SparringDialog(QDialog):
 
     def start_generation(self):
         current_tab_idx = self.tabs.currentIndex()
-        mode_map = {0: "relay", 1: "reaction", 2: "combo", 3: "rounds"}
-        mode = mode_map.get(current_tab_idx, "relay")
+        mode_map = {0: "circuit", 1: "relay", 2: "reaction", 3: "combo", 4: "rounds"}
+        mode = mode_map.get(current_tab_idx, "circuit")
 
         duck_db_val = self.combo_duck_level.currentData()
         if duck_db_val is None:
@@ -1129,7 +1248,14 @@ class SparringDialog(QDialog):
             "outro_text": self.txt_outro_ment.text().strip()
         }
 
-        if mode == "relay":
+        if mode == "circuit":
+            params["work_sec"] = float(self.sp_circuit_work.value())
+            params["rest_sec"] = float(self.sp_circuit_rest.value())
+            params["sets_count"] = self.sp_circuit_sets.value()
+            params["theme_key"] = self.combo_circuit_theme.currentData() or "power_agility"
+            params["language_mode"] = self.combo_circuit_lang.currentData() or "mix_kids"
+
+        elif mode == "relay":
             fighters = 2 if self.rb_relay_11.isChecked() else (3 if self.rb_relay_12.isChecked() else 4)
             params["fighters_count"] = fighters
             params["strike_sec"] = float(self.sp_relay_strike.value())

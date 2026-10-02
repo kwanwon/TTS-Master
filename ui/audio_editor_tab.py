@@ -178,8 +178,8 @@ class AudioEditorTab(QWidget):
         self.btn_shuttle_run.setToolTip("🏃‍♂️ 실내 왕복달리기(셔틀런) 체력측정 및 훈련용 비프음+구령 음원을 자동 생성합니다.")
         self.btn_shuttle_run.clicked.connect(self.open_shuttle_run_wizard)
 
-        # 🥋 스파링 훈련 마법사 버튼
-        self.btn_sparring = QPushButton("🥋 스파링 훈련 마법사")
+        # 🥋 스파링 & 기능성 인터벌 마법사 버튼
+        self.btn_sparring = QPushButton("🥋 스파링 & 기능성 인터벌 마법사")
         self.btn_sparring.setStyleSheet("""
             QPushButton {
                 background-color: #be185d;
@@ -191,7 +191,7 @@ class AudioEditorTab(QWidget):
             }
             QPushButton:hover { background-color: #9d174d; }
         """)
-        self.btn_sparring.setToolTip("🥋 1:1/1:2/1:3 미트 릴레이, 반사 반응, 콤비네이션 연타, 라운드 스파링 훈련 음원을 자동 생성합니다.")
+        self.btn_sparring.setToolTip("🥋 기능성 서킷 인터벌(HIIT·순발력·민첩성·근력·대련), 1:1/1:2/1:3 미트 릴레이, 반사 반응, 콤비 연타, 라운드 스파링 훈련 음원을 자동 생성합니다.")
         self.btn_sparring.clicked.connect(self.open_sparring_wizard)
 
         # 🧘‍♂️ 준비운동·스트레칭 마법사 버튼

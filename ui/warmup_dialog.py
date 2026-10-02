@@ -87,7 +87,7 @@ class WarmupSynthThread(QThread):
             lang = self.params.get("language", "kr")
             speaker = self.params.get("voice_speaker", "선히(여성)")
             
-            if lang == "kr":
+            if lang in ("kr", "mix_kids", "dual_step"):
                 voice_id = "ko-KR-SunHiNeural"
                 if "인준" in speaker:
                     voice_id = "ko-KR-InJoonNeural"
@@ -357,23 +357,39 @@ class WarmupDialog(QDialog):
         grp_style.setToolTip("사범님의 지도 방식과 언어를 설정합니다.")
         l_style = QVBoxLayout(grp_style)
 
-        h_style1 = QHBoxLayout()
-        # 언어 선택
-        h_style1.addWidget(QLabel("<b>구령 언어:</b>"))
-        self.rb_lang_kr = QRadioButton("🇰🇷 한국어 구령 (하나, 둘, 셋, 넷...)")
+        # 언어 선택 (수준별 4단계 맞춤 지도)
+        h_style1 = QVBoxLayout()
+        h_style1_title = QLabel("<b>구령 언어 (도장 연령·수준별 맞춤 지도):</b>")
+        h_style1.addWidget(h_style1_title)
+
+        row_lang1 = QHBoxLayout()
+        self.rb_lang_kr = QRadioButton("🇰🇷 한국어 정규 (하나, 둘, 셋, 넷... 표준 사범 지도)")
         self.rb_lang_kr.setChecked(True)
         self.rb_lang_kr.setToolTip("친숙하고 힘찬 한국어 사범님 8박자 구령과 지도 멘트를 사용합니다.")
-        self.rb_lang_en = QRadioButton("🇺🇸 쉬운 영어 구령 (One, Two... 초등 저학년 맞춤)")
-        self.rb_lang_en.setToolTip("초등 저학년도 귀로 듣고 즉시 따라 할 수 있는 쉬운 단어로 구성된 영어 구령입니다.")
-        
+
+        self.rb_lang_mix = QRadioButton("🧒 [유치부/7세미만] 한-영 단어 믹스 (핸드, 넥, 점핑잭, 앞차기 투 더 페이스)")
+        self.rb_lang_mix.setToolTip("7세 미만 유아 및 초등 저학년이 놀이처럼 재미있게 인체 부위와 동작 영어를 배울 수 있습니다.")
+        row_lang1.addWidget(self.rb_lang_kr)
+        row_lang1.addWidget(self.rb_lang_mix)
+        h_style1.addLayout(row_lang1)
+
+        row_lang2 = QHBoxLayout()
+        self.rb_lang_dual = QRadioButton("🏫 [초등부/기초] 한국어 + 영어 순차 구령 (목운동 ➔ Neck exercise, let's go!)")
+        self.rb_lang_dual.setToolTip("한국어로 먼저 동작을 이해하고, 바로 뒤따라 쉬운 영어 문장이 나와 자연스럽게 귀가 열립니다.")
+
+        self.rb_lang_en = QRadioButton("🇺🇸 [중고등부/상급] 100% 원어민 영어 구령 (Full English Instruction)")
+        self.rb_lang_en.setToolTip("글로벌 도장 수업 및 유학/국제반을 위한 100% 원어민 영어 사범 지도 구령입니다.")
+        row_lang2.addWidget(self.rb_lang_dual)
+        row_lang2.addWidget(self.rb_lang_en)
+        h_style1.addLayout(row_lang2)
+
         self.lang_group = QButtonGroup(self)
-        self.lang_group.addButton(self.rb_lang_kr)
-        self.lang_group.addButton(self.rb_lang_en)
+        self.lang_group.addButton(self.rb_lang_kr, 0)
+        self.lang_group.addButton(self.rb_lang_mix, 1)
+        self.lang_group.addButton(self.rb_lang_dual, 2)
+        self.lang_group.addButton(self.rb_lang_en, 3)
         self.lang_group.buttonClicked.connect(self.on_language_changed)
 
-        h_style1.addWidget(self.rb_lang_kr)
-        h_style1.addWidget(self.rb_lang_en)
-        h_style1.addStretch()
         l_style.addLayout(h_style1)
 
         h_style2 = QHBoxLayout()
@@ -566,20 +582,32 @@ class WarmupDialog(QDialog):
 
         self.refresh_table_display()
 
+    def get_current_lang(self) -> str:
+        """현재 선택된 4단계 수준별 언어 모드 반환"""
+        if hasattr(self, "rb_lang_mix") and self.rb_lang_mix.isChecked():
+            return "mix_kids"
+        elif hasattr(self, "rb_lang_dual") and self.rb_lang_dual.isChecked():
+            return "dual_step"
+        elif hasattr(self, "rb_lang_en") and self.rb_lang_en.isChecked():
+            return "en_advanced"
+        return "kr"
+
     def update_cue_combos(self):
         """언어에 따라 시작 및 종료 멘트 콤보박스 갱신"""
-        lang = "kr" if self.rb_lang_kr.isChecked() else "en"
+        lang = self.get_current_lang()
+        start_list = START_CUES.get(lang, START_CUES["kr"])
+        end_list = END_CUES.get(lang, END_CUES["kr"])
 
         self.combo_start.blockSignals(True)
         self.combo_start.clear()
-        for c in START_CUES[lang]:
+        for c in start_list:
             self.combo_start.addItem(c)
         self.combo_start.blockSignals(False)
         self.txt_start_cue.setText(self.combo_start.currentText())
 
         self.combo_end.blockSignals(True)
         self.combo_end.clear()
-        for c in END_CUES[lang]:
+        for c in end_list:
             self.combo_end.addItem(c)
         self.combo_end.blockSignals(False)
         self.txt_end_cue.setText(self.combo_end.currentText())
@@ -637,7 +665,7 @@ class WarmupDialog(QDialog):
 
     def refresh_table_display(self):
         """테이블 위젯에 현재 동작 목록 렌더링"""
-        lang = "kr" if self.rb_lang_kr.isChecked() else "en"
+        lang = self.get_current_lang()
         mode = "detailed" if self.rb_mode_detailed.isChecked() else "quick"
 
         self.table_moves.setRowCount(len(self.current_movements))
@@ -650,19 +678,16 @@ class WarmupDialog(QDialog):
             self.table_moves.setItem(row, 0, chk_item)
 
             # 1. 명칭
-            name_text = mov.get(f"name_{lang}", mov.get("name_kr", ""))
+            name_text, cue_text = WarmupEngine.get_movement_text(mov, lang, mode)
             name_item = QTableWidgetItem(name_text)
             name_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            tip_text = mov.get("tip", "바른 자세로 동작을 수행합니다.")
+            name_item.setToolTip(f"💡 <b>동작 방법:</b> {tip_text}")
             self.table_moves.setItem(row, 1, name_item)
 
             # 2. 사범 멘트 (더블클릭 편집 가능)
-            if mode == "detailed":
-                cue_text = mov.get(f"instruction_{lang}", mov.get("instruction_kr", ""))
-            else:
-                cue_text = mov.get(f"short_cue_{lang}", mov.get("short_cue_kr", ""))
-
             cue_item = QTableWidgetItem(cue_text)
-            cue_item.setToolTip("더블클릭하여 멘트를 원하는 대로 직접 수정할 수 있습니다.")
+            cue_item.setToolTip(f"더블클릭하여 멘트를 원하는 대로 직접 수정할 수 있습니다.\n💡 동작 요령: {tip_text}")
             self.table_moves.setItem(row, 2, cue_item)
 
             # 3. 구령 방식
@@ -681,17 +706,18 @@ class WarmupDialog(QDialog):
             elif ctype == "bridge_pattern":
                 ctype_desc = "브릿지 (3초-3초-10초)"
             elif "hold" in ctype:
-                ctype_desc = "15초 정적 유지"
+                ctype_desc = "30초 코어 유지" if "30s" in ctype else "15초 정적 유지"
             elif "breathing" in ctype:
                 ctype_desc = "심호흡 안내"
 
             cnt_item = QTableWidgetItem(ctype_desc)
             cnt_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            cnt_item.setToolTip(f"구령 스타일: {ctype_desc}")
             self.table_moves.setItem(row, 3, cnt_item)
 
     def save_table_changes_to_memory(self):
         """테이블에서 사용자가 수정한 체크박스 상태와 멘트 반영"""
-        lang = "kr" if self.rb_lang_kr.isChecked() else "en"
+        lang = self.get_current_lang()
         mode = "detailed" if self.rb_mode_detailed.isChecked() else "quick"
 
         for row in range(self.table_moves.rowCount()):
@@ -704,10 +730,11 @@ class WarmupDialog(QDialog):
                 cue_it = self.table_moves.item(row, 2)
                 if cue_it:
                     new_txt = cue_it.text().strip()
+                    lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
                     if mode == "detailed":
-                        mov[f"instruction_{lang}"] = new_txt
+                        mov[f"instruction_{lang_key}"] = new_txt
                     else:
-                        mov[f"short_cue_{lang}"] = new_txt
+                        mov[f"short_cue_{lang_key}"] = new_txt
 
     def save_custom_template(self):
         """현재 편집 중인 루틴 전체(동작 목록, 순서, 멘트, 템포, 시작/종료멘트)를 JSON 템플릿 파일로 저장"""
@@ -728,7 +755,7 @@ class WarmupDialog(QDialog):
 
         data = {
             "template_name": self.combo_preset.currentText(),
-            "language": "kr" if self.rb_lang_kr.isChecked() else "en",
+            "language": self.get_current_lang(),
             "coaching_mode": "detailed" if self.rb_mode_detailed.isChecked() else "quick",
             "tempo_bpm": self.slider_tempo.value(),
             "signal_type": self.combo_signal.currentData() or "bell",
@@ -769,8 +796,13 @@ class WarmupDialog(QDialog):
 
             self.current_movements = loaded_moves
 
-            # 언어 복원
-            if data.get("language") == "en":
+            # 언어 복원 (4단계)
+            saved_lang = data.get("language", "kr")
+            if saved_lang == "mix_kids":
+                self.rb_lang_mix.setChecked(True)
+            elif saved_lang == "dual_step":
+                self.rb_lang_dual.setChecked(True)
+            elif saved_lang in ("en", "en_advanced"):
                 self.rb_lang_en.setChecked(True)
             else:
                 self.rb_lang_kr.setChecked(True)
@@ -865,7 +897,7 @@ class WarmupDialog(QDialog):
             QMessageBox.warning(self, "선택 필요", "최소 하나 이상의 동작을 체크박스로 선택해 주세요.")
             return
 
-        lang = "kr" if self.rb_lang_kr.isChecked() else "en"
+        lang = self.get_current_lang()
         mode = "detailed" if self.rb_mode_detailed.isChecked() else "quick"
         sig = self.combo_signal.currentData() or "bell"
 
