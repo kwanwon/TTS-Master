@@ -78,9 +78,9 @@ class WarmupSynthThread(QThread):
 
             # 1. 타임라인 이벤트 계산
             schedule_data = WarmupEngine.build_timeline_events(self.params)
-            events = schedule_data["events"]
-            duck_segments = schedule_data["duck_segments"]
-            total_duration_sec = schedule_data["total_duration_sec"]
+            events = schedule_data.get("events", [])
+            duck_segments = schedule_data.get("duck_segments", [])
+            total_duration_sec = schedule_data.get("total_duration_sec", 0.0)
             total_duration_ms = int(total_duration_sec * 1000)
 
             # 2. 음성 합성 설정 (한국어 및 영어)

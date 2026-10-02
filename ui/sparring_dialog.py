@@ -68,9 +68,9 @@ class SparringWorker(QThread):
 
             # 1. 훈련 스케줄 계산
             schedule_data = SparringTrainingEngine.generate_training_schedule(self.mode, self.params)
-            events = schedule_data["events"]
-            duck_segments = schedule_data["duck_segments"]
-            total_duration_sec = schedule_data["total_duration_sec"]
+            events = schedule_data.get("events", [])
+            duck_segments = schedule_data.get("duck_segments", [])
+            total_duration_sec = schedule_data.get("total_duration_sec", 0.0)
             total_duration_ms = int(total_duration_sec * 1000)
 
             # 2. 음성 멘트 및 카운트다운 합성 (Edge-TTS 활용)

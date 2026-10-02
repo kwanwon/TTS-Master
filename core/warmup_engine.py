@@ -1127,6 +1127,7 @@ class WarmupEngine:
         return {
             "total_duration_sec": round(curr_time, 2),
             "events": events,
+            "duck_segments": [],
             "tempo_bpm": bpm,
             "language": lang,
             "coaching_mode": mode
