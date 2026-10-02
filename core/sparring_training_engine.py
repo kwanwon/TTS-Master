@@ -62,153 +62,153 @@ class BalancedCuePicker:
         return candidate
 
 
-# ── 도장 고강도 기능성 서킷 인터벌 4대 테마 프리셋 ──
+# ── 도장 고강도 기능성 서킷 인터벌 4대 복합 콤보 테마 (체력 + 발차기 + 낙법/점프 무한 반복 루프) ──
 CIRCUIT_INTERVAL_THEMES = {
     "power_agility": {
-        "name_kr": "⚡ [순발력 & 파워 점프 인터벌] 턱점프·앞차기·스쿼트점프·버피",
-        "name_mix": "⚡ 순발력 & 파워 점프 인터벌 (하이니 점프 & 프론트 킥)",
-        "name_dual": "⚡ 순발력 & 파워 인터벌 (Power & Agility)",
-        "name_en": "⚡ Explosive Power & Jump Interval",
-        "desc": "무릎 당겨 점프, 폭발적 앞차기 연속 타격, 쪼그려 점프, 전신 버피를 순환하여 폭발적 순발력 극대화",
+        "name_kr": "🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프",
+        "name_mix": "🥋 대련 실전 & 낙법 협응 콤보 (점프 & 킥 & 롤링 낙법)",
+        "name_dual": "🥋 대련 실전 & 낙법 협응 (Combat Kicks & Rolling Fall Combo)",
+        "name_en": "🥋 Dojo Combat & Breakfall Flow Interval",
+        "desc": "15~20초 동안 [체력 점프 ➔ 실전 발차기 ➔ 회전낙법/점프턴] 콤보를 전력으로 무한 반복하고 휴식하는 실전 대련 인터벌",
         "exercises": [
             {
-                "kr": "무릎 당겨 높이 점프! 무릎을 가슴까지 터치!",
-                "mix": "하이니 점프(High knee jump)! 무릎 가슴 터치 렛츠 고!",
-                "dual": "무릎 당겨 높이 점프! - Jump high and tuck knees to chest!",
-                "en": "High knee tuck jumps, pull knees to chest!",
-                "tip": "제자리에서 높이 뛰어올라 공중에서 양 무릎을 가슴 높이까지 끌어당깁니다."
+                "kr": "쪼그려 점프 3회 후 나래차기, 전방 회전낙법 기립! 쉼 없이 반복!",
+                "mix": "스쿼트 점프 3 타임스(Times), 나래 더블 킥, 롤링 낙법 기립! 무한 리핏(Repeat)!",
+                "dual": "쪼그려 점프 3회, 나래차기, 회전낙법! - 3 squat jumps, double kick, rolling breakfall, repeat!",
+                "en": "3 squat jumps, fast double kicks, rolling breakfall and spring up! Non-stop loop!",
+                "tip": "쪼그려 점프 3회 ➔ 양발 나래차기 ➔ 전방 회전낙법 후 즉시 스프링처럼 기립하여 15~20초 동안 처음부터 무한 반복합니다."
             },
             {
-                "kr": "폭발적 앞차기 연속 타격! 좌우 빠르게 차올리기!",
-                "mix": "프론트 킥 투 더 페이스(Front kick)! 빠르게 레프트 라이트 킥!",
-                "dual": "폭발적 앞차기 연속 타격! - Explosive front kicks left and right!",
-                "en": "Explosive front kicks, power and speed!",
-                "tip": "가드 올리고 좌우 번갈아 얼굴 높이로 전력 앞차기를 연속 타격합니다."
+                "kr": "전력 버피 1회 후 전진 몸통 2연타, 180도 점프 뒤돌아 착지! 쉼 없이 반복!",
+                "mix": "버피 1 타임(Time), 바디 2연타 킥, 180도 점프 턴 착지! 무한 리핏(Repeat)!",
+                "dual": "버피 1회, 전진 몸통 2연타, 180도 점프 턴! - 1 burpee, 2 body kicks, 180 jump turn, repeat!",
+                "en": "1 burpee, 2 continuous body kicks, 180-degree jump turn! Non-stop continuous loop!",
+                "tip": "전력 버피 1회 ➔ 전진 몸통 2연타 ➔ 공중에서 180도 점프 뒤돌아 착지 후 즉시 처음부터 무한 반복합니다."
             },
             {
-                "kr": "쪼그려 점프뛰기! 깊게 앉았다가 높이 점프!",
-                "mix": "스쿼트 점프(Squat jump)! 딥 다운 앤 점프 하이!",
-                "dual": "쪼그려 점프뛰기! - Squat down deep and jump high!",
-                "en": "Squat jumps, push from your heels and jump!",
-                "tip": "엉덩이를 뒤로 빼며 깊게 앉았다가 허벅지와 둔근 탄력으로 높이 뛰어오릅니다."
+                "kr": "무릎 당겨 높이 점프 2회 후 앞발 컷트 뒷발 상단, 측방 낙법 기립! 쉼 없이 반복!",
+                "mix": "하이니 점프 2 타임스, 앞발 컷트 하이 킥, 사이드 낙법 기립! 무한 리핏!",
+                "dual": "무릎당겨 점프 2회, 컷트 후 상단킥, 측방낙법! - 2 high knee jumps, cut & high kick, side fall, repeat!",
+                "en": "2 high knee jumps, front cut to high kick, side breakfall! Keep repeating!",
+                "tip": "무릎을 가슴까지 높이 2회 점프 ➔ 앞발 컷트 견제 후 뒷발 머리 상단 돌려차기 ➔ 측방 회전낙법 후 기립을 반복합니다."
             },
             {
-                "kr": "전신 버피 테스트! 엎드려, 뻗쳐, 모아, 점프!",
-                "mix": "버피 점프(Burpee jump)! 다운, 백, 인, 점프 하이!",
-                "dual": "전신 버피 점프! - Burpees, down, back, and jump!",
-                "en": "Full burpee jumps, maximum power and speed!",
-                "tip": "손 짚고 엎드려 뻗쳤다 다시 모아 공중으로 높이 점프합니다."
+                "kr": "손바닥 푸시업 2회 후 백스텝 카운터 뒤차기, 좌우 스케이터 점프! 쉼 없이 반복!",
+                "mix": "푸시업 2 타임스, 백스텝 카운터 뒤차기, 스케이터 점프! 무한 리핏!",
+                "dual": "푸시업 2회, 카운터 뒤차기, 스케이터 점프! - 2 pushups, counter back kick, skater jumps, repeat!",
+                "en": "2 pushups, explosive counter back kick, lateral skater jumps! Non-stop loop!",
+                "tip": "바닥 푸시업 2회 ➔ 재빨리 기립하여 백스텝 카운터 뒤차기 ➔ 좌우 스케이터 점프 2회 후 처음부터 반복합니다."
             }
         ]
     },
-    "footwork_speed": {
-        "name_kr": "🏃‍♂️ [민첩성 & 스텝 셔틀 인터벌] 사이드스텝·스위치·지그재그·발구르기",
-        "name_mix": "🏃‍♂️ 민첩성 & 스피드 스텝 인터벌 (사이드 스텝 & 패스트 피트)",
-        "name_dual": "🏃‍♂️ 민첩성 & 스피드 스텝 (Footwork & Agility)",
-        "name_en": "🏃‍♂️ Fast Footwork & Agility Interval",
-        "desc": "사이드 스텝 바닥 터치, 앞발/뒷발 빠른 스위치, 지그재그 회피 스텝, 초고속 발구르기",
+    "agility_power_combo": {
+        "name_kr": "⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프",
+        "name_mix": "⚡ 순발력 & 민첩성 폭발 콤보 (버피 & 점프 턴 & 나래 킥)",
+        "name_dual": "⚡ 순발력 & 민첩성 콤보 (Agility, Burpee & Fast Kick Flow)",
+        "name_en": "⚡ Agility & Explosive Kick Flow",
+        "desc": "15~20초 동안 [전신 순발력 ➔ 폭풍 스피드 발차기 ➔ 공중 방향전환]을 결합한 고강도 협응 인터벌",
         "exercises": [
             {
-                "kr": "사이드 스텝 좌우 콘 터치! 빠르게 바닥 터치!",
-                "mix": "사이드 스텝 터치(Side step touch)! 좌우 빠르게 핸드 터치!",
-                "dual": "사이드 스텝 좌우 터치! - Side step shuffle and touch the floor!",
-                "en": "Side step shuffles, touch the ground quick!",
-                "tip": "자세를 낮추고 좌우로 민첩하게 2스텝 이동하여 바닥을 터치합니다."
+                "kr": "전력 버피 1회 후 공중 나래차기 연타, 무릎 당겨 점프 1회! 쉼 없이 반복!",
+                "mix": "버피 1회 후 나래 더블 킥, 하이니 점프 1회! 무한 리핏(Repeat)!",
+                "dual": "버피 1회, 나래차기 연타, 무릎당겨 점프! - 1 burpee, double kick, high knee jump, repeat!",
+                "en": "1 burpee, rapid double kicks, 1 high knee tuck jump! Non-stop loop!",
+                "tip": "버피 1회 ➔ 공중 나래차기 2연타 ➔ 무릎 당겨 가슴 터치 점프 1회 후 쉬지 않고 무한 반복합니다."
             },
             {
-                "kr": "앞발 뒷발 빠른 스위치! 자세 바꾸며 전격 발바꿔!",
-                "mix": "스위치 스텝(Switch step)! 레그 체인지 빠르게 스위치!",
-                "dual": "앞발 뒷발 빠른 발바꿔! - Fast switch footwork, change stance!",
-                "en": "Fast stance switch, keep light on your feet!",
-                "tip": "대련 자세에서 양발을 동시에 띄워 앞뒤 발을 초고속으로 전환합니다."
+                "kr": "쪼그려 점프 3회 후 빠른발 상단 끊어차기 2회, 180도 점프 뒤돌기! 쉼 없이 반복!",
+                "mix": "스쿼트 점프 3회, 패스트 하이 킥 2회, 180도 점프 턴! 무한 리핏!",
+                "dual": "쪼그려 점프 3회, 상단 끊어차기, 180도 점프 턴! - 3 squat jumps, high snap kicks, 180 jump turn, repeat!",
+                "en": "3 squat jumps, rapid high snap kicks, 180-degree jump turn! Non-stop loop!",
+                "tip": "깊게 쪼그려 점프 3회 ➔ 앞발 빠른 상단 끊어차기 2회 ➔ 공중 180도 점프 뒤돌아 착지를 반복합니다."
             },
             {
-                "kr": "지그재그 회피 스텝 앤 고! 각도 꺾으며 전진!",
-                "mix": "지그재그 스텝(Zigzag step)! 앵글 꺾고 전진 무브!",
-                "dual": "지그재그 회피 스텝! - Zigzag footwork, change angles quickly!",
-                "en": "Zigzag evasion footwork, move sharp and crisp!",
-                "tip": "상대의 공격선을 벗어나 대각선으로 좌우 방향을 꺾으며 민첩하게 이동합니다."
+                "kr": "제자리 초고속 발구르기 3초 후 전진 원투 3연타, 전방 회전낙법 기립! 쉼 없이 반복!",
+                "mix": "패스트 피트 3초 후 전진 3연타 킥, 롤링 낙법 기립! 무한 리핏!",
+                "dual": "초고속 발구르기 후 전진 3연타, 회전낙법! - Fast feet 3s, 3 continuous kicks, rolling breakfall, repeat!",
+                "en": "3 seconds fast feet sprint, 3 push kicks, rolling breakfall! Non-stop continuous loop!",
+                "tip": "발끝으로 지면을 초고속으로 3초 구르고 ➔ 전진하며 3연타 ➔ 전방 회전낙법으로 굴러 일어나 반복합니다."
             },
             {
-                "kr": "제자리 초고속 발구르기 후 턴! 빠르게 발 구르기!",
-                "mix": "패스트 피트(Fast feet)! 제자리 빠르게 구르고 턴!",
-                "dual": "초고속 발구르기! - Fast feet on the spot, quick turn!",
-                "en": "Fast feet sprint on the spot, turn and react!",
-                "tip": "발끝으로 지면을 초고속으로 두드리며 순발력과 발목 탄력을 극대화합니다."
+                "kr": "마운틴 클라이머 4회 후 기립 앞차기 양발 연속 4회, 점프 대련자세! 쉼 없이 반복!",
+                "mix": "마운틴 클라이머 4회, 프론트 킥 4회, 점프 파이팅 스탠스! 무한 리핏!",
+                "dual": "마운틴 클라이머 4회, 앞차기 4회, 점프 대련자세! - 4 mountain climbers, 4 front kicks, ready stance, repeat!",
+                "en": "4 mountain climbers, 4 alternating front kicks, jump to fighting stance! Non-stop loop!",
+                "tip": "엎드려 마운틴 클라이머 4회 ➔ 용수철처럼 일어나 얼굴 앞차기 좌우 4회 ➔ 점프 착지를 반복합니다."
             }
         ]
     },
-    "bodyweight_core": {
-        "name_kr": "💪 [도장 전신 근력 & 코어 인터벌] 마운틴클라이머·푸시업·플랭크·V업",
-        "name_mix": "💪 도장 근력 & 코어 인터벌 (푸시업 & 마운틴 클라이머)",
-        "name_dual": "💪 전신 근력 & 코어 인터벌 (Bodyweight Strength & Core)",
-        "name_en": "💪 Dojo Strength & Core HIIT",
-        "desc": "마운틴 클라이머 전력 질주, 손바닥 푸시업, 플랭크 버티기, V업 복근 운동",
+    "footwork_reaction_combo": {
+        "name_kr": "🏃‍♂️ [스파링 풋워크 & 카운터 콤보] 스텝·카운터킥·회전낙법 루프",
+        "name_mix": "🏃‍♂️ 스파링 풋워크 & 반사신경 콤보 (스텝 & 카운터 킥 & 롤링 낙법)",
+        "name_dual": "🏃‍♂️ 스파링 풋워크 & 카운터 콤보 (Footwork, Counter Kicks & Breakfall)",
+        "name_en": "🏃‍♂️ Sparring Footwork & Reaction Flow",
+        "desc": "15~20초 동안 [대련 스텝 풋워크 ➔ 상대 격파 발차기 ➔ 낙법 회피 기립]을 무한 반복하는 실전 스파링 서킷",
         "exercises": [
             {
-                "kr": "마운틴 클라이머! 엎드려 무릎 가슴으로 전력 달리기!",
-                "mix": "마운틴 클라이머(Mountain climber)! 무릎 체스트로 런(Run)!",
-                "dual": "엎드려 무릎 달리기! - Mountain climbers, drive knees fast!",
-                "en": "Mountain climbers, sprint knees to chest!",
-                "tip": "엎드려 뻗쳐 자세에서 무릎을 번갈아 가슴 쪽으로 빠르게 차올립니다."
+                "kr": "사이드 스텝 좌우 터치 후 백스텝 카운터 뒤차기, 전방 회전낙법 기립! 쉼 없이 반복!",
+                "mix": "사이드 스텝 터치, 백스텝 카운터 뒤차기, 롤링 낙법 기립! 무한 리핏!",
+                "dual": "사이드 스텝 후 카운터 뒤차기, 회전낙법! - Side step touch, counter back kick, rolling breakfall, repeat!",
+                "en": "Side step touch ground, back step counter back kick, rolling breakfall! Non-stop loop!",
+                "tip": "사이드 스텝 좌우 터치 ➔ 한 걸음 빠지며 몸통 꽂는 카운터 뒤차기 ➔ 전방 회전낙법 후 기립을 반복합니다."
             },
             {
-                "kr": "손바닥 팔굽혀펴기! 가슴 바닥까지 깊게 전력 수행!",
-                "mix": "푸시업(Push-ups)! 체스트 바닥까지 다운 앤 업!",
-                "dual": "손바닥 팔굽혀펴기! - Push-ups, chest to the floor!",
-                "en": "Standard push-ups, keep straight and powerful!",
-                "tip": "몸을 일직선으로 유지하며 가슴이 바닥에 닿을 때까지 힘차게 밀어냅니다."
+                "kr": "앞뒤 풋워크 3단 전진 후 앞발 컷트 뒷발 상단 돌려차기, 180도 점프 턴! 쉼 없이 반복!",
+                "mix": "앞뒤 스텝 전진, 앞발 컷트 뒷발 하이 킥, 180도 점프 턴! 무한 리핏!",
+                "dual": "앞뒤 스텝, 컷트 후 상단 돌려차기, 180도 점프 턴! - In-and-out footwork, cut & high kick, 180 jump turn, repeat!",
+                "en": "3 in-and-out steps, front foot cut to high kick, 180-degree jump turn! Non-stop loop!",
+                "tip": "앞뒤 리듬 스텝 3회 ➔ 앞발 컷트로 상대 진입 저지 후 뒷발 상단 강타 ➔ 180도 점프 턴을 반복합니다."
             },
             {
-                "kr": "코어 플랭크 버티기! 복근 엉덩이 힘 꽉 주고 버티기!",
-                "mix": "플랭크 코어 홀드(Plank hold)! 락처럼 단단하게 홀드!",
-                "dual": "플랭크 코어 버티기! - Plank hold, squeeze core tight!",
-                "en": "Plank hold, keep your core locked and breathing!",
-                "tip": "팔꿈치를 바닥에 대고 몸을 널빤지처럼 일직선으로 만들어 흔들림 없이 버팁니다."
+                "kr": "양발 스위치 2회 후 전격 전진 몸통 3연타, 측방 낙법 후 스프링 기립! 쉼 없이 반복!",
+                "mix": "스위치 스텝 2회, 전진 바디 3연타 킥, 사이드 낙법 기립! 무한 리핏!",
+                "dual": "양발 스위치 2회, 전진 몸통 3연타, 측방 낙법! - 2 switch steps, 3 forward body kicks, side fall, repeat!",
+                "en": "2 stance switches, 3 pushing body kicks, side breakfall! Non-stop continuous loop!",
+                "tip": "대련 자세에서 양발 스위치 2회 ➔ 밀고 들어가며 몸통 3연타 ➔ 측방 회전낙법으로 굴러 일어나 반복합니다."
             },
             {
-                "kr": "누워서 V업 복근 치기! 손끝 발끝 모아올리기!",
-                "mix": "V업 싯업(V-up sit-ups)! 손끝 발끝 터치 앤 다운!",
-                "dual": "누워서 V업 복근 치기! - V-ups, touch toes with hands!",
-                "en": "V-ups, fold your body and touch toes!",
-                "tip": "누운 상태에서 상체와 다리를 동시에 V자로 들어 올려 손끝으로 발끝을 터치합니다."
+                "kr": "지그재그 회피 스텝 후 기습 나래차기, 쪼그려 점프 2회 착지! 쉼 없이 반복!",
+                "mix": "지그재그 스텝, 나래 더블 킥, 스쿼트 점프 2회! 무한 리핏!",
+                "dual": "지그재그 회피 후 나래차기, 쪼그려 점프 2회! - Zigzag evasion, double kick, 2 squat jumps, repeat!",
+                "en": "Zigzag evasion footwork, surprise double kick, 2 squat jumps! Non-stop loop!",
+                "tip": "공격선을 비켜서는 지그재그 스텝 ➔ 공중 나래차기 연타 ➔ 쪼그려 점프 2회 착지 후 다시 반복합니다."
             }
         ]
     },
-    "combat_reaction": {
-        "name_kr": "🥋 [대련 실전 & 반사신경 인터벌] 신호음 반응 나래차기·카운터·연타",
-        "name_mix": "🥋 대련 실전 & 반사신경 인터벌 (스텝 & 카운터 킥)",
-        "name_dual": "🥋 대련 실전 & 반사신경 (Combat Reaction & Kicks)",
-        "name_en": "🥋 Sparring Reaction & Combo Interval",
-        "desc": "스텝 뛰다 신호음에 즉시 반응 나래차기, 앞발 컷트 후 상단, 백스텝 카운터 뒤차기, 전진 3연타",
+    "strength_endurance_combo": {
+        "name_kr": "💪 [근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷",
+        "name_mix": "💪 근지구력 & 심폐 파워 콤보 (푸시업 & V업 복근 & 연속 킥)",
+        "name_dual": "💪 근지구력 & 심폐 파워 (Strength, Core & Continuous Kick Combo)",
+        "name_en": "💪 Endurance Strength & Striking Circuit",
+        "desc": "15~20초 동안 [도장 특화 체력 단련 ➔ 전력 타격 ➔ 심폐 파워]를 한 세트로 묶어 무한 반복하는 서킷",
         "exercises": [
             {
-                "kr": "스텝 유지 중 신호음에 즉시 반응 나래차기! 번개 타격!",
-                "mix": "스텝 뛰다 삑 신호에 나래차기(Double kick)! 라이트닝 타격!",
-                "dual": "신호음에 반응 나래차기! - Step and double kick on whistle!",
-                "en": "Step and react with double fast kicks on signal!",
-                "tip": "경쾌하게 스텝을 뛰다 휘슬 소리가 나면 0.1초 만에 공중 연타 나래차기를 꽂아 넣습니다."
+                "kr": "손바닥 푸시업 2회 후 스프링 기립, 전진 몸통 3연타, 무릎 당겨 점프! 쉼 없이 반복!",
+                "mix": "푸시업 2회, 스프링 기립, 전진 바디 3연타, 하이니 점프! 무한 리핏!",
+                "dual": "푸시업 2회, 전진 몸통 3연타, 무릎당겨 점프! - 2 pushups, 3 body kicks, 1 high knee jump, repeat!",
+                "en": "2 standard pushups, spring up, 3 body kicks, 1 high knee tuck jump! Non-stop loop!",
+                "tip": "가슴 바닥 푸시업 2회 ➔ 스프링처럼 박차고 일어나 몸통 3연타 ➔ 무릎 당겨 점프 1회 후 반복합니다."
             },
             {
-                "kr": "앞발 컷트 견제 후 뒷발 돌려차기 상단! 연속 콤보!",
-                "mix": "앞발 컷트(Cut) 후 백 레그 하이 킥(High kick)! 콤보!",
-                "dual": "앞발 컷트 후 상단 돌려차기! - Front foot cut then high round kick!",
-                "en": "Front foot cut check, then powerful high roundhouse kick!",
-                "tip": "앞발로 상대 진입을 저지하고 즉시 뒷발을 끌어올려 머리 높이로 돌려찹니다."
+                "kr": "마운틴 클라이머 6회 후 기립, 양발 교차 나래차기, 180도 점프 뒤돌기! 쉼 없이 반복!",
+                "mix": "마운틴 클라이머 6회, 나래 더블 킥, 180도 점프 턴! 무한 리핏!",
+                "dual": "마운틴 클라이머 6회, 나래차기, 180도 점프 턴! - 6 mountain climbers, double kick, 180 jump turn, repeat!",
+                "en": "6 mountain climbers, alternating double kicks, 180 jump turn! Non-stop loop!",
+                "tip": "엎드려 무릎 달리기 6회 ➔ 재빨리 일어나 공중 나래차기 ➔ 180도 점프 뒤돌아 착지를 반복합니다."
             },
             {
-                "kr": "백스텝 회피 후 전격 카운터 뒤차기! 강력한 반격!",
-                "mix": "백스텝(Back step) 회피 후 카운터 백킥(Back kick)! 스트롱 반격!",
-                "dual": "백스텝 후 카운터 뒤차기! - Back step and counter back kick!",
-                "en": "Back step dodge and explosive counter back kick!",
-                "tip": "상대의 공격 타이밍에 맞춰 뒤로 한 걸음 빠진 뒤 몸을 회전하며 뒤꿈치로 명치를 꽂습니다."
+                "kr": "누워서 V업 복근 2회 후 오뚝이 기립, 좌우 하이킥 2회, 전방 회전낙법! 쉼 없이 반복!",
+                "mix": "V업 복근 2회, 오뚝이 기립, 하이 킥 2회, 롤링 낙법! 무한 리핏!",
+                "dual": "누워서 V업 복근 2회, 좌우 하이킥 2회, 회전낙법! - 2 V-ups, 2 high kicks, rolling breakfall, repeat!",
+                "en": "2 V-ups, stand up quick, 2 alternating high kicks, rolling breakfall! Non-stop loop!",
+                "tip": "손끝 발끝 V업 복근 2회 ➔ 반동으로 오뚝이처럼 일어나 좌우 하이킥 2회 ➔ 전방 회전낙법 후 반복합니다."
             },
             {
-                "kr": "전진 원투 몸통 3연타 폭풍 타격! 밀고 들어가기!",
-                "mix": "원투쓰리 콤보 3연타! 전진하며 스트롱 바디 킥!",
-                "dual": "전진 3연타 폭풍 타격! - Push forward with three continuous kicks!",
-                "en": "Continuous three-strike combo, push forward aggressively!",
-                "tip": "스텝을 밀고 들어가며 원투쓰리 3연타를 쉼 없이 몰아붙여 타격합니다."
+                "kr": "쪼그려 점프 3회 후 앞발 컷트 카운터 뒤차기, 좌우 스케이터 점프 2회! 쉼 없이 반복!",
+                "mix": "스쿼트 점프 3회, 앞발 컷트 카운터 뒤차기, 스케이터 점프 2회! 무한 리핏!",
+                "dual": "쪼그려 점프 3회, 컷트 카운터 뒤차기, 스케이터 점프! - 3 squat jumps, cut & counter kick, skaters, repeat!",
+                "en": "3 squat jumps, front cut to counter back kick, 2 lateral skater jumps! Non-stop loop!",
+                "tip": "깊게 쪼그려 점프 3회 ➔ 앞발 컷트 후 번개 카운터 뒤차기 ➔ 좌우 스케이터 점프 2회 후 반복합니다."
             }
         ]
     }
@@ -922,16 +922,16 @@ class SparringTrainingEngine:
             lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
             theme_title = theme_data.get(f"name_{lang_key}", theme_data["name_kr"])
 
-            # 사전 안내 (모드 5 전용 맞춤)
+            # 사전 안내 (복합 콤보 루프 인터벌 맞춤)
             if intro_enabled:
                 if lang == "mix_kids":
-                    intro_text = f"지금부터 도장 하이 파워 인터벌(HIIT) 스타트! 이번 테마는 {theme_title}입니다. 운동 타임에 전력으로 무브하고, 레스트(Rest) 타임에 호흡 릴랙스! 준비해 주세요!"
+                    intro_text = f"지금부터 도장 파워 콤보 인터벌 스타트! 이번 테마는 {theme_title}입니다. 점프, 발차기, 롤링 낙법 콤보를 운동 시간 동안 쉼 없이 무한 리핏(Repeat)! 레스트 타임에 릴랙스! 준비해 주세요!"
                 elif lang == "dual_step":
-                    intro_text = f"지금부터 고강도 서킷 인터벌 훈련을 시작합니다. - High intensity interval training! 테마는 '{theme_title}'입니다. 운동 시간에 전력으로 집중하고, 휴식 시간에 호흡을 가다듬으세요. 모두 준비!"
+                    intro_text = f"지금부터 도장 실전 복합 인터벌 훈련을 시작합니다. - Functional flow interval training! 테마는 '{theme_title}'입니다. 체력, 발차기, 낙법 콤보를 무한 반복하세요. 모두 준비!"
                 elif lang in ("en", "en_advanced"):
-                    intro_text = f"Attention team! Today's circuit interval training theme is {theme_title}. Give your 100 percent during work intervals, and breathe deep during rest! Line up and get ready!"
+                    intro_text = f"Attention team! Today's functional flow interval theme is {theme_title}. Perform the continuous combo loop non-stop during work intervals, and breathe deep during rest! Get ready!"
                 else:
-                    intro_text = f"지금부터 도장 고강도 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 운동 시간 동안 전력으로 수행하고, 휴식 시간 동안 호흡을 가다듬으세요. 모두 준비해 주세요!"
+                    intro_text = f"지금부터 도장 실전 복합 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 각 세트마다 체력, 발차기, 회전낙법이 결합된 연속 콤보를 운동 시간 동안 전력으로 쉬지 않고 무한 반복합니다. 모두 준비해 주세요!"
 
                 intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
                 events.append({
@@ -962,7 +962,7 @@ class SparringTrainingEngine:
                 duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
                 curr_time += cd_dur + 1.0
 
-            # 세트 반복 루프
+            # 세트 반복 루프 (복합 콤보 무한 반복)
             for s in range(1, total_sets + 1):
                 ex_idx = (s - 1) % len(exercises)
                 cur_ex = exercises[ex_idx]
@@ -971,9 +971,17 @@ class SparringTrainingEngine:
                 else:
                     ex_name = str(cur_ex)
 
-                # 1. 동작 호명 및 준비
-                call_text = f"[{s}세트] {ex_name}!"
-                call_dur = max(1.5, round(len(call_text) * 0.20, 2))
+                # 1. 콤보 동작 호명 및 준비
+                if lang == "mix_kids":
+                    call_text = f"[{s}세트 콤보] {ex_name}"
+                elif lang == "dual_step":
+                    call_text = f"[{s}세트] {ex_name}"
+                elif lang in ("en", "en_advanced"):
+                    call_text = f"[Set {s} Flow] {ex_name}"
+                else:
+                    call_text = f"[{s}세트 복합 콤보] {ex_name}"
+
+                call_dur = max(1.8, round(len(call_text) * 0.20, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",

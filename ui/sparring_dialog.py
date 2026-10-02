@@ -432,7 +432,7 @@ class SparringDialog(QDialog):
         tab_circuit = QWidget()
         l_circuit = QVBoxLayout(tab_circuit)
 
-        circuit_info = QLabel("💡 순발력·민첩성·근력·반사신경·스파링 스텝 및 발차기가 결합된 도장 전용 고강도 서킷 인터벌(HIIT & Tabata) 음원을 생성합니다.")
+        circuit_info = QLabel("💡 [실전 복합 콤보 루프(Flow Loop) 방식]: 세트당 단순 1동작이 아닙니다. 15~20초 운동 시간 동안 [기초 체력(점프/버피) ➔ 실전 발차기 ➔ 회전낙법/점프턴]을 1세트로 묶어 전력으로 무한 반복하고 10초 휴식하는, 도장 실전 대련에 최적화된 복합 서킷 인터벌입니다.")
         circuit_info.setStyleSheet("background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #be123c; font-size: 12px;")
         l_circuit.addWidget(circuit_info)
 
@@ -440,10 +440,10 @@ class SparringDialog(QDialog):
         g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택")
         l_ct = QVBoxLayout(g_c_theme)
         self.combo_circuit_theme = QComboBox()
-        self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성] 무릎 당겨 높이 점프·버피 점프·스케이터 점프·스쿼트 폭풍 펀치", "power_agility")
-        self.combo_circuit_theme.addItem("🏃 [스파링 풋워크 & 스피드] 앞뒤 풋워크 3단 타격·사이드 스텝 컷트·업다운 런지 킥·나래차기 스피드", "footwork_speed")
-        self.combo_circuit_theme.addItem("💪 [근력 & 코어 전신 서킷] 마운틴 클라이머 무릎 달리기·손바닥 팔굽혀펴기·코어 플랭크 버티기·누워서 V업", "bodyweight_core")
-        self.combo_circuit_theme.addItem("🥋 [대련 실전 & 반사신경 인터벌] 신호음 반응 나래차기·앞발 컷트 후 상단·백스텝 카운터 뒤차기·전진 3연타", "combat_reaction")
+        self.combo_circuit_theme.addItem("🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프", "power_agility")
+        self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프", "agility_power_combo")
+        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 & 반사신경 콤보] 스텝·카운터킥·회전낙법 루프", "footwork_reaction_combo")
+        self.combo_circuit_theme.addItem("💪 [근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷", "strength_endurance_combo")
         self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
         l_ct.addWidget(self.combo_circuit_theme)
         l_circuit.addWidget(g_c_theme)
@@ -503,13 +503,13 @@ class SparringDialog(QDialog):
         l_circuit.addWidget(g_c_time)
 
         # 4. 세부 훈련 동작 구성 및 사범 지도 팁
-        g_c_moves = QGroupBox("4. 세부 훈련 동작 구성 및 사범 지도 팁 (직접 편집 가능)")
+        g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (직접 편집 가능)")
         l_cm = QVBoxLayout(g_c_moves)
         self.txt_circuit_moves = QTextEdit()
-        self.txt_circuit_moves.setMaximumHeight(150)
+        self.txt_circuit_moves.setMaximumHeight(170)
         l_cm.addWidget(self.txt_circuit_moves)
 
-        lbl_moves_hint = QLabel("※ 운동 시간마다 위 4가지 동작이 순환 지시되며, 3초 전 카운트다운 비프음과 휴식 신호음이 자동 합성됩니다.")
+        lbl_moves_hint = QLabel("※ 세트마다 위 복합 콤보가 호명되며, 15~20초 동안 해당 콤보를 전력으로 무한 반복한 뒤 3초 전 카운트다운 비프음과 휴식 신호음이 울립니다.")
         lbl_moves_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_cm.addWidget(lbl_moves_hint)
         l_circuit.addWidget(g_c_moves)
@@ -1100,9 +1100,9 @@ class SparringDialog(QDialog):
         for i, ex in enumerate(exercises, 1):
             text = ex.get(lang_field, ex.get("kr", ""))
             tip = ex.get("tip", "")
-            lines.append(f"{i}번. {text}  (지도 팁: {tip})")
+            lines.append(f"{i}번 콤보: {text}\n   ➔ [지도 팁]: {tip}\n")
 
-        self.txt_circuit_moves.setPlainText("\n".join(lines))
+        self.txt_circuit_moves.setPlainText("\n".join(lines).strip())
 
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
