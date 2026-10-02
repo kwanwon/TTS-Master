@@ -111,11 +111,13 @@ class ShuttleRunWorker(QThread):
             voice_texts = {}
             os.makedirs(os.path.join("projects", "temp_tts"), exist_ok=True)
 
+            is_female = "여성" in voice_speaker or "선히" in voice_speaker
             voice_id = "ko-KR-SunHiNeural"
             if "인준" in voice_speaker:
                 voice_id = "ko-KR-InJoonNeural"
             elif "현수" in voice_speaker:
                 voice_id = "ko-KR-HyunsuMultilingualNeural"
+            en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
 
             import edge_tts
             import io
@@ -130,35 +132,50 @@ class ShuttleRunWorker(QThread):
                 sig_name = "비프음"
 
             # A. 출발 전 준비 안내 방송 생성
-            # 사용자 요청: "이제 시작 하겠습니다. 준비해주세요. 신호음(비프음, 휘슬, 북) 소리에 출발해주세요."
-            prep_instruction = f"이제 시작하겠습니다. 준비해 주세요. {sig_name} 소리에 맞춰 출발해 주세요."
-            if intro_enabled and intro_text:
-                full_prep_text = f"{intro_text} {prep_instruction}"
-            else:
-                full_prep_text = prep_instruction
-
             intro_file = ""
             intro_duration = 0.0
-            self.progress.emit(10, "사전 안내 및 출발 준비 음성 생성 중...")
-            intro_path = os.path.join("projects", "temp_tts", f"shuttle_prep_{uuid.uuid4().hex[:6]}.wav")
-            try:
-                async def _gen_intro():
-                    comm = edge_tts.Communicate(full_prep_text, voice_id, rate="+15%")
-                    buf = io.BytesIO()
-                    async for chunk in comm.stream():
-                        if chunk['type'] == 'audio':
-                            buf.write(chunk['data'])
-                    buf.seek(0)
-                    raw_seg = AudioSegment.from_file(buf, format="mp3")
-                    trimmed_seg = trim_audio_silence(raw_seg)
-                    trimmed_seg.export(intro_path, format="wav")
 
-                asyncio.run(_gen_intro())
-                if os.path.exists(intro_path):
-                    intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
-                    intro_file = intro_path
-            except Exception as e_intro:
-                print(f"[Shuttle] Prep TTS fail: {e_intro}")
+            if intro_enabled:
+                self.progress.emit(10, "사전 안내 및 출발 준비 음성 생성 중...")
+                prep_instruction = f"이제 시작하겠습니다. 준비해 주세요. {sig_name} 소리에 맞춰 출발해 주세요."
+                if intro_text:
+                    full_prep_text = f"{intro_text} {prep_instruction}".strip()
+                else:
+                    full_prep_text = prep_instruction
+
+                intro_path = os.path.join("projects", "temp_tts", f"shuttle_prep_{uuid.uuid4().hex[:6]}.wav")
+                try:
+                    async def _gen_intro():
+                        comm = edge_tts.Communicate(full_prep_text, voice_id, rate="+15%")
+                        buf = io.BytesIO()
+                        async for chunk in comm.stream():
+                            if chunk['type'] == 'audio':
+                                buf.write(chunk['data'])
+                        buf.seek(0)
+                        raw_seg = AudioSegment.from_file(buf, format="mp3")
+                        trimmed_seg = trim_audio_silence(raw_seg)
+                        trimmed_seg.export(intro_path, format="wav")
+
+                    asyncio.run(_gen_intro())
+                    if os.path.exists(intro_path):
+                        intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
+                        intro_file = intro_path
+                except Exception as e_intro:
+                    print(f"[Shuttle] Prep TTS fail: {e_intro}")
+                    if os.name == 'posix':
+                        try:
+                            import subprocess
+                            tmp_aiff = intro_path.replace(".wav", ".aiff")
+                            res = subprocess.run(["say", "-v", "Yuna", "-o", tmp_aiff, full_prep_text], check=False, timeout=10)
+                            if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                seg.export(intro_path, format="wav")
+                                if os.path.exists(tmp_aiff):
+                                    os.remove(tmp_aiff)
+                                intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
+                                intro_file = intro_path
+                        except Exception as e_say_intro:
+                            print(f"[Shuttle] Intro say fallback fail: {e_say_intro}")
 
             # B. 카운트다운 생성 (템플릿: 영어 321, 비프음, 한국어 준비, 영어 준비, 한국어 321)
             cd_file = ""
@@ -167,23 +184,41 @@ class ShuttleRunWorker(QThread):
 
             if countdown_enabled:
                 cd_style = self.config.get("countdown_style", "en_321")
-                is_female = "여성" in voice_speaker or "선히" in voice_speaker
-                en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
 
                 # Helper for word-by-word stepped countdown with 1.5s (1500ms) delay
                 async def _synth_stepped_cd(words: list, voice: str, rate: str = "+0%") -> AudioSegment:
                     silence_gap = AudioSegment.silent(duration=1500)
                     segs = []
                     for w in words:
-                        comm = edge_tts.Communicate(w, voice, rate=rate)
-                        buf = io.BytesIO()
-                        async for chunk in comm.stream():
-                            if chunk['type'] == 'audio':
-                                buf.write(chunk['data'])
-                        buf.seek(0)
-                        raw_seg = AudioSegment.from_file(buf, format="mp3")
-                        trimmed_seg = trim_audio_silence(raw_seg)
-                        segs.append(trimmed_seg)
+                        seg = None
+                        for attempt in range(2):
+                            try:
+                                comm = edge_tts.Communicate(w, voice, rate=rate)
+                                buf = io.BytesIO()
+                                async for chunk in comm.stream():
+                                    if chunk['type'] == 'audio':
+                                        buf.write(chunk['data'])
+                                buf.seek(0)
+                                raw_seg = AudioSegment.from_file(buf, format="mp3")
+                                seg = trim_audio_silence(raw_seg)
+                                break
+                            except Exception:
+                                await asyncio.sleep(0.15)
+                        if seg is None and os.name == 'posix':
+                            try:
+                                import subprocess
+                                tmp_aiff = os.path.join("projects", "temp_tts", f"cd_word_{uuid.uuid4().hex[:4]}.aiff")
+                                say_voice = "Yuna" if "ko" in voice else "Samantha"
+                                res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, w], check=False, timeout=5)
+                                if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                    if os.path.exists(tmp_aiff):
+                                        os.remove(tmp_aiff)
+                            except Exception:
+                                pass
+                        if seg is None:
+                            seg = AudioSegment.silent(duration=400)
+                        segs.append(seg)
                     full = segs[0]
                     for s in segs[1:]:
                         full = full + silence_gap + s
@@ -284,30 +319,65 @@ class ShuttleRunWorker(QThread):
                 cue_text_map = {s: f"{s}단계!" for s in range(1, target_stages + 1)}
                 cue_rate = "+20%"
 
+            cue_cache_dir = os.path.join("projects", "temp_tts", "cue_cache")
+            os.makedirs(cue_cache_dir, exist_ok=True)
+
             if use_voice:
                 for st in range(1, target_stages + 1):
                     pct = 15 + int(35 * (st / target_stages))
                     text = cue_text_map[st]
                     self.progress.emit(pct, f"{st}단계 음성 구령 생성 중 ({text})...")
 
+                    safe_cue_name = f"{cue_voice}_{cue_style}_{st}_{abs(hash(text))}.wav"
+                    cached_cue_path = os.path.join(cue_cache_dir, safe_cue_name)
                     v_path = os.path.join("projects", "temp_tts", f"shuttle_stage_{st}_{uuid.uuid4().hex[:6]}.wav")
-                    generated = False
-                    try:
-                        async def _gen(t, v, p, r):
-                            comm = edge_tts.Communicate(t, v, rate=r)
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(p, format="wav")
 
-                        asyncio.run(_gen(text, cue_voice, v_path, cue_rate))
+                    generated = False
+                    if os.path.exists(cached_cue_path) and os.path.getsize(cached_cue_path) > 1000:
+                        import shutil
+                        shutil.copy(cached_cue_path, v_path)
                         generated = True
-                    except Exception as e_voice:
-                        print(f"[Shuttle] Edge-TTS direct fail: {e_voice}")
+                    else:
+                        for attempt in range(3):
+                            try:
+                                async def _gen(t, v, p, r):
+                                    comm = edge_tts.Communicate(t, v, rate=r)
+                                    buf = io.BytesIO()
+                                    async for chunk in comm.stream():
+                                        if chunk['type'] == 'audio':
+                                            buf.write(chunk['data'])
+                                    buf.seek(0)
+                                    raw_seg = AudioSegment.from_file(buf, format="mp3")
+                                    trimmed_seg = trim_audio_silence(raw_seg)
+                                    trimmed_seg.export(p, format="wav")
+
+                                asyncio.run(_gen(text, cue_voice, v_path, cue_rate))
+                                if os.path.exists(v_path) and os.path.getsize(v_path) > 500:
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                                    break
+                            except Exception as e_voice:
+                                print(f"[Shuttle] Edge-TTS direct fail (stage {st}, attempt {attempt+1}): {e_voice}")
+                                import time
+                                time.sleep(0.2)
+
+                        if not generated and os.name == 'posix':
+                            try:
+                                import subprocess
+                                tmp_aiff = v_path.replace(".wav", ".aiff")
+                                say_voice = "Yuna" if "ko" in cue_voice else "Samantha"
+                                res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, text], check=False, timeout=5)
+                                if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                    seg.export(v_path, format="wav")
+                                    if os.path.exists(tmp_aiff):
+                                        os.remove(tmp_aiff)
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                            except Exception as e_say:
+                                print(f"[Shuttle] say fallback fail: {e_say}")
 
                     if generated and os.path.exists(v_path):
                         v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
@@ -812,15 +882,15 @@ class ShuttleRunDialog(QDialog):
         h_voice.addWidget(self.voice_combo)
         opt_layout.addLayout(h_voice)
 
-        # 구령 스타일 선택 (영어 Level 1, One, 한국어 1단계, 1단 등)
+        # 구령 스타일 선택 (한국어 표준 단계 기본값, 영어 Level 1, One, 1단 등)
         h_cue_style = QHBoxLayout()
         h_cue_style.addWidget(QLabel("  🥋 구령 스타일:"))
         self.combo_cue_style = QComboBox()
-        self.combo_cue_style.addItem("🇺🇸 영어 레벨 ('Level 1!', 'Level 2!' - 미국 본토 발음)", "en_level")
-        self.combo_cue_style.addItem("🇺🇸 영어 숫자 ('One!', 'Two!', 'Three!' - 본토 발음)", "en_num")
         self.combo_cue_style.addItem("📢 한국어 표준 단계 ('1단계!', '2단계!' - 시작 단어 제외)", "stage")
         self.combo_cue_style.addItem("🥋 한국어 초간결 단 ('1단!', '2단!', '3단!') - 5m 단거리 추천", "dan")
         self.combo_cue_style.addItem("🔢 한국어 초미니멀 숫자 ('1!', '2!', '3!') - 0.25초 순간 구령", "num")
+        self.combo_cue_style.addItem("🇺🇸 영어 레벨 ('Level 1!', 'Level 2!' - 미국 본토 발음)", "en_level")
+        self.combo_cue_style.addItem("🇺🇸 영어 숫자 ('One!', 'Two!', 'Three!' - 본토 발음)", "en_num")
 
         btn_preview_cue = QPushButton("🎧 구령 미리듣기")
         btn_preview_cue.clicked.connect(self.preview_cue_sound)
@@ -828,6 +898,9 @@ class ShuttleRunDialog(QDialog):
         h_cue_style.addWidget(self.combo_cue_style, stretch=1)
         h_cue_style.addWidget(btn_preview_cue)
         opt_layout.addLayout(h_cue_style)
+
+        self.cb_intro_guide.toggled.connect(self.combo_intro_style.setEnabled)
+        self.cb_intro_guide.toggled.connect(self.update_countdown_banner)
 
         lbl_voice_info = QLabel("💡 5m 단거리는 '1단!', '2단!' 또는 '1!', '2!'로 설정하시면 빠른 배속(+35%)으로 신호음 간격에 완벽히 들어맞습니다.")
         lbl_voice_info.setStyleSheet("color: #0369a1; font-size: 11px; padding-left: 20px; font-weight: 500;")
@@ -966,11 +1039,16 @@ class ShuttleRunDialog(QDialog):
     def update_countdown_banner(self):
         if not hasattr(self, 'seq_banner'):
             return
-        enabled = self.cb_countdown.isChecked()
-        self.combo_countdown_style.setEnabled(enabled)
+        intro_on = self.cb_intro_guide.isChecked() if hasattr(self, 'cb_intro_guide') else True
+        cd_on = self.cb_countdown.isChecked() if hasattr(self, 'cb_countdown') else True
+        self.combo_countdown_style.setEnabled(cd_on)
+        if hasattr(self, 'combo_intro_style'):
+            self.combo_intro_style.setEnabled(intro_on)
 
-        if not enabled:
-            self.seq_banner.setText("🎯 1단계 출발 순서: [준비 안내] ➔ (5초 대기) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]")
+        intro_part = "[준비 안내: 신호음 소리에 맞춰 출발!] ➔ " if intro_on else ""
+
+        if not cd_on:
+            self.seq_banner.setText(f"🎯 1단계 출발 순서: {intro_part}[1단계!] ➔ [첫 출발 신호음(삑!)]")
             return
 
         style = self.combo_countdown_style.currentData()
@@ -983,7 +1061,7 @@ class ShuttleRunDialog(QDialog):
         }
         cd_desc = style_desc_map.get(style, "🇺🇸 Three, Two, One")
         self.seq_banner.setText(
-            f"🎯 1단계 출발 순서: [준비 안내: 신호음 소리에 출발!] ➔ [{cd_desc}] ➔ (1초 딜레이) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]"
+            f"🎯 1단계 출발 순서: {intro_part}[{cd_desc}] ➔ (1초 딜레이) ➔ [1단계!] ➔ [첫 출발 신호음(삑!)]"
         )
 
     def _quick_tts_export(self, text: str, voice: str, out_path: str, rate: str = "+0%"):
