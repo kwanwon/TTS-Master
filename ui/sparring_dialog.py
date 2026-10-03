@@ -35,16 +35,18 @@ def vol_pct_to_db(pct: int) -> float:
     return round(20.0 * math.log10(pct / 100.0), 2)
 
 
-def trim_audio_silence(seg: AudioSegment, threshold: float = -42.0) -> AudioSegment:
-    """TTS 음성의 앞쪽 무음은 타이트하게 자르되, 뒤쪽은 말끝 여운(모음/자음 감쇄)이 잘리지 않도록 안전 여백(300ms)을 보존함"""
+def trim_audio_silence(seg: AudioSegment, threshold: float = -48.0) -> AudioSegment:
+    """TTS 음성의 앞쪽 무음은 깔끔히 자르고, 뒤쪽은 말끝 여운(모음/자음 감쇄)이 잘리지 않도록 450ms 안전 여백과 부드러운 페이드아웃 적용"""
     try:
         from pydub.silence import detect_leading_silence
         lead = detect_leading_silence(seg, silence_threshold=threshold)
         trail = detect_leading_silence(seg.reverse(), silence_threshold=threshold)
-        # 말끝이 툭 끊기지 않도록 뒤쪽 무음 중 300ms를 안전하게 남김
-        safe_trail = max(0, trail - 300)
+        # 말끝이 툭 끊기지 않도록 뒤쪽 무음 중 450ms를 넉넉히 남기고 60ms 페이드아웃 적용
+        safe_trail = max(0, trail - 450)
         end_idx = max(lead, len(seg) - safe_trail)
         trimmed = seg[lead:end_idx]
+        if len(trimmed) > 100:
+            trimmed = trimmed.fade_out(60)
         return trimmed if len(trimmed) >= 80 else seg
     except Exception:
         return seg
@@ -196,6 +198,43 @@ class SparringWorker(QThread):
                     ev["sound_file"] = voice_cache[clean_text]["file"]
                     ev["duration"] = voice_cache[clean_text]["duration"]
                 else:
+                    # ⭐ 심판 공식 구령 처리: '갈려', '중지', '그만'
+                    # 말끝('려')이 끊기지 않고 경기 심판처럼 당당하고 자연스러운 억양으로 발음되도록 전용 음원 최우선 사용
+                    is_referee_cue = False
+                    if clean_text in ("갈려!", "갈려"):
+                        referee_audio = os.path.join("effects", "kalyeo_injoon.wav" if "InJoon" in voice_id else "kalyeo_sunhi.wav")
+                        if not os.path.exists(referee_audio):
+                            referee_audio = os.path.join("effects", "kalyeo.wav")
+                        if os.path.exists(referee_audio):
+                            v_dur = len(AudioSegment.from_file(referee_audio)) / 1000.0
+                            voice_cache[clean_text] = {"file": referee_audio, "duration": v_dur}
+                            ev["sound_file"] = referee_audio
+                            ev["duration"] = v_dur
+                            is_referee_cue = True
+                    elif clean_text in ("중지!", "중지"):
+                        ref_audio = os.path.join("effects", "stop_injoon.wav" if "InJoon" in voice_id else "stop_sunhi.wav")
+                        if not os.path.exists(ref_audio):
+                            ref_audio = os.path.join("effects", "stop.wav")
+                        if os.path.exists(ref_audio):
+                            v_dur = len(AudioSegment.from_file(ref_audio)) / 1000.0
+                            voice_cache[clean_text] = {"file": ref_audio, "duration": v_dur}
+                            ev["sound_file"] = ref_audio
+                            ev["duration"] = v_dur
+                            is_referee_cue = True
+                    elif clean_text in ("그만!", "그만"):
+                        ref_audio = os.path.join("effects", "geuman_injoon.wav" if "InJoon" in voice_id else "geuman_sunhi.wav")
+                        if not os.path.exists(ref_audio):
+                            ref_audio = os.path.join("effects", "geuman.wav")
+                        if os.path.exists(ref_audio):
+                            v_dur = len(AudioSegment.from_file(ref_audio)) / 1000.0
+                            voice_cache[clean_text] = {"file": ref_audio, "duration": v_dur}
+                            ev["sound_file"] = ref_audio
+                            ev["duration"] = v_dur
+                            is_referee_cue = True
+
+                    if is_referee_cue:
+                        continue
+
                     v_path = os.path.join("projects", "temp_tts", f"sparring_v_{uuid.uuid4().hex[:6]}.wav")
                     try:
                         import edge_tts
@@ -208,6 +247,10 @@ class SparringWorker(QThread):
                         target_voice = en_voice if (has_english and not has_korean) else voice_id
                         rate_val = "+10%" if (has_english and not has_korean) else "+0%"
 
+                        synth_text = clean_text
+                        if "갈려" in clean_text and not clean_text.endswith("~!"):
+                            synth_text = clean_text.replace("갈려!", "갈~려!").replace("갈려", "갈~려")
+
                         async def _synth(t, v, path):
                             comm = edge_tts.Communicate(t, v, rate=rate_val)
                             buf = io.BytesIO()
@@ -219,7 +262,7 @@ class SparringWorker(QThread):
                             trimmed_seg = trim_audio_silence(raw_seg)
                             trimmed_seg.export(path, format="wav")
 
-                        asyncio.run(_synth(clean_text, target_voice, v_path))
+                        asyncio.run(_synth(synth_text, target_voice, v_path))
                         if os.path.exists(v_path):
                             v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
                             voice_cache[clean_text] = {"file": v_path, "duration": v_dur}
@@ -473,27 +516,44 @@ class SparringDialog(QDialog):
         l_ctime = QVBoxLayout(g_c_time)
 
         h_ct1 = QHBoxLayout()
-        h_ct1.addWidget(QLabel("운동(전력) 시간:"))
+        h_ct1.addWidget(QLabel("⏱️ 운동(전력) 시간:"))
         self.sp_circuit_work = QSpinBox()
         self.sp_circuit_work.setRange(5, 120)
         self.sp_circuit_work.setValue(20)
         self.sp_circuit_work.setSuffix(" 초")
+        self.sp_circuit_work.setFixedWidth(90)
         h_ct1.addWidget(self.sp_circuit_work)
 
-        h_ct1.addWidget(QLabel("휴식(숨고르기) 시간:"))
+        h_ct1.addWidget(QLabel("🧘 휴식(숨고르기) 시간:"))
         self.sp_circuit_rest = QSpinBox()
         self.sp_circuit_rest.setRange(5, 60)
         self.sp_circuit_rest.setValue(10)
         self.sp_circuit_rest.setSuffix(" 초")
+        self.sp_circuit_rest.setFixedWidth(90)
         h_ct1.addWidget(self.sp_circuit_rest)
 
-        h_ct1.addWidget(QLabel("총 세트 수:"))
+        h_ct1.addWidget(QLabel("🔁 총 세트 수:"))
         self.sp_circuit_sets = QSpinBox()
         self.sp_circuit_sets.setRange(1, 30)
         self.sp_circuit_sets.setValue(8)
         self.sp_circuit_sets.setSuffix(" 세트")
+        self.sp_circuit_sets.setFixedWidth(90)
         h_ct1.addWidget(self.sp_circuit_sets)
+        h_ct1.addStretch()
         l_ctime.addLayout(h_ct1)
+
+        # 세트 종료 신호 선택
+        h_c_stop = QHBoxLayout()
+        h_c_stop.addWidget(QLabel("🔔 세트 종료 및 휴식 신호:"))
+        self.combo_circuit_stop_signal = QComboBox()
+        self.combo_circuit_stop_signal.addItem("🥋 음성: '갈려! 휴식!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_circuit_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 세트 종료)", "bell")
+        self.combo_circuit_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
+        self.combo_circuit_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
+        self.combo_circuit_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
+        self.combo_circuit_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        h_c_stop.addWidget(self.combo_circuit_stop_signal, stretch=1)
+        l_ctime.addLayout(h_c_stop)
 
         # 빠른 프리셋 버튼
         h_c_preset = QHBoxLayout()
@@ -560,36 +620,60 @@ class SparringDialog(QDialog):
         g_relay_t = QGroupBox("시간 및 실전 훈련 설정")
         l_rt = QVBoxLayout(g_relay_t)
         
-        h_rt1 = QHBoxLayout()
-        h_rt1.addWidget(QLabel("타자당 타격 시간:"))
+        grid_rt = QGridLayout()
+        grid_rt.setHorizontalSpacing(20)
+        grid_rt.setVerticalSpacing(10)
+
+        lbl_strike = QLabel("⏱️ 1인당 타격 시간:")
         self.sp_relay_strike = QSpinBox()
         self.sp_relay_strike.setRange(5, 60)
         self.sp_relay_strike.setValue(15)
         self.sp_relay_strike.setSuffix(" 초")
-        h_rt1.addWidget(self.sp_relay_strike)
+        self.sp_relay_strike.setFixedWidth(90)
+        grid_rt.addWidget(lbl_strike, 0, 0)
+        grid_rt.addWidget(self.sp_relay_strike, 0, 1)
 
-        h_rt1.addWidget(QLabel("선수 교대(준비) 시간:"))
+        lbl_change = QLabel("🔄 선수 교대(준비) 시간:")
         self.sp_relay_change = QSpinBox()
         self.sp_relay_change.setRange(2, 15)
         self.sp_relay_change.setValue(3)
         self.sp_relay_change.setSuffix(" 초")
-        h_rt1.addWidget(self.sp_relay_change)
+        self.sp_relay_change.setFixedWidth(90)
+        grid_rt.addWidget(lbl_change, 0, 2)
+        grid_rt.addWidget(self.sp_relay_change, 0, 3)
 
-        h_rt1.addWidget(QLabel("설명 후 준비 대기 시간:"))
+        lbl_prep_wait = QLabel("⏳ 설명 후 준비 대기:")
         self.sp_relay_prep_wait = QSpinBox()
         self.sp_relay_prep_wait.setRange(0, 60)
         self.sp_relay_prep_wait.setValue(10)
         self.sp_relay_prep_wait.setSuffix(" 초")
+        self.sp_relay_prep_wait.setFixedWidth(90)
         self.sp_relay_prep_wait.setToolTip("사전 설명 음성 후 받기자들이 암미트/손미트를 착용하고 위치를 잡는 준비 대기 시간입니다. (0초 설정 시 대기 없이 즉시 시작)")
-        h_rt1.addWidget(self.sp_relay_prep_wait)
+        grid_rt.addWidget(lbl_prep_wait, 1, 0)
+        grid_rt.addWidget(self.sp_relay_prep_wait, 1, 1)
 
-        h_rt1.addWidget(QLabel("전체 세트:"))
+        lbl_cycles = QLabel("🔁 전체 순환 세트:")
         self.sp_relay_cycles = QSpinBox()
         self.sp_relay_cycles.setRange(1, 10)
         self.sp_relay_cycles.setValue(3)
         self.sp_relay_cycles.setSuffix(" 세트")
-        h_rt1.addWidget(self.sp_relay_cycles)
-        l_rt.addLayout(h_rt1)
+        self.sp_relay_cycles.setFixedWidth(90)
+        grid_rt.addWidget(lbl_cycles, 1, 2)
+        grid_rt.addWidget(self.sp_relay_cycles, 1, 3)
+
+        l_rt.addLayout(grid_rt)
+
+        # 타격 종료 및 교대 신호 선택
+        h_rt_sig = QHBoxLayout()
+        h_rt_sig.addWidget(QLabel("🔔 타격 종료 및 교대 신호:"))
+        self.combo_relay_stop_signal = QComboBox()
+        self.combo_relay_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_relay_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
+        self.combo_relay_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
+        self.combo_relay_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        self.combo_relay_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
+        h_rt_sig.addWidget(self.combo_relay_stop_signal, stretch=1)
+        l_rt.addLayout(h_rt_sig)
 
         # 릴레이 훈련 기술 템플릿 선택 드롭다운
         h_rt_tmpl = QHBoxLayout()
@@ -646,38 +730,44 @@ class SparringDialog(QDialog):
         
         # 1행: 총 훈련 시간 & 타격 후 다음 구령까지 복귀 대기
         h_rct1 = QHBoxLayout()
-        h_rct1.addWidget(QLabel("총 훈련 시간:"))
+        h_rct1.addWidget(QLabel("⏱️ 총 훈련 시간:"))
         self.sp_reac_dur = QSpinBox()
         self.sp_reac_dur.setRange(30, 600)
         self.sp_reac_dur.setValue(120)
         self.sp_reac_dur.setSuffix(" 초")
+        self.sp_reac_dur.setFixedWidth(90)
         h_rct1.addWidget(self.sp_reac_dur)
 
-        h_rct1.addWidget(QLabel("타격 후 복귀 대기:"))
+        h_rct1.addWidget(QLabel("🦶 타격 후 복귀 대기:"))
         self.sp_reac_recovery = QDoubleSpinBox()
         self.sp_reac_recovery.setRange(0.2, 5.0)
         self.sp_reac_recovery.setSingleStep(0.1)
         self.sp_reac_recovery.setValue(0.8)
         self.sp_reac_recovery.setSuffix(" 초")
+        self.sp_reac_recovery.setFixedWidth(90)
         self.sp_reac_recovery.setToolTip("비프음으로 발차기 타격 후 착지하여 다음 구령이 나올 때까지의 준비 시간입니다. (스피드 연타는 0.4~0.6초 추천)")
         h_rct1.addWidget(self.sp_reac_recovery)
+        h_rct1.addStretch()
         l_rct.addLayout(h_rct1)
 
         # 2행: 랜덤 긴장 대기 (지시어 방송 후 비프음이 울릴 때까지)
         h_rct2 = QHBoxLayout()
-        h_rct2.addWidget(QLabel("랜덤 긴장 대기:"))
+        h_rct2.addWidget(QLabel("🎲 랜덤 긴장 대기:"))
         self.sp_reac_min = QDoubleSpinBox()
         self.sp_reac_min.setRange(0.3, 15.0)
         self.sp_reac_min.setSingleStep(0.2)
         self.sp_reac_min.setValue(1.0)
         self.sp_reac_min.setSuffix("초 ~ ")
+        self.sp_reac_min.setFixedWidth(90)
         self.sp_reac_max = QDoubleSpinBox()
         self.sp_reac_max.setRange(0.5, 20.0)
         self.sp_reac_max.setSingleStep(0.2)
         self.sp_reac_max.setValue(2.5)
         self.sp_reac_max.setSuffix("초")
+        self.sp_reac_max.setFixedWidth(90)
         h_rct2.addWidget(self.sp_reac_min)
         h_rct2.addWidget(self.sp_reac_max)
+        h_rct2.addStretch()
         l_rct.addLayout(h_rct2)
 
         # 3행: 훈련 템포 빠른 프리셋 버튼 3종
@@ -714,10 +804,12 @@ class SparringDialog(QDialog):
 
         l_reac.addWidget(g_reac_t)
 
-        # 2. 발차기 출발/타격 신호음 종류 선택
-        g_reac_sig = QGroupBox("2. 발차기 출발/타격 신호 (트리거)")
-        l_sig = QHBoxLayout(g_reac_sig)
-        l_sig.addWidget(QLabel("타격 신호음:"))
+        # 2. 발차기 출발/타격 신호음 종류 선택 및 훈련 종료 신호
+        g_reac_sig = QGroupBox("2. 타격 트리거 신호 및 훈련 종료 신호")
+        l_sig = QVBoxLayout(g_reac_sig)
+
+        h_sig1 = QHBoxLayout()
+        h_sig1.addWidget(QLabel("⚡ 타격 시작 신호:"))
         self.combo_reac_signal = QComboBox()
         self.combo_reac_signal.addItem("📢 경기용 심판 휘슬 (호각)", "whistle")
         self.combo_reac_signal.addItem("🔔 전자 비프음 (880Hz 삑~익)", "beep")
@@ -727,7 +819,21 @@ class SparringDialog(QDialog):
         self.combo_reac_signal.addItem("🗣️ 음성 구령: \"Ready, Go!\" (미국 본토 발음)", "voice_readygo")
         self.combo_reac_signal.addItem("🗣️ 음성 구령: '탕!'", "voice_bang")
         self.combo_reac_signal.addItem("🎲 랜덤 믹스 (휘슬 / 비프 / 시작! / Let's Go! 무작위)", "random_mix")
-        l_sig.addWidget(self.combo_reac_signal, stretch=1)
+        h_sig1.addWidget(self.combo_reac_signal, stretch=1)
+        l_sig.addLayout(h_sig1)
+
+        h_sig2 = QHBoxLayout()
+        h_sig2.addWidget(QLabel("🏁 훈련 종료 신호:"))
+        self.combo_reac_stop_signal = QComboBox()
+        self.combo_reac_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_reac_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
+        self.combo_reac_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
+        self.combo_reac_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 훈련 종료)", "bell")
+        self.combo_reac_stop_signal.addItem("📢 심판 호각 (종료 휘슬)", "whistle")
+        self.combo_reac_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        h_sig2.addWidget(self.combo_reac_stop_signal, stretch=1)
+        l_sig.addLayout(h_sig2)
+
         l_reac.addWidget(g_reac_sig)
 
         # 3. 명령어 템플릿 프리셋 선택 및 직접 편집
@@ -884,30 +990,48 @@ class SparringDialog(QDialog):
         # ── 탭 4: 정규 스파링 라운드 ──
         tab_round = QWidget()
         l_rnd = QVBoxLayout(tab_round)
-        g_rnd_set = QGroupBox("스파링 라운드 시간 설정")
+        g_rnd_set = QGroupBox("1. 스파링 라운드 시간 설정")
         l_rnds = QHBoxLayout(g_rnd_set)
         
-        l_rnds.addWidget(QLabel("1라운드 경기 시간:"))
+        l_rnds.addWidget(QLabel("⏱️ 1라운드 경기 시간:"))
         self.sp_rnd_time = QSpinBox()
         self.sp_rnd_time.setRange(30, 300)
         self.sp_rnd_time.setValue(90)
-        self.sp_rnd_time.setSuffix(" 초 (1분 30초)")
+        self.sp_rnd_time.setSuffix(" 초")
+        self.sp_rnd_time.setFixedWidth(90)
         l_rnds.addWidget(self.sp_rnd_time)
 
-        l_rnds.addWidget(QLabel("라운드 간 휴식:"))
+        l_rnds.addWidget(QLabel("🧘 라운드 간 휴식:"))
         self.sp_rnd_rest = QSpinBox()
         self.sp_rnd_rest.setRange(10, 120)
         self.sp_rnd_rest.setValue(30)
         self.sp_rnd_rest.setSuffix(" 초")
+        self.sp_rnd_rest.setFixedWidth(90)
         l_rnds.addWidget(self.sp_rnd_rest)
 
-        l_rnds.addWidget(QLabel("총 라운드:"))
+        l_rnds.addWidget(QLabel("🥊 총 라운드 수:"))
         self.sp_rnd_count = QSpinBox()
         self.sp_rnd_count.setRange(1, 10)
         self.sp_rnd_count.setValue(3)
         self.sp_rnd_count.setSuffix(" 라운드")
+        self.sp_rnd_count.setFixedWidth(90)
         l_rnds.addWidget(self.sp_rnd_count)
+        l_rnds.addStretch()
         l_rnd.addWidget(g_rnd_set)
+
+        # 2. 라운드 종료 신호 설정
+        g_rnd_sig = QGroupBox("2. 라운드 종료 신호 (선택)")
+        l_rsig = QHBoxLayout(g_rnd_sig)
+        l_rsig.addWidget(QLabel("🔔 라운드 종료 신호:"))
+        self.combo_rnd_stop_signal = QComboBox()
+        self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (태권도/격투기 경기 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_rnd_stop_signal.addItem("🛑 음성: '중지! 타임!'", "voice_stop")
+        self.combo_rnd_stop_signal.addItem("✋ 음성: '그만! 타임!'", "voice_end")
+        self.combo_rnd_stop_signal.addItem("🔔 경기장 공/벨 (딩~동 라운드 종료)", "bell")
+        self.combo_rnd_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
+        self.combo_rnd_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        l_rsig.addWidget(self.combo_rnd_stop_signal, stretch=1)
+        l_rnd.addWidget(g_rnd_sig)
         l_rnd.addStretch()
         self.tabs.addTab(tab_round, "🥊 정규 스파링 라운드")
 
@@ -1275,6 +1399,7 @@ class SparringDialog(QDialog):
             params["language_mode"] = self.combo_circuit_lang.currentData() or "mix_kids"
             params["circuit_mode_type"] = "single" if hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked() else "cycle"
             params["custom_routine_text"] = self.txt_circuit_moves.toPlainText().strip()
+            params["stop_signal"] = self.combo_circuit_stop_signal.currentData() if hasattr(self, 'combo_circuit_stop_signal') else "voice_kalyeo"
 
         elif mode == "relay":
             fighters = 2 if self.rb_relay_11.isChecked() else (3 if self.rb_relay_12.isChecked() else 4)
@@ -1285,6 +1410,7 @@ class SparringDialog(QDialog):
             params["cycles"] = self.sp_relay_cycles.value()
             params["intro_text"] = self.txt_relay_intro.toPlainText().strip()
             params["cue_text"] = self.txt_relay_cue.toPlainText().strip() or "백스텝 후 받아차기 교차 상단"
+            params["stop_signal"] = self.combo_relay_stop_signal.currentData() if hasattr(self, 'combo_relay_stop_signal') else "voice_kalyeo"
 
         elif mode == "reaction":
             params["duration_sec"] = float(self.sp_reac_dur.value())
@@ -1294,6 +1420,7 @@ class SparringDialog(QDialog):
             raw_cues = self.txt_reac_cues.text().split(",")
             params["cues"] = [c.strip() for c in raw_cues if c.strip()]
             params["signal_sound"] = self.combo_reac_signal.currentData()
+            params["stop_signal"] = self.combo_reac_stop_signal.currentData() if hasattr(self, 'combo_reac_stop_signal') else "voice_kalyeo"
 
         elif mode == "combo":
             params["step_sec"] = float(self.sp_combo_step.value())
@@ -1311,6 +1438,7 @@ class SparringDialog(QDialog):
             params["round_sec"] = float(self.sp_rnd_time.value())
             params["rest_sec"] = float(self.sp_rnd_rest.value())
             params["total_rounds"] = self.sp_rnd_count.value()
+            params["stop_signal"] = self.combo_rnd_stop_signal.currentData() if hasattr(self, 'combo_rnd_stop_signal') else "voice_kalyeo"
 
         self.btn_generate.setEnabled(False)
         self.progress_bar.setVisible(True)

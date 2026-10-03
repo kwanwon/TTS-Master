@@ -30,12 +30,16 @@ def vol_pct_to_db(pct: int) -> float:
     return round(20.0 * math.log10(pct / 100.0), 2)
 
 
-def trim_audio_silence(seg: AudioSegment, threshold: float = -42.0) -> AudioSegment:
-    """TTS 음성의 앞뒤 여백 무음을 타이트하게 잘라내어 멘트가 늘어지지 않게 함"""
+def trim_audio_silence(seg: AudioSegment, threshold: float = -46.0) -> AudioSegment:
+    """TTS 음성의 앞쪽 무음은 깔끔히 자르고, 뒤쪽은 말끝 여운이 잘리지 않도록 350ms 안전 여백과 부드러운 페이드아웃 적용"""
     try:
         lead = detect_leading_silence(seg, silence_threshold=threshold)
         trail = detect_leading_silence(seg.reverse(), silence_threshold=threshold)
-        trimmed = seg[lead:max(lead, len(seg) - trail)]
+        safe_trail = max(0, trail - 350)
+        end_idx = max(lead, len(seg) - safe_trail)
+        trimmed = seg[lead:end_idx]
+        if len(trimmed) > 100:
+            trimmed = trimmed.fade_out(50)
         return trimmed if len(trimmed) >= 100 else seg
     except Exception:
         return seg

@@ -292,6 +292,103 @@ class SparringTrainingEngine:
         return exercises
 
     @classmethod
+    def _add_stop_signal_event(
+        cls,
+        events: List[Dict[str, Any]],
+        duck_segments: List[Tuple[int, int]],
+        curr_time: float,
+        stop_signal: str,
+        label: str = "종료"
+    ) -> float:
+        """
+        Appends the selected stop signal event (referee voice or sound effect)
+        and returns the elapsed time offset for the next sequence.
+        Note: Sound effects (whistle, beep, bell) do NOT duck music to keep background music natural and smooth.
+        """
+        stop_sig = str(stop_signal or "voice_kalyeo").strip()
+        if stop_sig == "voice_kalyeo":
+            events.append({
+                "time": curr_time,
+                "type": "voice",
+                "text": f"[{label}] 갈려!",
+                "duration": 0.7,
+                "track": 2,
+                "vol": 2.8
+            })
+            if duck_segments is not None:
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+            return 0.8
+        elif stop_sig == "voice_stop":
+            events.append({
+                "time": curr_time,
+                "type": "voice",
+                "text": f"[{label}] 중지!",
+                "duration": 0.7,
+                "track": 2,
+                "vol": 2.8
+            })
+            if duck_segments is not None:
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+            return 0.8
+        elif stop_sig == "voice_end":
+            events.append({
+                "time": curr_time,
+                "type": "voice",
+                "text": f"[{label}] 그만!",
+                "duration": 0.7,
+                "track": 2,
+                "vol": 2.8
+            })
+            if duck_segments is not None:
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+            return 0.8
+        elif stop_sig == "whistle":
+            events.append({
+                "time": curr_time,
+                "type": "signal",
+                "text": f"[{label}] 심판 호각",
+                "sound_file": os.path.join("effects", "whistle.wav"),
+                "duration": 0.35,
+                "track": 1,
+                "vol": 3.0
+            })
+            return 0.5
+        elif stop_sig == "beep":
+            events.append({
+                "time": curr_time,
+                "type": "signal",
+                "text": f"[{label}] 비프음",
+                "sound_file": os.path.join("effects", "beep.wav"),
+                "duration": 0.25,
+                "track": 1,
+                "vol": 3.0
+            })
+            return 0.5
+        elif stop_sig == "bell":
+            events.append({
+                "time": curr_time,
+                "type": "bell",
+                "text": f"[{label}] 경기장 벨소리",
+                "sound_file": os.path.join("effects", "stage_bell.wav"),
+                "duration": 0.8,
+                "track": 1,
+                "vol": 2.5
+            })
+            return 0.8
+        else: # 기본값 갈려
+            events.append({
+                "time": curr_time,
+                "type": "voice",
+                "text": f"[{label}] 갈려!",
+                "duration": 0.7,
+                "track": 2,
+                "vol": 2.8
+            })
+            if duck_segments is not None:
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
+            return 0.8
+
+    @classmethod
     def _generate_circuit_schedule(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generates functional circuit interval schedule (HIIT / Tabata / Combat intervals).
@@ -451,17 +548,16 @@ class SparringTrainingEngine:
 
             # (E) 세트 종료 및 휴식 구간
             is_final_set = (s == total_sets)
-            if not is_final_set:
-                events.append({
-                    "time": curr_time,
-                    "type": "bell",
-                    "text": f"[{s}세트 종료] 갈려! 휴식!",
-                    "sound_file": os.path.join("effects", "stage_bell.wav"),
-                    "duration": 0.8,
-                    "track": 1,
-                    "vol": 2.2
-                })
+            stop_sig = params.get("stop_signal", "voice_kalyeo")
+            delta = cls._add_stop_signal_event(
+                events=events,
+                duck_segments=duck_segments,
+                curr_time=curr_time,
+                stop_signal=stop_sig,
+                label=f"{s}세트 종료" if not is_final_set else "최종 세트 종료"
+            )
 
+            if not is_final_set:
                 if lang == "mix_kids":
                     rest_ment = "릴랙스 휴식! 딥 브레스 쉬고 다음 동작 웨이트!"
                 elif lang == "dual_step":
@@ -473,7 +569,7 @@ class SparringTrainingEngine:
 
                 r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
                 events.append({
-                    "time": curr_time + 0.4,
+                    "time": curr_time + delta + 0.3,
                     "type": "voice",
                     "text": f"[휴식] {rest_ment}",
                     "duration": r_dur,
@@ -482,16 +578,7 @@ class SparringTrainingEngine:
                 })
                 curr_time += rest_sec
             else:
-                events.append({
-                    "time": curr_time,
-                    "type": "bell",
-                    "text": "[최종 세트 종료] 훈련 완료!",
-                    "sound_file": os.path.join("effects", "stage_bell.wav"),
-                    "duration": 1.2,
-                    "track": 1,
-                    "vol": 2.5
-                })
-                curr_time += 1.0
+                curr_time += delta + 0.5
 
         # 4. 전체 훈련 완료 멘트
         if lang == "mix_kids":
@@ -737,7 +824,18 @@ class SparringTrainingEngine:
 
                     curr_time += strike_sec
 
-                    # 4. 선수 교대 안내: 신호음(벨)이 아니라 "또렷한 음성"으로 교대 방송!
+                    # 4. 타격 종료 신호 (갈려 / 중지 / 그만 / 비프음 / 휘슬 중 선택)
+                    stop_sig = params.get("stop_signal", "voice_kalyeo")
+                    delta = cls._add_stop_signal_event(
+                        events=events,
+                        duck_segments=duck_segments,
+                        curr_time=curr_time,
+                        stop_signal=stop_sig,
+                        label="타격 종료"
+                    )
+                    curr_time += delta + 0.4  # 종료 신호 후 0.4초 호흡 대기
+
+                    # 5. 선수 교대 안내: 종료 신호 후 또렷한 음성으로 교대 방송!
                     is_last_fighter = (c == cycles and f == fighters_count)
                     if not is_last_fighter:
                         if fighters_count == 2:
@@ -917,29 +1015,30 @@ class SparringTrainingEngine:
                 curr_time += recovery_time
                 cue_count += 1
 
-            # 훈련 종료
-            events.append({
-                "time": curr_time + 0.5,
-                "type": "bell",
-                "text": "[종료 벨] 훈련 종료!",
-                "sound_file": os.path.join("effects", "stage_bell.wav"),
-                "duration": 1.2,
-                "track": 2,
-                "vol": 1.5
-            })
+            # 훈련 종료 신호 (갈려 / 중지 / 그만 / 차임벨 / 휘슬 / 비프)
+            stop_sig = params.get("stop_signal", "voice_kalyeo")
+            delta = cls._add_stop_signal_event(
+                events=events,
+                duck_segments=duck_segments,
+                curr_time=curr_time + 0.3,
+                stop_signal=stop_sig,
+                label="훈련 종료"
+            )
+            curr_time += 0.3 + delta + 0.5
+
             default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
             outro_text = params.get("outro_text", default_outro).strip() or default_outro
             outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
             events.append({
-                "time": curr_time + 1.8,
+                "time": curr_time,
                 "type": "voice",
                 "text": f"[훈련 종료] {outro_text}",
                 "duration": outro_dur,
                 "track": 2,
                 "vol": 2.5
             })
-            duck_segments.append((int((curr_time + 1.8) * 1000), int((curr_time + 1.8 + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + 1.8 + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
+            duck_segments.append((int(curr_time * 1000), int((curr_time + outro_dur + 0.5) * 1000)))
+            total_duration_sec = curr_time + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
 
         # ── Mode 3: 스텝 + 콤비네이션 연타 인터벌 ──
         elif mode == "combo":
@@ -1010,74 +1109,14 @@ class SparringTrainingEngine:
                 curr_time += combo_sec
 
                 # 4. 연타 종료 신호 (갈려 / 중지 / 그만 / 비프음 / 휘슬 중 선택)
-                if stop_signal == "voice_kalyeo":
-                    events.append({
-                        "time": curr_time,
-                        "type": "voice",
-                        "text": "[연타 종료] 갈려!",
-                        "duration": 0.7,
-                        "track": 2,
-                        "vol": 2.8
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
-                    curr_time += 0.8
-                elif stop_signal == "voice_stop":
-                    events.append({
-                        "time": curr_time,
-                        "type": "voice",
-                        "text": "[연타 종료] 중지!",
-                        "duration": 0.7,
-                        "track": 2,
-                        "vol": 2.8
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
-                    curr_time += 0.8
-                elif stop_signal == "voice_end":
-                    events.append({
-                        "time": curr_time,
-                        "type": "voice",
-                        "text": "[연타 종료] 그만!",
-                        "duration": 0.7,
-                        "track": 2,
-                        "vol": 2.8
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
-                    curr_time += 0.8
-                elif stop_signal == "beep":
-                    events.append({
-                        "time": curr_time,
-                        "type": "signal",
-                        "text": "[연타 종료] 비프음",
-                        "sound_file": os.path.join("effects", "beep.wav"),
-                        "duration": 0.25,
-                        "track": 1,
-                        "vol": 3.0
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
-                    curr_time += 0.5
-                elif stop_signal == "whistle":
-                    events.append({
-                        "time": curr_time,
-                        "type": "signal",
-                        "text": "[연타 종료] 심판 호각",
-                        "sound_file": os.path.join("effects", "whistle.wav"),
-                        "duration": 0.35,
-                        "track": 1,
-                        "vol": 3.0
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
-                    curr_time += 0.5
-                else:  # 기본값 갈려
-                    events.append({
-                        "time": curr_time,
-                        "type": "voice",
-                        "text": "[연타 종료] 갈려!",
-                        "duration": 0.7,
-                        "track": 2,
-                        "vol": 2.8
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 0.8) * 1000)))
-                    curr_time += 0.8
+                delta = cls._add_stop_signal_event(
+                    events=events,
+                    duck_segments=duck_segments,
+                    curr_time=curr_time,
+                    stop_signal=stop_signal,
+                    label="연타 종료"
+                )
+                curr_time += delta
 
                 # 세트 간 자연스러운 호흡 텀 (1.0초)
                 curr_time += 1.0
@@ -1157,40 +1196,41 @@ class SparringTrainingEngine:
 
                 curr_time += round_sec
 
-                # 라운드 종료 공(Gong/Bell)
-                events.append({
-                    "time": curr_time,
-                    "type": "bell",
-                    "text": f"[{r}라운드 종료] 갈려! 타임!",
-                    "sound_file": os.path.join("effects", "stage_bell.wav"),
-                    "duration": 1.2,
-                    "track": 2,
-                    "vol": 2.0
-                })
+                # 라운드 종료 신호 (갈려 / 중지 / 그만 / 경기장 벨 / 휘슬 / 비프)
+                stop_sig = params.get("stop_signal", "voice_kalyeo")
+                delta = cls._add_stop_signal_event(
+                    events=events,
+                    duck_segments=duck_segments,
+                    curr_time=curr_time,
+                    stop_signal=stop_sig,
+                    label=f"{r}라운드 종료"
+                )
+                curr_time += delta + 0.4
 
                 if r < total_rounds:
                     # 휴식 멘트
                     events.append({
-                        "time": curr_time + 1.2,
+                        "time": curr_time,
                         "type": "voice",
                         "text": f"휴식 {int(rest_sec)}초입니다. 물 마시고 숨 고르세요.",
                         "duration": 3.0,
                         "track": 2,
                         "vol": 1.5
                     })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 4.5) * 1000)))
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + 3.2) * 1000)))
                     curr_time += rest_sec
                 else:
                     # 최종 경기 종료
                     events.append({
-                        "time": curr_time + 1.5,
+                        "time": curr_time + 0.5,
                         "type": "voice",
                         "text": "[훈련 종료] 경기 종료! 수고하셨습니다! 양 선수 마주보고 차렷, 경례!",
                         "duration": 3.5,
                         "track": 2,
                         "vol": 2.0
                     })
-                    curr_time += 4.0
+                    duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 4.0) * 1000)))
+                    curr_time += 4.5
 
             total_duration_sec = curr_time + 3.0
 
