@@ -113,6 +113,9 @@ class ShuttleRunWorker(QThread):
             voice_durations = {}
             voice_files = {}
             voice_texts = {}
+            outro_voice_file = None
+            outro_voice_dur = 0.0
+            outro_voice_text = ""
             os.makedirs(os.path.join("projects", "temp_tts"), exist_ok=True)
 
             is_female = "여성" in voice_speaker or "선히" in voice_speaker
@@ -389,6 +392,74 @@ class ShuttleRunWorker(QThread):
                         voice_files[st] = v_path
                         voice_texts[st] = text
 
+                # D. 셔틀런 완주 종료 안내 방송 (아웃트로 멘트) 생성
+                self.progress.emit(52, "셔틀런 완주 및 종료 안내 멘트 생성 중...")
+                if cue_style in ("en_level", "en_num"):
+                    outro_text = "Target stage complete! Shuttle run test finished. Excellent work everyone, catch your breath and rest!"
+                    outro_voice = en_voice
+                elif cue_style == "dan":
+                    outro_text = f"목표 {target_stages}단 완주! 모든 셔틀런 측정이 종료되었습니다. 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으세요."
+                    outro_voice = voice_id
+                else:
+                    outro_text = f"목표 {target_stages}단계 완주! 모든 셔틀런 측정이 종료되었습니다. 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으세요."
+                    outro_voice = voice_id
+
+                safe_outro_name = f"outro_{outro_voice}_{abs(hash(outro_text))}.wav"
+                cached_outro_path = os.path.join(cue_cache_dir, safe_outro_name)
+                outro_v_path = os.path.join("projects", "temp_tts", f"shuttle_outro_{uuid.uuid4().hex[:6]}.wav")
+
+                outro_generated = False
+                if os.path.exists(cached_outro_path) and os.path.getsize(cached_outro_path) > 1000:
+                    import shutil
+                    shutil.copy(cached_outro_path, outro_v_path)
+                    outro_generated = True
+                else:
+                    for attempt in range(3):
+                        try:
+                            async def _gen_outro(t, v, p):
+                                comm = edge_tts.Communicate(t, v, rate="+10%")
+                                buf = io.BytesIO()
+                                async for chunk in comm.stream():
+                                    if chunk['type'] == 'audio':
+                                        buf.write(chunk['data'])
+                                buf.seek(0)
+                                raw_seg = AudioSegment.from_file(buf, format="mp3")
+                                trimmed_seg = trim_audio_silence(raw_seg)
+                                trimmed_seg.export(p, format="wav")
+
+                            asyncio.run(_gen_outro(outro_text, outro_voice, outro_v_path))
+                            if os.path.exists(outro_v_path) and os.path.getsize(outro_v_path) > 500:
+                                outro_generated = True
+                                import shutil
+                                shutil.copy(outro_v_path, cached_outro_path)
+                                break
+                        except Exception as e_outro:
+                            print(f"[Shuttle] Outro Edge-TTS fail (attempt {attempt+1}): {e_outro}")
+                            import time
+                            time.sleep(0.2)
+
+                    if not outro_generated and os.name == 'posix':
+                        try:
+                            import subprocess
+                            tmp_aiff = outro_v_path.replace(".wav", ".aiff")
+                            say_voice = "Yuna" if "ko" in outro_voice else "Samantha"
+                            res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, outro_text], check=False, timeout=6)
+                            if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                seg.export(outro_v_path, format="wav")
+                                if os.path.exists(tmp_aiff):
+                                    os.remove(tmp_aiff)
+                                outro_generated = True
+                                import shutil
+                                shutil.copy(outro_v_path, cached_outro_path)
+                        except Exception as e_say:
+                            print(f"[Shuttle] Outro say fallback fail: {e_say}")
+
+                if outro_generated and os.path.exists(outro_v_path):
+                    outro_voice_file = outro_v_path
+                    outro_voice_dur = len(AudioSegment.from_file(outro_v_path)) / 1000.0
+                    outro_voice_text = outro_text
+
             # 3. 셔틀런 단계별 타임스탬프 계산
             # 순서: [준비 안내] ➔ [카운트다운: 쓰리, 투, 원] ➔ (1초 딜레이) ➔ [1단계 구령] ➔ [첫 출발 신호음]
             self.progress.emit(55, "정밀 생체역학 및 비중복 순차 인터벌 스케줄 계산 중...")
@@ -519,12 +590,29 @@ class ShuttleRunWorker(QThread):
                         e_ms = s_ms + int(sig_dur * 1000) + 120
                         duck_segments.append((s_ms, e_ms))
 
+            # E. 셔틀런 완주 후 종료 안내 멘트 클립 배치 (스샷 2번 종료 멘트 부재 해결)
+            last_beep_end = schedule[-1]["stage_end_sec"]
+            if outro_voice_file and os.path.exists(outro_voice_file):
+                outro_time = round(last_beep_end + 1.2, 2)
+                timeline_clips.append({
+                    "text": f"[훈련 종료] {outro_voice_text}",
+                    "file": outro_voice_file,
+                    "time": outro_time,
+                    "duration": outro_voice_dur,
+                    "track": voice_track,
+                    "vol": voice_vol_db
+                })
+                if duck_mode in ("voice_only", "all") and auto_ducking:
+                    duck_segments.append((int(outro_time * 1000), int((outro_time + outro_voice_dur + 0.3) * 1000)))
+                total_duration_sec = round(outro_time + outro_voice_dur + 3.0, 2)
+            else:
+                total_duration_sec = round(last_beep_end + 5.0, 2)
+
             # 클립들을 시간 순서대로 정렬 (타임라인 상 논리적 순서 보장)
             timeline_clips.sort(key=lambda x: x["time"])
 
             # 6. BGM 트랙 준비 및 길이 맞춤 (다중 BGM 크로스페이드 & 루핑)
             self.progress.emit(75, "배경음악(BGM) 믹싱 및 오토 덕킹 처리 중...")
-            total_duration_sec = schedule[-1]["stage_end_sec"] + 5.0
             total_duration_ms = int(total_duration_sec * 1000)
 
             bgm_clip_path = ""

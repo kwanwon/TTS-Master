@@ -15,7 +15,7 @@ import asyncio
 import math
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QSpinBox, QDoubleSpinBox, QCheckBox, QFileDialog, QMessageBox, QComboBox,
     QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTextEdit, QTabWidget, QApplication, QSlider
 )

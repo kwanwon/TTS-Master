@@ -1,6 +1,6 @@
 {
-  "version": "1.5.6",
+  "version": "1.5.7",
   "release_date": "2026-10-03",
   "app_name": "AIMaster_TTS",
-  "description": "셔틀런 단계 전환 안내 멘트를 이전 단계 마지막 비프와 다음 단계 첫 비프 사이의 정중간에 대칭 배치하여 자연스러운 간격 형성, macOS 네이티브 파일 선택창 복원으로 바탕화면(Desktop) 등 모든 폴더의 BGM 및 음원 파일 완벽 탐색 지원"
+  "description": "스파링 마법사 QGridLayout 참조 누락 오류 수정, 셔틀런 목표 단계 완주 후 축하 및 휴식 종료 안내 멘트(아웃트로) 정식 탑재"
 }
