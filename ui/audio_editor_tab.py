@@ -458,25 +458,58 @@ class AudioEditorTab(QWidget):
         if not os.path.exists(self.auto_mix_path):
             QMessageBox.information(self, "알림", "타임라인에 재생할 클립이 없습니다.")
             return
-            
+
+        if not pygame.mixer.get_init():
+            try:
+                pygame.mixer.init()
+            except Exception as e:
+                QMessageBox.warning(self, "오디오 장치 오류", f"사운드 장치를 초기화할 수 없습니다: {e}")
+                return
+
+        # 타임라인 끝에 도달한 상태에서 재생을 누르면 처음(0.0초)부터 다시 재생
+        if self.bgm_length > 0 and self.current_time >= self.bgm_length - 0.2:
+            self.current_time = 0.0
+            self.update_ui_time()
+            self.timeline_view.set_playhead_time(0.0)
+
+        # 일시정지 상태에서 재개 시 unpause 처리
+        if getattr(self, 'is_paused', False) and pygame.mixer.music.get_busy():
+            try:
+                pygame.mixer.music.unpause()
+                self.is_playing = True
+                self.is_paused = False
+                self.play_start_time = time.time()
+                self.play_start_offset = self.current_time
+                self.timer.start(50)
+                return
+            except Exception:
+                pass
+
         if not self.is_playing:
-            pygame.mixer.music.load(self.auto_mix_path)
-            # Pygame music start offset은 초 단위로 동작
-            pygame.mixer.music.play(start=self.current_time)
-            self.is_playing = True
-            self.play_start_time = time.time()
-            self.play_start_offset = self.current_time
-            self.timer.start(50)
-            
+            try:
+                pygame.mixer.music.load(self.auto_mix_path)
+                pygame.mixer.music.set_volume(1.0)
+                # Pygame music start offset은 초 단위로 동작
+                pygame.mixer.music.play(start=self.current_time)
+                self.is_playing = True
+                self.is_paused = False
+                self.play_start_time = time.time()
+                self.play_start_offset = self.current_time
+                self.timer.start(50)
+            except Exception as e:
+                QMessageBox.warning(self, "재생 실패", f"오디오를 재생할 수 없습니다:\n{e}")
+
     def pause_timeline(self):
         if self.is_playing:
             pygame.mixer.music.pause()
             self.is_playing = False
+            self.is_paused = True
             self.timer.stop()
-        
+
     def stop_timeline(self):
         pygame.mixer.music.stop()
         self.is_playing = False
+        self.is_paused = False
         self.timer.stop()
         self.current_time = 0.0
         self.update_ui_time()
@@ -847,11 +880,22 @@ class AudioEditorTab(QWidget):
                         c["duration"]
                     )
 
-                # 플레이어 길이 및 믹싱 트리거
+                # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
                 self.update_ui_time()
-                self.trigger_auto_mix()
+
+                master_path = res.get("master_audio_path", "")
+                if master_path and os.path.exists(master_path):
+                    import shutil
+                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
+                    try:
+                        shutil.copy(master_path, self.auto_mix_path)
+                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
+                    except Exception:
+                        self.trigger_auto_mix()
+                else:
+                    self.trigger_auto_mix()
                 
                 layout_info = "트랙 1: 배경음악(BGM) | 트랙 2: 훈련 트랙 (신호음+구령 순차 정렬)" if res.get("track_layout") == "single" else "트랙 1: 배경음악(BGM) | 트랙 2: 신호음 | 트랙 3: 음성 구령"
                 QMessageBox.information(
@@ -898,11 +942,22 @@ class AudioEditorTab(QWidget):
                         c["duration"]
                     )
 
-                # 플레이어 길이 및 믹싱 트리거
+                # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
                 self.update_ui_time()
-                self.trigger_auto_mix()
+
+                master_path = res.get("master_audio_path", "")
+                if master_path and os.path.exists(master_path):
+                    import shutil
+                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
+                    try:
+                        shutil.copy(master_path, self.auto_mix_path)
+                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
+                    except Exception:
+                        self.trigger_auto_mix()
+                else:
+                    self.trigger_auto_mix()
                 
                 mode_name = res.get("mode_name", "스파링 훈련")
                 QMessageBox.information(
@@ -948,11 +1003,22 @@ class AudioEditorTab(QWidget):
                         c["duration"]
                     )
 
-                # 플레이어 길이 및 믹싱 트리거
+                # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
                 self.update_ui_time()
-                self.trigger_auto_mix()
+
+                master_path = res.get("master_audio_path", "")
+                if master_path and os.path.exists(master_path):
+                    import shutil
+                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
+                    try:
+                        shutil.copy(master_path, self.auto_mix_path)
+                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
+                    except Exception:
+                        self.trigger_auto_mix()
+                else:
+                    self.trigger_auto_mix()
 
                 routine_name = res.get("routine_name", "준비운동")
                 QMessageBox.information(

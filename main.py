@@ -47,6 +47,17 @@ try:
 except Exception as e:
     print(f"[Init] ffmpeg setup warning: {e}")
 
+# SSL 루트 인증서 경로 설정 (PyInstaller macOS 환경에서 Edge-TTS / HTTPS 통신 오류 원천 차단)
+try:
+    import certifi
+    ca_bundle = certifi.where()
+    if os.path.exists(ca_bundle):
+        os.environ["SSL_CERT_FILE"] = ca_bundle
+        os.environ["REQUESTS_CA_BUNDLE"] = ca_bundle
+        print(f"[Init] SSL CA bundle configured: {ca_bundle}")
+except Exception as e_cert:
+    print(f"[Init] certifi setup warning: {e_cert}")
+
 try:
     os.makedirs(APP_DATA_DIR, exist_ok=True)
     os.makedirs(os.path.join(APP_DATA_DIR, "projects", "temp_tts"), exist_ok=True)

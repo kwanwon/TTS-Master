@@ -91,6 +91,9 @@ class SparringWorker(QThread):
             en_voice = "en-US-JennyNeural" if is_female else "en-US-GuyNeural"
 
             # 2-1. 카운트다운 오디오 준비 (영어 본토 발음 및 한국어 지원)
+            sparring_cache_dir = os.path.join("projects", "temp_tts", "sparring_cache")
+            os.makedirs(sparring_cache_dir, exist_ok=True)
+
             countdown_events = [ev for ev in events if ev["type"] == "countdown"]
             if countdown_events:
                 cd_style = self.params.get("countdown_style", "en_321")
@@ -101,14 +104,35 @@ class SparringWorker(QThread):
                     silence_gap = AudioSegment.silent(duration=1500)
                     segs = []
                     for w in words:
-                        comm = edge_tts.Communicate(w, voice, rate=rate)
-                        buf = io.BytesIO()
-                        async for chunk in comm.stream():
-                            if chunk['type'] == 'audio':
-                                buf.write(chunk['data'])
-                        buf.seek(0)
-                        s = trim_audio_silence(AudioSegment.from_file(buf, format="mp3"))
-                        segs.append(s)
+                        seg = None
+                        for attempt in range(3):
+                            try:
+                                comm = edge_tts.Communicate(w, voice, rate=rate)
+                                buf = io.BytesIO()
+                                async for chunk in comm.stream():
+                                    if chunk['type'] == 'audio':
+                                        buf.write(chunk['data'])
+                                buf.seek(0)
+                                s = trim_audio_silence(AudioSegment.from_file(buf, format="mp3"))
+                                seg = s
+                                break
+                            except Exception:
+                                await asyncio.sleep(0.15)
+                        if seg is None and os.name == 'posix':
+                            try:
+                                import subprocess
+                                tmp_aiff = os.path.join("projects", "temp_tts", f"sparring_cd_word_{uuid.uuid4().hex[:4]}.aiff")
+                                say_voice = "Yuna" if any(ord(c) >= 0xAC00 and ord(c) <= 0xD7A3 for c in w) else "Samantha"
+                                res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, w], check=False, timeout=5)
+                                if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                    if os.path.exists(tmp_aiff):
+                                        os.remove(tmp_aiff)
+                            except Exception:
+                                pass
+                        if seg is None:
+                            seg = AudioSegment.silent(duration=400)
+                        segs.append(seg)
                     full = segs[0]
                     for s in segs[1:]:
                         full = full + silence_gap + s
@@ -128,7 +152,7 @@ class SparringWorker(QThread):
                             full_seg = await _synth_stepped_cd(["Are you ready? Ready!", "Three", "Two", "One"], en_voice, rate="+5%")
                             full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
-                        if os.path.exists(cd_path):
+                        if os.path.exists(cd_path) and os.path.getsize(cd_path) > 500:
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
@@ -141,7 +165,7 @@ class SparringWorker(QThread):
                             full_seg = await _synth_stepped_cd(["준비되었나요? 준비!", "셋", "둘", "하나"], voice_id, rate="+5%")
                             full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
-                        if os.path.exists(cd_path):
+                        if os.path.exists(cd_path) and os.path.getsize(cd_path) > 500:
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
@@ -154,7 +178,7 @@ class SparringWorker(QThread):
                             full_seg = await _synth_stepped_cd(["셋", "둘", "하나"], voice_id, rate="+5%")
                             full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
-                        if os.path.exists(cd_path):
+                        if os.path.exists(cd_path) and os.path.getsize(cd_path) > 500:
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
@@ -167,10 +191,18 @@ class SparringWorker(QThread):
                             full_seg = await _synth_stepped_cd(["Three", "Two", "One"], en_voice, rate="+5%")
                             full_seg.export(cd_path, format="wav")
                         asyncio.run(_synth_cd())
-                        if os.path.exists(cd_path):
+                        if os.path.exists(cd_path) and os.path.getsize(cd_path) > 500:
                             cd_file = cd_path
                     except Exception as e_cd:
                         print(f"[SparringWorker] countdown TTS fail: {e_cd}")
+
+                # 최종 폴백: 실패 시 비프음 카운트다운 에셋으로 무음 방지
+                if not cd_file or not os.path.exists(cd_file):
+                    cd_beeps = os.path.join("effects", "countdown_beeps.wav")
+                    if os.path.exists(cd_beeps):
+                        cd_file = cd_beeps
+                    else:
+                        cd_file = os.path.join("effects", "countdown.wav")
 
                 if cd_file and os.path.exists(cd_file):
                     dur = len(AudioSegment.from_file(cd_file)) / 1000.0
@@ -236,43 +268,79 @@ class SparringWorker(QThread):
                         continue
 
                     v_path = os.path.join("projects", "temp_tts", f"sparring_v_{uuid.uuid4().hex[:6]}.wav")
-                    try:
-                        import edge_tts
-                        import io
-                        import re
+                    import re
+                    has_korean = bool(re.search(r'[가-힣]', clean_text))
+                    has_english = bool(re.search(r'[a-zA-Z]', clean_text))
+                    target_voice = en_voice if (has_english and not has_korean) else voice_id
+                    rate_val = "+10%" if (has_english and not has_korean) else "+0%"
 
-                        # 텍스트가 영문 전용(한글 미포함)일 경우 미국 본토 원어민 성우(en_voice) 적용!
-                        has_korean = bool(re.search(r'[가-힣]', clean_text))
-                        has_english = bool(re.search(r'[a-zA-Z]', clean_text))
-                        target_voice = en_voice if (has_english and not has_korean) else voice_id
-                        rate_val = "+10%" if (has_english and not has_korean) else "+0%"
+                    synth_text = clean_text
+                    if "갈려" in clean_text and not clean_text.endswith("~!"):
+                        synth_text = clean_text.replace("갈려!", "갈~려!").replace("갈려", "갈~려")
 
-                        synth_text = clean_text
-                        if "갈려" in clean_text and not clean_text.endswith("~!"):
-                            synth_text = clean_text.replace("갈려!", "갈~려!").replace("갈려", "갈~려")
+                    safe_cue_name = f"sp_{target_voice}_{abs(hash(synth_text))}.wav"
+                    cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
-                        async def _synth(t, v, path):
-                            comm = edge_tts.Communicate(t, v, rate=rate_val)
-                            buf = io.BytesIO()
-                            async for chunk in comm.stream():
-                                if chunk['type'] == 'audio':
-                                    buf.write(chunk['data'])
-                            buf.seek(0)
-                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                            trimmed_seg = trim_audio_silence(raw_seg)
-                            trimmed_seg.export(path, format="wav")
+                    generated = False
+                    if os.path.exists(cached_cue_path) and os.path.getsize(cached_cue_path) > 500:
+                        import shutil
+                        shutil.copy(cached_cue_path, v_path)
+                        generated = True
+                    else:
+                        for attempt in range(3):
+                            try:
+                                import edge_tts
+                                import io
 
-                        asyncio.run(_synth(synth_text, target_voice, v_path))
-                        if os.path.exists(v_path):
-                            v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
-                            voice_cache[clean_text] = {"file": v_path, "duration": v_dur}
-                            ev["sound_file"] = v_path
-                            ev["duration"] = v_dur
-                    except Exception as e:
-                        print(f"[SparringWorker] TTS synth fail for '{clean_text}': {e}")
-                        # Fallback to beep if TTS fails
+                                async def _synth(t, v, path):
+                                    comm = edge_tts.Communicate(t, v, rate=rate_val)
+                                    buf = io.BytesIO()
+                                    async for chunk in comm.stream():
+                                        if chunk['type'] == 'audio':
+                                            buf.write(chunk['data'])
+                                    buf.seek(0)
+                                    raw_seg = AudioSegment.from_file(buf, format="mp3")
+                                    trimmed_seg = trim_audio_silence(raw_seg)
+                                    trimmed_seg.export(path, format="wav")
+
+                                asyncio.run(_synth(synth_text, target_voice, v_path))
+                                if os.path.exists(v_path) and os.path.getsize(v_path) > 500:
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                                    break
+                            except Exception as e_voice:
+                                print(f"[SparringWorker] TTS attempt {attempt+1} fail for '{clean_text}': {e_voice}")
+                                import time
+                                time.sleep(0.2)
+
+                        # macOS 로컬 네이티브 음성 합성 폴백 (오프라인 및 네트워크 오류 완벽 대응)
+                        if not generated and os.name == 'posix':
+                            try:
+                                import subprocess
+                                tmp_aiff = v_path.replace(".wav", ".aiff")
+                                say_voice = "Yuna" if has_korean else "Samantha"
+                                res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, synth_text], check=False, timeout=8)
+                                if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                    seg.export(v_path, format="wav")
+                                    if os.path.exists(tmp_aiff):
+                                        os.remove(tmp_aiff)
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                            except Exception as e_say:
+                                print(f"[SparringWorker] say fallback fail: {e_say}")
+
+                    if generated and os.path.exists(v_path):
+                        v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
+                        voice_cache[clean_text] = {"file": v_path, "duration": v_dur}
+                        ev["sound_file"] = v_path
+                        ev["duration"] = v_dur
+                    else:
+                        print(f"[SparringWorker] Warning: Voice gen fallback used for '{clean_text}'")
                         ev["sound_file"] = os.path.join("effects", "beep.wav")
-                        ev["duration"] = 0.25
+                        ev["duration"] = 0.5
 
             # 2-3. 실제 오디오 실측 길이를 기반으로 동적 타임라인 체이닝 및 1.0초 정밀 딜레이 정렬
             # (사용자 요청: B선수 명칭/기술 발성 종료를 실제 오디오 길이로 확인 후 정확히 1.0초 딜레이 후 신호음 배치, 말 잘림 원천 방지)
