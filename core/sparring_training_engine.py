@@ -652,10 +652,17 @@ class SparringTrainingEngine:
             intro_text = params.get("intro_text", "").strip()
             if not intro_text:
                 if mode == "relay":
-                    cue_raw = params.get("cue_text", "백스텝 후 받아차기 교차 상단")
-                    # 여러 기술일 경우 앞부분 요약
-                    cue_first = cue_raw.split(",")[0].strip()
-                    intro_text = f"지금부터 실전 스파링 발차기 훈련을 시작합니다. 이번 훈련 기술은 '{cue_first}' 입니다. 지시하는 기술을 듣고 신호음에 맞춰 정확히 타격하세요. 모두 준비해 주세요!"
+                    f_cnt = params.get("fighters_count", 2)
+                    match_label = "1대1" if f_cnt == 2 else ("2대1" if f_cnt == 3 else f"{f_cnt-1}대1")
+                    cue_raw = params.get("cue_text", "미트 발차기")
+                    cues_list_tmp = [c.strip() for line in str(cue_raw).splitlines() for c in line.split(",") if c.strip()]
+                    if cues_list_tmp:
+                        cue_summary = cues_list_tmp[0]
+                        if len(cues_list_tmp) > 1:
+                            cue_summary += f" 외 {len(cues_list_tmp)-1}개"
+                        intro_text = f"지금부터 {match_label} 릴레이 미트 발차기 훈련을 시작합니다. 지시하는 세트별 기술을 듣고 신호음에 맞춰 정확히 타격하세요. 모두 준비해 주세요!"
+                    else:
+                        intro_text = f"지금부터 {match_label} 릴레이 미트 발차기 훈련을 시작합니다. 지시하는 기술을 듣고 신호음에 맞춰 정확히 타격하세요. 모두 준비해 주세요!"
                 elif mode == "reaction":
                     intro_text = "지금부터 실전 스파링 반응 훈련을 시작합니다. 스텝을 뛰며 기술 지시를 듣고 신호음에 맞춰 빠르고 정확하게 타격하세요. 모두 준비해 주세요!"
                 elif mode == "combo":
@@ -761,27 +768,33 @@ class SparringTrainingEngine:
             if not cues_list:
                 cues_list = ["백스텝 후 받아차기 교차 상단"]
 
-            ordinal_names = ["첫번째 선수", "두번째 선수", "세번째 선수", "네번째 선수"]
+            fighter_names = ["A선수", "B선수", "C선수", "D선수"]
 
             for c in range(1, cycles + 1):
-                for f in range(1, fighters_count + 1):
-                    # 사용자 요청: 1:2와 1:3은 첫번째 선수, 두번째 선수, 세번째 선수 호칭 적용
-                    if fighters_count == 2:
-                        fighter_name = "A선수" if f == 1 else "B선수"
-                    else:
-                        fighter_name = ordinal_names[f - 1] if f <= len(ordinal_names) else f"{f}번째 선수"
+                # 세트별 훈련 종목 결정: 동일 세트 내에서는 A, B, C 모든 선수가 같은 발차기 훈련!
+                # 등록된 기술이 여러 개일 경우 세트가 바뀔 때마다 순차적으로 다음 기술로 전환
+                current_cue = cues_list[(c - 1) % len(cues_list)]
 
-                    # 사용자 요청: 선수별로 따로 기술 지시어 매칭
-                    if len(cues_list) >= fighters_count:
-                        current_cue = cues_list[f - 1]
-                    elif len(cues_list) > 1:
-                        current_cue = cues_list[(f - 1) % len(cues_list)]
-                    else:
-                        current_cue = cues_list[0]
-                    
-                    # 1. 설명/기술 명칭 먼저 충분히 송출 (절대로 '출발' 단어 넣지 않음!)
-                    call_text = f"{fighter_name}! {current_cue}!"
-                    call_dur = max(2.0, round(len(call_text) * 0.22, 2))
+                # 1. 세트 시작 안내 (예: "1세트! 앞차기!", "2세트! 돌려차기!")
+                set_msg = f"{c}세트! {current_cue}!"
+                set_dur = max(2.0, round(len(set_msg) * 0.22, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[{c}세트 안내] {set_msg}",
+                    "duration": set_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + set_dur) * 1000)))
+                curr_time += set_dur + 0.8  # 세트 안내 후 0.8초 호흡 정렬
+
+                for f in range(1, fighters_count + 1):
+                    fighter_name = fighter_names[f - 1] if f <= len(fighter_names) else f"{f}번째 선수"
+
+                    # 2. 선수 준비 멘트 (예: "A선수 준비!", "B선수 준비!")
+                    call_text = f"{fighter_name} 준비!"
+                    call_dur = max(1.5, round(len(call_text) * 0.22, 2))
                     events.append({
                         "time": curr_time,
                         "type": "voice",
@@ -791,9 +804,9 @@ class SparringTrainingEngine:
                         "vol": 2.5
                     })
                     duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
-                    curr_time += call_dur + 1.0  # 사용자 요청: 음성 안내 완료 후 1.0초 여유 딜레이 후 신호음 배치
+                    curr_time += call_dur + 1.0  # 음성 후 1.0초 정밀 긴장 딜레이
 
-                    # 2. 설명 직후 타격 시작 신호음 (삑~익!)
+                    # 3. 타격 시작 신호음 (삑~익!)
                     events.append({
                         "time": curr_time,
                         "type": "beep",
@@ -806,7 +819,7 @@ class SparringTrainingEngine:
                     duck_segments.append((int(curr_time * 1000), int((curr_time + 0.4) * 1000)))
                     curr_time += 0.3
 
-                    # 3. 타격 시간 진행 및 마지막 3초 카운트다운/경고 비프
+                    # 4. 타격 시간 진행 및 종료 3초 전 마무리 비프음 (3-2-1)
                     if strike_sec >= 8:
                         warn_time = curr_time + strike_sec - 3.0
                         for b in range(3):
@@ -824,7 +837,7 @@ class SparringTrainingEngine:
 
                     curr_time += strike_sec
 
-                    # 4. 타격 종료 신호 (갈려 / 중지 / 그만 / 비프음 / 휘슬 중 선택)
+                    # 5. 타격 종료 신호 (갈려 / 중지 / 그만 등)
                     stop_sig = params.get("stop_signal", "voice_kalyeo")
                     delta = cls._add_stop_signal_event(
                         events=events,
@@ -835,32 +848,33 @@ class SparringTrainingEngine:
                     )
                     curr_time += delta + 0.4  # 종료 신호 후 0.4초 호흡 대기
 
-                    # 5. 선수 교대 안내: 종료 신호 후 또렷한 음성으로 교대 방송!
-                    is_last_fighter = (c == cycles and f == fighters_count)
-                    if not is_last_fighter:
-                        if fighters_count == 2:
-                            next_fighter = "B선수" if f == 1 else "A선수"
+                    # 6. 선수 교대 안내
+                    is_last_fighter_in_set = (f == fighters_count)
+                    is_last_overall = (c == cycles and is_last_fighter_in_set)
+
+                    if not is_last_overall:
+                        if not is_last_fighter_in_set:
+                            # 세트 내 다음 선수로 교대
+                            change_msg = "선수 교대!"
+                            chg_dur = 1.3
+                            events.append({
+                                "time": curr_time,
+                                "type": "voice",
+                                "text": f"[선수 교대] {change_msg}",
+                                "duration": chg_dur,
+                                "track": 2,
+                                "vol": 2.5
+                            })
+                            duck_segments.append((int(curr_time * 1000), int((curr_time + chg_dur) * 1000)))
+                            curr_time += chg_dur + change_sec
                         else:
-                            next_f_idx = (f % fighters_count) + 1
-                            next_fighter = ordinal_names[next_f_idx - 1] if next_f_idx <= len(ordinal_names) else f"{next_f_idx}번째 선수"
+                            # 세트의 마지막 선수 완료 후 다음 세트로 넘어가는 휴식/교대 대기
+                            curr_time += change_sec
 
-                        change_msg = f"선수 교대! {next_fighter} 준비!"
-                        chg_dur = max(1.8, round(len(change_msg) * 0.22, 2))
-                        events.append({
-                            "time": curr_time,
-                            "type": "voice",
-                            "text": f"[선수 교대] {change_msg}",
-                            "duration": chg_dur,
-                            "track": 2,
-                            "vol": 2.5
-                        })
-                        duck_segments.append((int(curr_time * 1000), int((curr_time + chg_dur) * 1000)))
-                        curr_time += chg_dur + change_sec
-
-            # 5. 모든 세트 종료 시 휴식 및 대기 안내 멘트 (사용자 요청: 정렬 대신 물 한잔 및 다음 지시 대기/휴식 개념 적용)
-            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            # 7. 모든 세트 종료 시 정중하고 자연스러운 마무리 멘트 (수고하셨습니다! 물 한잔 마시고 다음 준비!)
+            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
             outro_text = params.get("outro_text", default_outro).strip() or default_outro
-            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
+            outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 0.5,
                 "type": "voice",
@@ -870,7 +884,7 @@ class SparringTrainingEngine:
                 "vol": 2.5
             })
             duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0  # 마지막 음성 완전히 끝난 뒤 최소 2.0초 여유 딜레이 보장
+            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0
 
         # ── Mode 2: 스텝 & 실전 기술 반응 훈련 ──
         elif mode == "reaction":
@@ -1026,9 +1040,9 @@ class SparringTrainingEngine:
             )
             curr_time += 0.3 + delta + 0.5
 
-            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
             outro_text = params.get("outro_text", default_outro).strip() or default_outro
-            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
+            outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time,
                 "type": "voice",
@@ -1131,9 +1145,9 @@ class SparringTrainingEngine:
                 "track": 2,
                 "vol": 1.5
             })
-            default_outro = "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
             outro_text = params.get("outro_text", default_outro).strip() or default_outro
-            outro_dur = max(3.5, round(len(outro_text) * 0.22, 2))
+            outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 1.5,
                 "type": "voice",

@@ -45,6 +45,25 @@ def trim_audio_silence(seg: AudioSegment, threshold: float = -46.0) -> AudioSegm
         return seg
 
 
+def make_shuttle_filename(level: str, distance: float, target_stages: int) -> str:
+    """
+    셔틀런 난이도, 거리, 단계 수에 맞춰 직관적인 한글 파일명 생성
+    예: 초등5m_셔틀런_10단계.wav, 전문선수10m_셔틀런_20단계.wav
+    """
+    level_map = {
+        "beginner": "초급",
+        "intermediate": "초등",
+        "advanced": "전문선수",
+        "pro": "프로선수",
+        "kinder": "유치부",
+        "elementary_low": "초등",
+        "elementary_high_teen": "중고등"
+    }
+    level_name = level_map.get(level, "표준")
+    dist_int = int(distance)
+    return f"{level_name}{dist_int}m_셔틀런_{target_stages}단계.wav"
+
+
 class ShuttleRunWorker(QThread):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal(bool, str, dict)
@@ -671,9 +690,11 @@ class ShuttleRunWorker(QThread):
             except Exception:
                 pass
 
+            suggested_filename = make_shuttle_filename(level, distance, target_stages)
+            clean_base = os.path.splitext(suggested_filename)[0]
             output_master_path = os.path.join(
                 "projects", "temp_tts",
-                f"ShuttleRun_{int(distance)}m_{target_stages}stages_{uuid.uuid4().hex[:6]}.wav"
+                f"{clean_base}_{uuid.uuid4().hex[:6]}.wav"
             )
             master_canvas.export(output_master_path, format="wav")
 
@@ -682,9 +703,11 @@ class ShuttleRunWorker(QThread):
                 "schedule": schedule,
                 "timeline_clips": timeline_clips,
                 "master_audio_path": output_master_path,
+                "suggested_filename": suggested_filename,
                 "total_duration_sec": total_duration_sec,
                 "distance": distance,
-                "target_stages": target_stages
+                "target_stages": target_stages,
+                "level": level
             }
             self.finished.emit(True, "셔틀런 음원이 성공적으로 생성되었습니다.", result_data)
 
@@ -1374,9 +1397,10 @@ class ShuttleRunDialog(QDialog):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 if save_reply == QMessageBox.StandardButton.Yes:
+                    suggested = result_data.get("suggested_filename", f"실내셔틀런_{int(result_data['distance'])}m_{result_data['target_stages']}단계.wav")
                     save_path, _ = QFileDialog.getSaveFileName(
                         self, "셔틀런 음원 저장",
-                        f"실내셔틀런_{int(result_data['distance'])}m_{result_data['target_stages']}단계.wav",
+                        suggested,
                         "Audio Files (*.wav *.mp3)"
                     )
                     if save_path:

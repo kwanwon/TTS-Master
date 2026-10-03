@@ -52,6 +52,68 @@ def trim_audio_silence(seg: AudioSegment, threshold: float = -48.0) -> AudioSegm
         return seg
 
 
+def make_suggested_filename(mode: str, params: dict, duration_sec: float) -> str:
+    """
+    훈련 모드, 인원, 세트수, 기술명에 맞춰 직관적인 한글 파일명 생성
+    예: 1대1_앞차기_10세트.wav, 2대1_앞차기_돌려차기_3세트.wav
+    """
+    import re
+    dur_m = int(duration_sec // 60)
+    dur_s = int(duration_sec % 60)
+
+    if mode == "relay":
+        f_count = params.get("fighters_count", 2)
+        match_type = "1대1" if f_count == 2 else ("2대1" if f_count == 3 else f"{f_count-1}대1")
+
+        cue_raw = params.get("cue_text", "미트훈련")
+        cues_list = [c.strip() for line in str(cue_raw).splitlines() for c in line.split(",") if c.strip()]
+        if cues_list:
+            cleaned_cues = [re.sub(r'[^\w가-힣]', '', c) for c in cues_list[:2]]
+            cue_str = "_".join([c for c in cleaned_cues if c])
+        else:
+            cue_str = "미트훈련"
+        if not cue_str:
+            cue_str = "미트훈련"
+
+        cycles = params.get("cycles", 3)
+        return f"{match_type}_{cue_str}_{cycles}세트.wav"
+
+    elif mode == "reaction":
+        total_sec = params.get("duration_sec", 120.0)
+        t_m = int(total_sec // 60)
+        t_s = int(total_sec % 60)
+        time_str = f"{t_m}분" if t_s == 0 else f"{t_m}분{t_s}초"
+        return f"반응훈련_스텝카운터_{time_str}.wav"
+
+    elif mode == "combo":
+        raw_kicks = params.get("kick_types", [])
+        kick_list = [re.sub(r'[^\w가-힣]', '', k.strip()) for k in raw_kicks if k and k.strip()] if isinstance(raw_kicks, list) else [re.sub(r'[^\w가-힣]', '', k.strip()) for k in str(raw_kicks).split(",") if k.strip()]
+        kick_str = "_".join(kick_list[:2]) if kick_list else "스텝연타"
+        rounds = params.get("rounds", 3)
+        return f"콤비네이션_{kick_str}_{rounds}라운드.wav"
+
+    elif mode == "rounds":
+        rounds = params.get("rounds", 3)
+        round_sec = params.get("round_sec", 120.0)
+        r_m = int(round_sec // 60)
+        return f"정규스파링_{rounds}라운드_{r_m}분.wav"
+
+    elif mode == "circuit":
+        theme_key = params.get("theme", "power_agility")
+        theme_names = {
+            "power_agility": "대련실전낙법",
+            "agility_power_combo": "순발력민첩성",
+            "footwork_reaction_combo": "풋워크카운터",
+            "core_balance_kicks": "코어밸런스"
+        }
+        theme_str = theme_names.get(theme_key, "서킷콤보")
+        cycles = params.get("cycles", 4)
+        return f"서킷인터벌_{theme_str}_{cycles}세트.wav"
+
+    else:
+        return f"스파링훈련_{mode}_{dur_m}분{dur_s}초.wav"
+
+
 class SparringWorker(QThread):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal(bool, str, dict)
@@ -484,9 +546,11 @@ class SparringWorker(QThread):
             except Exception:
                 pass
 
+            suggested_filename = make_suggested_filename(self.mode, self.params, total_duration_sec)
+            clean_base = os.path.splitext(suggested_filename)[0]
             output_master_path = os.path.join(
                 "projects", "temp_tts",
-                f"Sparring_{self.mode}_{uuid.uuid4().hex[:6]}.wav"
+                f"{clean_base}_{uuid.uuid4().hex[:6]}.wav"
             )
             master_canvas.export(output_master_path, format="wav")
 
@@ -496,6 +560,7 @@ class SparringWorker(QThread):
                 "mode_name": SparringTrainingEngine.TRAINING_MODES.get(self.mode, {}).get("name", "스파링 훈련"),
                 "timeline_clips": timeline_clips,
                 "master_audio_path": output_master_path,
+                "suggested_filename": suggested_filename,
                 "total_duration_sec": total_duration_sec
             }
             self.finished.emit(True, "스파링 훈련 음원이 성공적으로 생성되었습니다.", result_data)
@@ -1165,17 +1230,19 @@ class SparringDialog(QDialog):
         h_outro_top = QHBoxLayout()
         h_outro_top.addWidget(QLabel("🏁 훈련 종료 멘트 (휴식/대기 안내):"))
         self.combo_outro_tmpl = QComboBox()
-        self.combo_outro_tmpl.addItem("💧 [물 한잔 & 대기] 물 한잔 마시고 호흡 가다듬으며 다음 지시 대기",
-            "훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요.")
-        self.combo_outro_tmpl.addItem("☕ [자유 휴식 & 호흡] 호흡 가다듬고 잠시 자유롭게 휴식",
-            "훈련 종료! 수고하셨습니다! 호흡 가다듬고 잠시 자유롭게 휴식하세요.")
-        self.combo_outro_tmpl.addItem("⏳ [다음 훈련 대기] 땀 닦고 물 마시며 다음 훈련을 위해 대기",
-            "훈련 종료! 모두 수고하셨습니다! 땀 닦고 물 마시며 다음 훈련을 위해 제자리에서 대기하세요.")
+        self.combo_outro_tmpl.addItem("💧 [추천] 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!",
+            "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!")
+        self.combo_outro_tmpl.addItem("🥤 [간결] 수고하셨습니다! 물 한잔 마시고 다음 준비!",
+            "수고하셨습니다! 물 한잔 마시고 다음 준비!")
+        self.combo_outro_tmpl.addItem("⏳ [호흡 & 대기] 수고하셨습니다! 호흡 가다듬고 물 마시며 다음 준비하세요!",
+            "수고하셨습니다! 호흡 가다듬고 물 마시며 다음 준비하세요!")
+        self.combo_outro_tmpl.addItem("🏁 [완전 종료] 오늘의 훈련이 모두 종료되었습니다. 수고하셨습니다!",
+            "오늘의 훈련이 모두 종료되었습니다. 수고하셨습니다!")
         self.combo_outro_tmpl.currentIndexChanged.connect(self._on_outro_tmpl_changed)
         h_outro_top.addWidget(self.combo_outro_tmpl, stretch=1)
         h_outro.addLayout(h_outro_top)
 
-        self.txt_outro_ment = QLineEdit("훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요.")
+        self.txt_outro_ment = QLineEdit("수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!")
         self.txt_outro_ment.setPlaceholderText("훈련 종료 후 송출될 휴식 및 대기 안내 멘트를 자유롭게 입력하세요")
         h_outro.addWidget(self.txt_outro_ment)
         l_common.addLayout(h_outro)
@@ -1553,9 +1620,10 @@ class SparringDialog(QDialog):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 if save_reply == QMessageBox.StandardButton.Yes:
+                    suggested = result_data.get("suggested_filename", f"스파링훈련_{result_data['mode']}_{dur_m}분{dur_s}초.wav")
                     save_path, _ = QFileDialog.getSaveFileName(
                         self, "훈련 음원 저장",
-                        f"스파링훈련_{result_data['mode']}_{dur_m}분{dur_s}초.wav",
+                        suggested,
                         "Audio Files (*.wav *.mp3)"
                     )
                     if save_path:

@@ -763,7 +763,13 @@ class AudioEditorTab(QWidget):
         if not fmt:
             fmt = "wav"
             
-        default_name = f"final_mixed.{fmt}"
+        suggested = getattr(self, 'last_suggested_filename', '')
+        if suggested:
+            base = os.path.splitext(suggested)[0]
+            default_name = f"{base}.{fmt}"
+        else:
+            default_name = f"final_mixed.{fmt}"
+
         default_full_path = os.path.join(self.last_dir, default_name) if self.last_dir else default_name
         output_file, _ = QFileDialog.getSaveFileName(
             self, "최종 믹싱 오디오 저장", default_full_path,
@@ -883,6 +889,7 @@ class AudioEditorTab(QWidget):
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
+                self.last_suggested_filename = res.get("suggested_filename", "")
                 self.update_ui_time()
 
                 master_path = res.get("master_audio_path", "")
@@ -945,6 +952,7 @@ class AudioEditorTab(QWidget):
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
+                self.last_suggested_filename = res.get("suggested_filename", "")
                 self.update_ui_time()
 
                 master_path = res.get("master_audio_path", "")
