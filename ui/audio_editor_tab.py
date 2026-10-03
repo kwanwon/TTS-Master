@@ -426,7 +426,7 @@ class AudioEditorTab(QWidget):
             
     # --- 플레이어 로직 ---
     def add_bgm_track(self):
-        path, _ = QFileDialog.getOpenFileName(self, "오디오(BGM) 추가", self.last_dir, "Audio Files (*.wav *.mp3 *.ogg *.m4a)", options=QFileDialog.Option.DontUseNativeDialog)
+        path, _ = QFileDialog.getOpenFileName(self, "오디오(BGM) 추가", self.last_dir, "Audio Files (*.wav *.mp3 *.ogg *.m4a)")
         if path:
             self.last_dir = os.path.dirname(path)
             try:
@@ -581,7 +581,7 @@ class AudioEditorTab(QWidget):
             "엔진 잠금이 강제로 해제되었습니다.\n이제 다시 TTS 생성이 가능합니다.")
 
     def add_external_asset(self):
-        path, _ = QFileDialog.getOpenFileName(self, "오디오 파일 선택", self.last_dir, "Audio Files (*.wav *.mp3 *.m4a)", options=QFileDialog.Option.DontUseNativeDialog)
+        path, _ = QFileDialog.getOpenFileName(self, "오디오 파일 선택", self.last_dir, "Audio Files (*.wav *.mp3 *.m4a)")
         if path:
             self.last_dir = os.path.dirname(path)
             self.add_asset_item(f"[효과음] {os.path.basename(path)}", path)
@@ -734,7 +734,7 @@ class AudioEditorTab(QWidget):
         default_full_path = os.path.join(self.last_dir, default_name) if self.last_dir else default_name
         output_file, _ = QFileDialog.getSaveFileName(
             self, "최종 믹싱 오디오 저장", default_full_path,
-            f"Audio Files (*.{fmt})", options=QFileDialog.Option.DontUseNativeDialog
+            f"Audio Files (*.{fmt})"
         )
         
         if output_file:

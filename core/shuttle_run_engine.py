@@ -133,13 +133,21 @@ class ShuttleRunEngine:
                 last_beep = beeps[-1]
             else:
                 # 2단계 이상:
-                # 1단계 마지막 완주 비프(last_beep)가 곧 2단계 첫 주행의 출발점(턴)입니다.
-                # 러너는 last_beep에서 턴을 하고 2단계 속도로 달리므로,
-                # 불필요한 중복 출발 비프를 울리지 않고 턴 직후 달리는 도중(약 0.35초)에 "2단계!" 멘트를 송출하며,
-                # 첫 번째 도착 비프는 정확히 last_beep + interval_sec 에 울립니다.
+                # 1단계 마지막 완주 비프(last_beep)와 2단계 첫 도착 비프(last_beep + interval_sec) 사이의
+                # 정확한 중간(center)에 "2단계!" 안내 멘트를 배치하여 스샷 3번처럼 가장 자연스러운 대칭 간격을 형성합니다.
                 stage_cue_dur = stage_cue_durations.get(s, 0.0) if stage_cue_durations else 0.0
-                cue_gap = 0.20 if distance <= 5.0 else 0.35
-                stage_cue_time = round(last_beep + cue_gap, 2) if stage_cue_dur > 0 else None
+                if stage_cue_dur > 0:
+                    center_time = last_beep + (interval_sec / 2.0)
+                    calculated_cue_time = round(center_time - (stage_cue_dur / 2.0), 2)
+                    # 앞뒤 비프음과 절대 겹치지 않도록 안전 여백 보장
+                    min_cue_time = round(last_beep + signal_duration_sec + 0.35, 2)
+                    max_cue_time = round((last_beep + interval_sec) - stage_cue_dur - 0.35, 2)
+                    if max_cue_time >= min_cue_time:
+                        stage_cue_time = max(min_cue_time, min(calculated_cue_time, max_cue_time))
+                    else:
+                        stage_cue_time = round(last_beep + max(0.2, (interval_sec - stage_cue_dur) / 2.0), 2)
+                else:
+                    stage_cue_time = None
 
                 # 2단계 이상 비프: 1회차 도착부터 num_shuttles회차 도착 비프까지 순차 배치
                 beeps = []

@@ -416,7 +416,7 @@ class SchedulerTab(QWidget):
         return panel
             
     def on_add_files(self, session):
-        files, _ = QFileDialog.getOpenFileNames(self, "음원 파일 다중 선택", "", "Audio Files (*.mp3 *.wav *.ogg *.m4a)", options=QFileDialog.Option.DontUseNativeDialog)
+        files, _ = QFileDialog.getOpenFileNames(self, "음원 파일 다중 선택", "", "Audio Files (*.mp3 *.wav *.ogg *.m4a)")
         for file in files:
             self.playlists[session].add_audio_file(file, 0.0)
             
@@ -595,8 +595,7 @@ class SchedulerTab(QWidget):
     def save_to_file(self):
         file_path, _ = QFileDialog.getSaveFileName(
             self, "스케줄 파일 저장", "",
-            "JSON Files (*.json);;All Files (*)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "JSON Files (*.json);;All Files (*)"
         )
         if file_path:
             if not os.path.splitext(file_path)[1]:
@@ -612,8 +611,7 @@ class SchedulerTab(QWidget):
     def load_from_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self, "스케줄 파일 불러오기", "",
-            "All Files (*);;JSON Files (*.json)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "All Files (*);;JSON Files (*.json)"
         )
         if file_path:
             try:

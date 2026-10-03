@@ -748,8 +748,7 @@ class WarmupDialog(QDialog):
         save_path, _ = QFileDialog.getSaveFileName(
             self, "나만의 준비운동 템플릿 저장",
             default_name,
-            "JSON Files (*.json)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "JSON Files (*.json)"
         )
         if not save_path:
             return
@@ -783,8 +782,7 @@ class WarmupDialog(QDialog):
         file_path, _ = QFileDialog.getOpenFileName(
             self, "준비운동 템플릿 불러오기",
             "",
-            "JSON Files (*.json)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "JSON Files (*.json)"
         )
         if not file_path or not os.path.exists(file_path):
             return
@@ -964,8 +962,7 @@ class WarmupDialog(QDialog):
             save_path, _ = QFileDialog.getSaveFileName(
                 self, "준비운동 완성 음원 저장",
                 f"준비운동_{data.get('routine_name', '스트레칭')}_{m}분{s}초.wav",
-                "Audio Files (*.wav *.mp3)",
-                options=QFileDialog.Option.DontUseNativeDialog
+                "Audio Files (*.wav *.mp3)"
             )
             if save_path:
                 if not os.path.splitext(save_path)[1]:

@@ -1250,8 +1250,7 @@ class SparringDialog(QDialog):
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, "배경음악(BGM) 다중 선택 (여러 곡 가능)", "",
-            "Audio Files (*.mp3 *.wav *.ogg *.m4a)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "Audio Files (*.mp3 *.wav *.ogg *.m4a)"
         )
         if file_paths:
             for fp in file_paths:
@@ -1489,8 +1488,7 @@ class SparringDialog(QDialog):
                     save_path, _ = QFileDialog.getSaveFileName(
                         self, "훈련 음원 저장",
                         f"스파링훈련_{result_data['mode']}_{dur_m}분{dur_s}초.wav",
-                        "Audio Files (*.wav *.mp3)",
-                        options=QFileDialog.Option.DontUseNativeDialog
+                        "Audio Files (*.wav *.mp3)"
                     )
                     if save_path:
                         import shutil

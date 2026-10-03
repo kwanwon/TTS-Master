@@ -1007,8 +1007,7 @@ class ShuttleRunDialog(QDialog):
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, "배경음악(BGM) 다중 선택 (여러 곡 가능)", "",
-            "Audio Files (*.mp3 *.wav *.ogg *.m4a)",
-            options=QFileDialog.Option.DontUseNativeDialog
+            "Audio Files (*.mp3 *.wav *.ogg *.m4a)"
         )
         if file_paths:
             for fp in file_paths:
@@ -1270,8 +1269,7 @@ class ShuttleRunDialog(QDialog):
                     save_path, _ = QFileDialog.getSaveFileName(
                         self, "셔틀런 음원 저장",
                         f"실내셔틀런_{int(result_data['distance'])}m_{result_data['target_stages']}단계.wav",
-                        "Audio Files (*.wav *.mp3)",
-                        options=QFileDialog.Option.DontUseNativeDialog
+                        "Audio Files (*.wav *.mp3)"
                     )
                     if save_path:
                         import shutil

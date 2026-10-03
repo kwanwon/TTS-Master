@@ -53,5 +53,8 @@ app = BUNDLE(
         'CFBundleName': 'AIMaster_TTS_Mac',
         'CFBundleIconFile': 'icon',
         'NSHighResolutionCapable': True,
+        'NSDesktopFolderUsageDescription': '배경음악 및 훈련 음원 파일을 불러오고 저장하기 위해 데스크톱 폴더 접근 권한이 필요합니다.',
+        'NSDocumentsFolderUsageDescription': '훈련 템플릿 및 음원 파일을 불러오고 저장하기 위해 문서 폴더 접근 권한이 필요합니다.',
+        'NSDownloadsFolderUsageDescription': '다운로드한 배경음악 파일을 불러오기 위해 다운로드 폴더 접근 권한이 필요합니다.',
     },
 )

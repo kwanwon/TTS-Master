@@ -940,7 +940,7 @@ class MainWindow(QMainWindow):
         current_voice = self.voice_combo.currentText()
         
         default_path = os.path.join(self.last_dir, "qwen_output.wav") if self.last_dir else "qwen_output.wav"
-        save_path, _ = QFileDialog.getSaveFileName(self, "오디오 저장", default_path, "WAV Files (*.wav)", options=QFileDialog.Option.DontUseNativeDialog)
+        save_path, _ = QFileDialog.getSaveFileName(self, "오디오 저장", default_path, "WAV Files (*.wav)")
         
         if not save_path:
             return
@@ -1003,7 +1003,7 @@ class MainWindow(QMainWindow):
             self.voice_status_lbl.setStyleSheet("color: #e67e22;")
             
     def _register_speaker(self, title, dest_filename):
-        file_path, _ = QFileDialog.getOpenFileName(self, f"{title} 파일 선택 (3~10초 분량)", self.last_dir, "Audio Files (*.wav *.m4a *.mp3 *.ogg)", options=QFileDialog.Option.DontUseNativeDialog)
+        file_path, _ = QFileDialog.getOpenFileName(self, f"{title} 파일 선택 (3~10초 분량)", self.last_dir, "Audio Files (*.wav *.m4a *.mp3 *.ogg)")
         if file_path:
             self.last_dir = os.path.dirname(file_path)
             self.auto_save_state()
