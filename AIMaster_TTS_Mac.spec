@@ -51,8 +51,7 @@ app = BUNDLE(
     info_plist={
         'CFBundleDisplayName': 'AIMaster_TTS_Mac',
         'CFBundleName': 'AIMaster_TTS_Mac',
-        'CFBundleIconFile': 'icon.icns',
-        'CFBundleIconName': 'icon',
+        'CFBundleIconFile': 'icon',
         'NSHighResolutionCapable': True,
     },
 )
