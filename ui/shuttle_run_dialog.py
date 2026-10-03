@@ -487,12 +487,19 @@ class ShuttleRunWorker(QThread):
                 sig_dur = len(signal_audio) / 1000.0
                 total_beeps = len(stage_info["beeps"])
                 for b_idx, b_time in enumerate(stage_info["beeps"]):
-                    if b_idx == 0:
-                        lbl = f"[{st}단계-출발] 신호음"
-                    elif b_idx == total_beeps - 1:
-                        lbl = f"[{st}단계-{b_idx}회 완주] 신호음"
+                    if st == 1:
+                        if b_idx == 0:
+                            lbl = f"[{st}단계-출발] 신호음"
+                        elif b_idx == total_beeps - 1:
+                            lbl = f"[{st}단계-{b_idx}회 완주] 신호음"
+                        else:
+                            lbl = f"[{st}단계-{b_idx}회] 신호음"
                     else:
-                        lbl = f"[{st}단계-{b_idx}회] 신호음"
+                        shuttle_num = b_idx + 1
+                        if shuttle_num == stage_info["shuttles"]:
+                            lbl = f"[{st}단계-{shuttle_num}회 완주] 신호음"
+                        else:
+                            lbl = f"[{st}단계-{shuttle_num}회] 신호음"
 
                     timeline_clips.append({
                         "text": lbl,

@@ -241,6 +241,298 @@ class SparringTrainingEngine:
     }
 
     @classmethod
+    def parse_custom_circuit_text(cls, text: str) -> List[Dict[str, str]]:
+        """
+        Parses customized combo routine text into structured exercise dictionaries.
+        Supports:
+          - "1번 콤보: ...", "1. ...", "[1세트] ..."
+          - Tip lines containing "지도 팁", "➔ [지도" attached to the previous combo
+          - Raw text lines
+        """
+        if not text or not text.strip():
+            return []
+
+        import re
+        lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
+        exercises = []
+        current_item = None
+
+        for line in lines:
+            # Check if this line is an instructional tip
+            if any(marker in line for marker in ["[지도 팁]", "지도 팁", "➔ [지도", "★", "※"]):
+                if current_item:
+                    tip_part = line.split(":", 1)[-1].strip() if ":" in line else line
+                    current_item["tip"] = tip_part.replace("]", "").strip()
+                continue
+
+            # Check if line starts with combo marker like '1번 콤보:', '1.', '[1세트]', '1)'
+            m = re.match(r"^(?:\[?\d+세트\]?|\d+번\s*(?:콤보)?|\d+[\.\)])\s*[:\-\.]?\s*(.+)$", line)
+            if m:
+                combo_text = m.group(1).strip()
+                if combo_text:
+                    current_item = {
+                        "kr": combo_text,
+                        "mix": combo_text,
+                        "dual": combo_text,
+                        "en": combo_text,
+                        "tip": ""
+                    }
+                    exercises.append(current_item)
+            else:
+                # Normal line without number prefix
+                current_item = {
+                    "kr": line,
+                    "mix": line,
+                    "dual": line,
+                    "en": line,
+                    "tip": ""
+                }
+                exercises.append(current_item)
+
+        return exercises
+
+    @classmethod
+    def _generate_circuit_schedule(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generates functional circuit interval schedule (HIIT / Tabata / Combat intervals).
+        Sequence:
+          [1세트]: [설명] ➔ [카운트다운: 준비 3, 2, 1] ➔ [1세트 시작 휘슬(삐익)] ➔ [운동] ➔ [휴식]
+          [2세트 이후]:
+            - single 모드: 설명 없이 바로 [준비 3, 2, 1] ➔ [시작 휘슬(삐익)] ➔ [운동] ➔ [휴식]
+            - cycle 모드: 해당 세트 콤보 호명 ➔ [준비 3, 2, 1] ➔ [시작 휘슬(삐익)] ➔ [운동] ➔ [휴식]
+        """
+        work_sec = float(params.get("work_sec", 20.0))    # 운동 시간
+        rest_sec = float(params.get("rest_sec", 10.0))    # 휴식 시간
+        total_sets = int(params.get("sets_count", 8))     # 총 세트 수
+        theme_key = params.get("theme_key", "power_agility")
+        lang = params.get("language_mode", "mix_kids")
+        circuit_mode_type = params.get("circuit_mode_type", "cycle") # "cycle" or "single"
+        custom_routine_text = params.get("custom_routine_text", "").strip()
+        intro_enabled = params.get("intro_enabled", True)
+        countdown_enabled = params.get("countdown_enabled", True)
+        cd_style = params.get("countdown_style", "en_321")
+
+        # 1. 훈련 동작 결정 (커스텀 텍스트 우선 반영)
+        theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES.get("power_agility", {}))
+        exercises = []
+        if custom_routine_text:
+            parsed = cls.parse_custom_circuit_text(custom_routine_text)
+            if parsed:
+                exercises = parsed
+        if not exercises:
+            exercises = list(theme_data.get("exercises", []))
+
+        # 단일 종목 집중 반복 모드일 경우: 첫 번째 콤보 1개로 고정
+        if circuit_mode_type == "single" and exercises:
+            exercises = [exercises[0]]
+
+        lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
+        theme_title = theme_data.get(f"name_{lang_key}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
+
+        events = []
+        duck_segments = []
+        curr_time = 1.0
+
+        # 2. 서킷 인터벌 전용 사전 안내 방송 (스파링 멘트가 아닌 서킷 전용 멘트)
+        if intro_enabled:
+            intro_text = params.get("intro_text", "").strip()
+            if not intro_text:
+                if circuit_mode_type == "single":
+                    ex0_name = exercises[0].get(lang_key, exercises[0].get("kr", ""))
+                    if lang == "mix_kids":
+                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {ex0_name}입니다. 매 세트 전력 무한 리핏! 준비해 주세요!"
+                    elif lang == "dual_step":
+                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 '{ex0_name}'입니다. 매 세트 전력 반복하세요. 준비!"
+                    elif lang in ("en", "en_advanced"):
+                        intro_text = f"Attention team! Today's focused interval theme is {theme_title}. Perform the combo loop non-stop during work intervals! Get ready!"
+                    else:
+                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 '{ex0_name}' 단일 콤보를 전 세트 동안 극한으로 반복하여 심폐지구력과 근력을 극대화합니다. 모두 준비해 주세요!"
+                else:
+                    if lang == "mix_kids":
+                        intro_text = f"지금부터 도장 파워 콤보 인터벌 스타트! 이번 테마는 {theme_title}입니다. 점프, 발차기, 롤링 낙법 콤보를 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
+                    elif lang == "dual_step":
+                        intro_text = f"지금부터 도장 실전 복합 인터벌 훈련을 시작합니다. - Functional flow interval training! 테마는 '{theme_title}'입니다. 체력, 발차기, 낙법 콤보를 무한 반복하세요. 모두 준비!"
+                    elif lang in ("en", "en_advanced"):
+                        intro_text = f"Attention team! Today's functional flow interval theme is {theme_title}. Perform the continuous combo loop non-stop during work intervals, and breathe deep during rest! Get ready!"
+                    else:
+                        intro_text = f"지금부터 도장 실전 복합 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 각 세트마다 체력, 발차기, 회전낙법이 결합된 연속 콤보를 운동 시간 동안 전력으로 쉬지 않고 무한 반복합니다. 모두 준비해 주세요!"
+
+            intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
+            events.append({
+                "time": curr_time,
+                "type": "voice",
+                "text": f"[인터벌 사전 안내] {intro_text}",
+                "duration": intro_dur,
+                "track": 2,
+                "vol": 2.5
+            })
+            curr_time += intro_dur + 0.8
+
+        cd_sound_file = os.path.join("effects", "countdown_beeps.wav") if cd_style == "beep" else os.path.join("effects", "countdown.wav")
+        cd_dur = 6.5 if "ready" in cd_style else 4.3
+
+        # 3. 세트 반복 루프
+        for s in range(1, total_sets + 1):
+            ex_idx = (s - 1) % len(exercises)
+            cur_ex = exercises[ex_idx]
+            if isinstance(cur_ex, dict):
+                ex_name = cur_ex.get(lang_key, cur_ex.get("kr", "전력 수행!"))
+            else:
+                ex_name = str(cur_ex)
+
+            # (A) 설명: 1세트는 필수, 2세트 이후는 cycle 모드일 때만 호명
+            should_explain = (s == 1) or (circuit_mode_type == "cycle")
+            if should_explain:
+                if s == 1 and circuit_mode_type == "single":
+                    call_text = f"[오늘의 집중 콤보] {ex_name}"
+                elif lang == "mix_kids":
+                    call_text = f"[{s}세트 콤보] {ex_name}"
+                elif lang == "dual_step":
+                    call_text = f"[{s}세트] {ex_name}"
+                elif lang in ("en", "en_advanced"):
+                    call_text = f"[Set {s} Flow] {ex_name}"
+                else:
+                    call_text = f"[{s}세트 복합 콤보] {ex_name}"
+
+                call_dur = max(1.8, round(len(call_text) * 0.20, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": call_text,
+                    "duration": call_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                curr_time += call_dur + 0.5
+
+            # (B) 카운트다운 (준비 3, 2, 1): 설명 바로 뒤에 배치
+            if countdown_enabled:
+                cd_label = f"[{s}세트 카운트다운] 준비 3, 2, 1"
+                events.append({
+                    "time": curr_time,
+                    "type": "countdown",
+                    "text": cd_label,
+                    "cd_style": cd_style,
+                    "sound_file": cd_sound_file,
+                    "duration": cd_dur,
+                    "track": 2,
+                    "vol": 2.2
+                })
+                curr_time += cd_dur + 0.3
+
+            # (C) 세트 시작 휘슬 (삐익~!)
+            events.append({
+                "time": curr_time,
+                "type": "whistle",
+                "text": f"[{s}세트 시작 휘슬] 삐익~!",
+                "sound_file": os.path.join("effects", "whistle.wav"),
+                "duration": 0.35,
+                "track": 1,
+                "vol": 3.0
+            })
+            curr_time += 0.4
+
+            # (D) 운동 구간 (work_sec) & 종료 3초 전 알림 비프 3회
+            if work_sec >= 7:
+                warn_time = curr_time + work_sec - 3.0
+                for b in range(3):
+                    b_t = warn_time + b * 1.0
+                    events.append({
+                        "time": b_t,
+                        "type": "beep",
+                        "text": f"[마무리 알림 {3-b}]",
+                        "sound_file": os.path.join("effects", "beep.wav"),
+                        "duration": 0.25,
+                        "track": 1,
+                        "vol": 1.5
+                    })
+
+            curr_time += work_sec
+
+            # (E) 세트 종료 및 휴식 구간
+            is_final_set = (s == total_sets)
+            if not is_final_set:
+                events.append({
+                    "time": curr_time,
+                    "type": "bell",
+                    "text": f"[{s}세트 종료] 갈려! 휴식!",
+                    "sound_file": os.path.join("effects", "stage_bell.wav"),
+                    "duration": 0.8,
+                    "track": 1,
+                    "vol": 2.2
+                })
+
+                if lang == "mix_kids":
+                    rest_ment = "릴랙스 휴식! 딥 브레스 쉬고 다음 동작 웨이트!"
+                elif lang == "dual_step":
+                    rest_ment = "휴식! 호흡 가다듬으세요. - Rest, catch your breath!"
+                elif lang in ("en", "en_advanced"):
+                    rest_ment = "Rest and breathe! Next exercise coming up!"
+                else:
+                    rest_ment = "휴식! 호흡 가다듬고 다음 세트 준비하세요."
+
+                r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
+                events.append({
+                    "time": curr_time + 0.4,
+                    "type": "voice",
+                    "text": f"[휴식] {rest_ment}",
+                    "duration": r_dur,
+                    "track": 2,
+                    "vol": 2.2
+                })
+                curr_time += rest_sec
+            else:
+                events.append({
+                    "time": curr_time,
+                    "type": "bell",
+                    "text": "[최종 세트 종료] 훈련 완료!",
+                    "sound_file": os.path.join("effects", "stage_bell.wav"),
+                    "duration": 1.2,
+                    "track": 1,
+                    "vol": 2.5
+                })
+                curr_time += 1.0
+
+        # 4. 전체 훈련 완료 멘트
+        if lang == "mix_kids":
+            final_outro = "고강도 인터벌 훈련 종료! 굿 잡! 모두 수고했습니다! 워터 물 한잔 마시고 호흡을 릴랙스 가다듬으세요!"
+        elif lang == "dual_step":
+            final_outro = "인터벌 훈련 종료! 모두 수고하셨습니다! - Great workout everyone! Drink some water and relax!"
+        elif lang in ("en", "en_advanced"):
+            final_outro = "Interval training complete! Outstanding effort team! Drink water, catch your breath, and wait for next instruction!"
+        else:
+            final_outro = "고강도 인터벌 훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+
+        outro_dur = max(3.5, round(len(final_outro) * 0.22, 2))
+        events.append({
+            "time": curr_time + 0.5,
+            "type": "voice",
+            "text": f"[훈련 종료] {final_outro}",
+            "duration": outro_dur,
+            "track": 2,
+            "vol": 2.5
+        })
+        curr_time += 0.5 + outro_dur + 1.5
+
+        # 5. 오토덕킹 구간 (비프음/신호음은 0dB 유지, 오직 음성에만 덕킹)
+        for ev in events:
+            ev_type = ev.get("type", "")
+            is_voice = (ev_type == "voice")
+            if ev_type == "countdown" and ev.get("cd_style") != "beep":
+                is_voice = True
+
+            if is_voice:
+                st_ms = int(ev["time"] * 1000)
+                dur_ms = int(ev.get("duration", 0.5) * 1000)
+                duck_segments.append((st_ms, st_ms + dur_ms + 200))
+
+        return {
+            "total_duration_sec": round(curr_time, 2),
+            "events": events,
+            "duck_segments": duck_segments
+        }
+
+    @classmethod
     def generate_training_schedule(
         cls,
         mode: str,
@@ -251,18 +543,14 @@ class SparringTrainingEngine:
         Returns:
         {
             "total_duration_sec": float,
-            "events": [
-                {
-                    "time": float,
-                    "type": "beep" | "whistle" | "voice" | "bell" | "countdown",
-                    "text": str,
-                    "sound_file": str,
-                    "track": int
-                }, ...
-            ],
+            "events": [...],
             "duck_segments": [(start_ms, end_ms), ...]
         }
         """
+        # circuit 모드는 전용 인터벌 스케줄러로 즉시 분기 (스파링 멘트/공통 카운트다운 침범 방지)
+        if mode == "circuit":
+            return cls._generate_circuit_schedule(params)
+
         events = []
         duck_segments = []
 
@@ -908,191 +1196,7 @@ class SparringTrainingEngine:
 
         # ── Mode 5: 도장 고강도 기능성 서킷 인터벌 (HIIT & Tabata) ──
         elif mode == "circuit":
-            work_sec = float(params.get("work_sec", 20.0))    # 운동 시간 (기본 20초)
-            rest_sec = float(params.get("rest_sec", 10.0))    # 휴식 시간 (기본 10초)
-            total_sets = int(params.get("sets_count", 8))     # 총 세트 수 (기본 8세트)
-            theme_key = params.get("theme_key", "power_agility")
-            lang = params.get("language_mode", "kr")          # kr / mix_kids / dual_step / en_advanced
-
-            theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES["power_agility"])
-            exercises = params.get("custom_exercises", [])
-            if not exercises:
-                exercises = theme_data["exercises"]
-
-            lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
-            theme_title = theme_data.get(f"name_{lang_key}", theme_data["name_kr"])
-
-            # 사전 안내 (복합 콤보 루프 인터벌 맞춤)
-            if intro_enabled:
-                if lang == "mix_kids":
-                    intro_text = f"지금부터 도장 파워 콤보 인터벌 스타트! 이번 테마는 {theme_title}입니다. 점프, 발차기, 롤링 낙법 콤보를 운동 시간 동안 쉼 없이 무한 리핏(Repeat)! 레스트 타임에 릴랙스! 준비해 주세요!"
-                elif lang == "dual_step":
-                    intro_text = f"지금부터 도장 실전 복합 인터벌 훈련을 시작합니다. - Functional flow interval training! 테마는 '{theme_title}'입니다. 체력, 발차기, 낙법 콤보를 무한 반복하세요. 모두 준비!"
-                elif lang in ("en", "en_advanced"):
-                    intro_text = f"Attention team! Today's functional flow interval theme is {theme_title}. Perform the continuous combo loop non-stop during work intervals, and breathe deep during rest! Get ready!"
-                else:
-                    intro_text = f"지금부터 도장 실전 복합 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 각 세트마다 체력, 발차기, 회전낙법이 결합된 연속 콤보를 운동 시간 동안 전력으로 쉬지 않고 무한 반복합니다. 모두 준비해 주세요!"
-
-                intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
-                events.append({
-                    "time": curr_time,
-                    "type": "voice",
-                    "text": f"[인터벌 사전 안내] {intro_text}",
-                    "duration": intro_dur,
-                    "track": 2,
-                    "vol": 2.5
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + intro_dur + 0.5) * 1000)))
-                curr_time += intro_dur + 1.2
-
-            # 카운트다운 (Ready, Three, Two, One)
-            if countdown_enabled:
-                cd_text = "[카운트다운] Three, Two, One"
-                cd_dur = 4.3
-                events.append({
-                    "time": curr_time,
-                    "type": "countdown",
-                    "text": cd_text,
-                    "cd_style": cd_style,
-                    "sound_file": os.path.join("effects", "countdown.wav"),
-                    "duration": cd_dur,
-                    "track": 2,
-                    "vol": 2.0
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
-                curr_time += cd_dur + 1.0
-
-            # 세트 반복 루프 (복합 콤보 무한 반복)
-            for s in range(1, total_sets + 1):
-                ex_idx = (s - 1) % len(exercises)
-                cur_ex = exercises[ex_idx]
-                if isinstance(cur_ex, dict):
-                    ex_name = cur_ex.get(lang_key, cur_ex.get("kr", "전력 수행!"))
-                else:
-                    ex_name = str(cur_ex)
-
-                # 1. 콤보 동작 호명 및 준비
-                if lang == "mix_kids":
-                    call_text = f"[{s}세트 콤보] {ex_name}"
-                elif lang == "dual_step":
-                    call_text = f"[{s}세트] {ex_name}"
-                elif lang in ("en", "en_advanced"):
-                    call_text = f"[Set {s} Flow] {ex_name}"
-                else:
-                    call_text = f"[{s}세트 복합 콤보] {ex_name}"
-
-                call_dur = max(1.8, round(len(call_text) * 0.20, 2))
-                events.append({
-                    "time": curr_time,
-                    "type": "voice",
-                    "text": call_text,
-                    "duration": call_dur,
-                    "track": 2,
-                    "vol": 2.5
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
-                curr_time += call_dur + 0.3
-
-                # 2. 운동 시작 휘슬 (삐익~!)
-                events.append({
-                    "time": curr_time,
-                    "type": "whistle",
-                    "text": f"[{s}세트 시작 휘슬] 삐익~!",
-                    "sound_file": os.path.join("effects", "whistle.wav"),
-                    "duration": 0.35,
-                    "track": 1,
-                    "vol": 3.0
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.6) * 1000)))
-                curr_time += 0.4
-
-                # 3. 운동 진행 및 종료 3초 전 카운트다운 비프
-                if work_sec >= 7:
-                    warn_time = curr_time + work_sec - 3.0
-                    for b in range(3):
-                        b_t = warn_time + b * 1.0
-                        events.append({
-                            "time": b_t,
-                            "type": "beep",
-                            "text": f"[마무리 알림 {3-b}]",
-                            "sound_file": os.path.join("effects", "beep.wav"),
-                            "duration": 0.25,
-                            "track": 1,
-                            "vol": 1.5
-                        })
-                        duck_segments.append((int(b_t * 1000), int((b_t + 0.3) * 1000)))
-
-                curr_time += work_sec
-
-                # 4. 세트 종료 신호 (벨 / 호각)
-                is_final_set = (s == total_sets)
-                if not is_final_set:
-                    # 휴식 전환 벨
-                    events.append({
-                        "time": curr_time,
-                        "type": "bell",
-                        "text": f"[{s}세트 종료] 갈려! 휴식!",
-                        "sound_file": os.path.join("effects", "stage_bell.wav"),
-                        "duration": 0.8,
-                        "track": 1,
-                        "vol": 2.2
-                    })
-
-                    # 휴식 안내 멘트
-                    if lang == "mix_kids":
-                        rest_ment = "릴랙스 휴식! 딥 브레스 쉬고 다음 동작 웨이트!"
-                    elif lang == "dual_step":
-                        rest_ment = "휴식! 호흡 가다듬으세요. - Rest, catch your breath!"
-                    elif lang in ("en", "en_advanced"):
-                        rest_ment = "Rest and breathe! Next exercise coming up!"
-                    else:
-                        rest_ment = "휴식! 호흡 가다듬고 다음 동작 준비하세요."
-
-                    r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
-                    events.append({
-                        "time": curr_time + 0.5,
-                        "type": "voice",
-                        "text": f"[휴식] {rest_ment}",
-                        "duration": r_dur,
-                        "track": 2,
-                        "vol": 2.2
-                    })
-                    duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + r_dur) * 1000)))
-                    curr_time += rest_sec
-                else:
-                    # 마지막 세트 완료
-                    events.append({
-                        "time": curr_time,
-                        "type": "bell",
-                        "text": "[최종 세트 종료] 훈련 완료!",
-                        "sound_file": os.path.join("effects", "stage_bell.wav"),
-                        "duration": 1.2,
-                        "track": 1,
-                        "vol": 2.5
-                    })
-                    curr_time += 1.0
-
-            # 5. 인터벌 훈련 완료 멘트
-            if lang == "mix_kids":
-                final_outro = "고강도 인터벌 훈련 종료! 굿 잡! 모두 수고했습니다! 워터(Water) 물 한잔 마시고 호흡을 릴랙스 가다듬으세요!"
-            elif lang == "dual_step":
-                final_outro = "인터벌 훈련 종료! 모두 수고하셨습니다! - Great workout everyone! Drink some water and relax!"
-            elif lang in ("en", "en_advanced"):
-                final_outro = "Interval training complete! Outstanding effort team! Drink water, catch your breath, and wait for next instruction!"
-            else:
-                final_outro = "고강도 인터벌 훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
-
-            outro_dur = max(3.5, round(len(final_outro) * 0.22, 2))
-            events.append({
-                "time": curr_time + 0.5,
-                "type": "voice",
-                "text": f"[훈련 종료] {final_outro}",
-                "duration": outro_dur,
-                "track": 2,
-                "vol": 2.5
-            })
-            duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0
+            return cls._generate_circuit_schedule(params)
         else:
             total_duration_sec = 60.0
 

@@ -123,25 +123,33 @@ class ShuttleRunEngine:
                 stage_start = stage_1_first_beep
                 stage_cue_time = cue_time_1
                 stage_cue_dur = stage_cue_durations.get(1, 0.0) if stage_cue_durations else 0.0
+                # 1단계: B_0(출발), B_1..B_num_shuttles(각 회차 도착 및 턴)
+                beeps = []
+                for b in range(num_shuttles + 1):
+                    beep_time = round(stage_start + b * interval_sec, 2)
+                    beeps.append(beep_time)
+                stage_start_time = beeps[0]
+                stage_end_time = beeps[-1]
+                last_beep = beeps[-1]
             else:
-                cue_gap = 0.15 if distance <= 5.0 else 0.25
-                post_gap = 0.25 if distance <= 5.0 else cue_post_gap_sec
+                # 2단계 이상:
+                # 1단계 마지막 완주 비프(last_beep)가 곧 2단계 첫 주행의 출발점(턴)입니다.
+                # 러너는 last_beep에서 턴을 하고 2단계 속도로 달리므로,
+                # 불필요한 중복 출발 비프를 울리지 않고 턴 직후 달리는 도중(약 0.35초)에 "2단계!" 멘트를 송출하며,
+                # 첫 번째 도착 비프는 정확히 last_beep + interval_sec 에 울립니다.
                 stage_cue_dur = stage_cue_durations.get(s, 0.0) if stage_cue_durations else 0.0
-                
-                if stage_cue_dur > 0:
-                    stage_cue_time = round(last_beep + signal_duration_sec + cue_gap, 2)
-                    stage_start = round(stage_cue_time + stage_cue_dur + post_gap, 2)
-                else:
-                    stage_cue_time = None
-                    stage_start = round(last_beep + signal_duration_sec + (0.3 if distance <= 5.0 else 0.6), 2)
+                cue_gap = 0.20 if distance <= 5.0 else 0.35
+                stage_cue_time = round(last_beep + cue_gap, 2) if stage_cue_dur > 0 else None
 
-            # 비프 타임스탬프: B_0(출발), B_1..B_num_shuttles(각 회차 도착 및 턴)
-            beeps = []
-            for b in range(num_shuttles + 1):
-                beep_time = round(stage_start + b * interval_sec, 2)
-                beeps.append(beep_time)
+                # 2단계 이상 비프: 1회차 도착부터 num_shuttles회차 도착 비프까지 순차 배치
+                beeps = []
+                for b in range(1, num_shuttles + 1):
+                    beep_time = round(last_beep + b * interval_sec, 2)
+                    beeps.append(beep_time)
 
-            last_beep = beeps[-1]
+                stage_start_time = last_beep
+                stage_end_time = beeps[-1]
+                last_beep = beeps[-1]
 
             schedule.append({
                 "stage": s,
@@ -149,8 +157,8 @@ class ShuttleRunEngine:
                 "interval_sec": interval_sec,
                 "shuttles": num_shuttles,
                 "beeps": beeps,
-                "stage_start_sec": beeps[0],
-                "stage_end_sec": beeps[-1],
+                "stage_start_sec": stage_start_time,
+                "stage_end_sec": stage_end_time,
                 "cue_time_sec": stage_cue_time,
                 "cue_duration_sec": stage_cue_dur,
                 "countdown_time_sec": cd_time if s == 1 else None,

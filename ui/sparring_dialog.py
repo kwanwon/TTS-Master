@@ -279,11 +279,19 @@ class SparringWorker(QThread):
                             events[j]["time"] = round(events[j]["time"] + delta, 2)
 
             # 2-4. 타임라인 재정렬에 맞춘 오토덕킹 구간(duck_segments) 및 전체 재생시간 재계산
+            # ⭐ 사용자 요청: 비프음/신호음/휘슬/벨은 모두 0dB(감쇄 없음)로 음악을 온전히 유지하고,
+            # 오직 음성(TTS 안내 및 구령) 시에만 오토덕킹이 작동하도록 처리 (음악 끊김/렉 방지)
             duck_segments = []
             for ev in events:
-                st_ms = int(ev["time"] * 1000)
-                dur_ms = int(ev.get("duration", 0.5) * 1000)
-                duck_segments.append((st_ms, st_ms + dur_ms + 200))
+                ev_type = ev.get("type", "")
+                is_voice = (ev_type == "voice")
+                if ev_type == "countdown" and ev.get("cd_style") != "beep":
+                    is_voice = True
+
+                if is_voice:
+                    st_ms = int(ev["time"] * 1000)
+                    dur_ms = int(ev.get("duration", 0.5) * 1000)
+                    duck_segments.append((st_ms, st_ms + dur_ms + 200))
 
             if events:
                 last_ev = events[-1]
@@ -505,11 +513,23 @@ class SparringDialog(QDialog):
         # 4. 세부 훈련 동작 구성 및 사범 지도 팁
         g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (직접 편집 가능)")
         l_cm = QVBoxLayout(g_c_moves)
+
+        # 진행 방식 선택 (종목 순환 vs 단일 종목 집중 반복)
+        h_cm_mode = QHBoxLayout()
+        h_cm_mode.addWidget(QLabel("🎯 진행 방식:"))
+        self.rb_circuit_cycle = QRadioButton("🔄 세트마다 종목 순환 (1번➔2번➔3번 콤보 순환)")
+        self.rb_circuit_single = QRadioButton("🎯 단일 종목 집중 반복 (1세트 설명 후 2세트부터 설명 없이 3,2,1로 즉시 진행)")
+        self.rb_circuit_cycle.setChecked(True)
+        h_cm_mode.addWidget(self.rb_circuit_cycle)
+        h_cm_mode.addWidget(self.rb_circuit_single)
+        h_cm_mode.addStretch()
+        l_cm.addLayout(h_cm_mode)
+
         self.txt_circuit_moves = QTextEdit()
         self.txt_circuit_moves.setMaximumHeight(170)
         l_cm.addWidget(self.txt_circuit_moves)
 
-        lbl_moves_hint = QLabel("※ 세트마다 위 복합 콤보가 호명되며, 15~20초 동안 해당 콤보를 전력으로 무한 반복한 뒤 3초 전 카운트다운 비프음과 휴식 신호음이 울립니다.")
+        lbl_moves_hint = QLabel("※ 위 콤보 내용을 직접 추가/수정/삭제할 수 있으며, 실제 음원에 그대로 반영됩니다. '종목 순환'은 매 세트 콤보를 호명하며 진행되고, '단일 종목 집중 반복'은 1세트에서만 1번 콤보를 설명하고 2세트부터는 설명 없이 준비 3,2,1로 빠르게 진행됩니다.")
         lbl_moves_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_cm.addWidget(lbl_moves_hint)
         l_circuit.addWidget(g_c_moves)
@@ -933,7 +953,7 @@ class SparringDialog(QDialog):
 
         # 화자 및 오토덕킹
         h_opts = QHBoxLayout()
-        self.cb_ducking = QCheckBox("🎵 BGM 오토 덕킹(신호 시 음악 -8dB 감쇄)")
+        self.cb_ducking = QCheckBox("🎵 BGM 오토 덕킹 (음성 구령 시 음악 감쇄, 비프/신호음은 음악 0dB 유지)")
         self.cb_ducking.setChecked(True)
         h_opts.addWidget(self.cb_ducking)
 
@@ -1018,11 +1038,10 @@ class SparringDialog(QDialog):
         h_v4 = QHBoxLayout()
         h_v4.addWidget(QLabel("📉 오토덕킹 강도:"))
         self.combo_duck_level = QComboBox()
-        self.combo_duck_level.addItem("보통 감쇄 (-8 dB) - 기본 추천", -8.0)
-        self.combo_duck_level.addItem("강한 감쇄 (-12 dB) - 신호음/구령 극대화", -12.0)
-        self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지", -4.0)
-        self.combo_duck_level.addItem("최대 감쇄 (-16 dB) - 음악 일시 거의 음소거", -16.0)
-        self.combo_duck_level.addItem("오토덕킹 끄기 (0 dB 감쇄 없음)", 0.0)
+        self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지 [강력 추천]", -4.0)
+        self.combo_duck_level.addItem("보통 감쇄 (-6 dB) - 균형 잡힌 사운드", -6.0)
+        self.combo_duck_level.addItem("강한 감쇄 (-10 dB) - 구령 집중", -10.0)
+        self.combo_duck_level.addItem("오토덕킹 끄기 (0 dB 감쇄 없음 - 음악 원본 유지)", 0.0)
         h_v4.addWidget(self.combo_duck_level)
 
         btn_preset_default = QPushButton("기본 밸런스")
@@ -1254,6 +1273,8 @@ class SparringDialog(QDialog):
             params["sets_count"] = self.sp_circuit_sets.value()
             params["theme_key"] = self.combo_circuit_theme.currentData() or "power_agility"
             params["language_mode"] = self.combo_circuit_lang.currentData() or "mix_kids"
+            params["circuit_mode_type"] = "single" if hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked() else "cycle"
+            params["custom_routine_text"] = self.txt_circuit_moves.toPlainText().strip()
 
         elif mode == "relay":
             fighters = 2 if self.rb_relay_11.isChecked() else (3 if self.rb_relay_12.isChecked() else 4)
