@@ -20,6 +20,35 @@ from utils.model_installer import ModelInstallerThread
 import pygame
 from PyQt6.QtCore import QThread, pyqtSignal
 
+class ClickableSlider(QSlider):
+    """
+    QSlider 기본 pageStep(10) 버그(클릭 시 0.5x <-> 1.5x 널뛰기)를 원천 차단하고,
+    마우스 클릭 지점으로 즉시 부드럽게 이동하며 1.0x(표준 배속) 자석 스냅을 지원하는 고정밀 슬라이더
+    """
+    def __init__(self, orientation=Qt.Orientation.Horizontal, parent=None):
+        super().__init__(orientation, parent)
+        self.setSingleStep(1)
+        self.setPageStep(1)  # 10단위 점프 버그 방지 (1단위 정밀 제어)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            slider_width = max(1, self.width())
+            slider_min = self.minimum()
+            slider_max = self.maximum()
+            pos_x = event.position().x() if hasattr(event, 'position') else event.x()
+            ratio = max(0.0, min(1.0, pos_x / float(slider_width)))
+            exact_val = slider_min + ratio * (slider_max - slider_min)
+
+            # 1.0x (값 10) 부근 클릭 시 10(1.0x)으로 강력한 자석 흡착
+            if 9.4 <= exact_val <= 10.6:
+                target_val = 10
+            else:
+                target_val = int(round(exact_val))
+
+            self.setValue(target_val)
+            event.accept()
+        super().mousePressEvent(event)
+
 class GenerateAudioThread(QThread):
     finished_signal = pyqtSignal(str)
     
@@ -251,14 +280,57 @@ class MainWindow(QMainWindow):
         voice_layout.addWidget(self.voice_desc_lbl)
         
         h_speed = QHBoxLayout()
-        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setMinimum(5)  # 0.5x
-        self.speed_slider.setMaximum(20) # 2.0x
-        self.speed_slider.setValue(10)   # 1.0x
-        self.speed_label = QLabel("속도: 1.0x")
-        h_speed.addWidget(QLabel("출력 속도:"))
-        h_speed.addWidget(self.speed_slider)
+        lbl_speed_title = QLabel("출력 속도:")
+        lbl_speed_title.setStyleSheet("font-weight: bold;")
+        h_speed.addWidget(lbl_speed_title)
+
+        self.speed_slider = ClickableSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setMinimum(5)   # 0.5x
+        self.speed_slider.setMaximum(20)  # 2.0x
+        self.speed_slider.setValue(10)    # 1.0x 기본
+        self.speed_slider.setSingleStep(1)
+        self.speed_slider.setPageStep(1)  # 10단위 널뛰기 점프 원천 방지
+        self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.speed_slider.setTickInterval(1)
+        h_speed.addWidget(self.speed_slider, 1)
+
+        self.speed_label = QLabel("속도: 1.0x (표준)")
+        self.speed_label.setFixedWidth(125)
+        self.speed_label.setStyleSheet("font-weight: bold; color: #16a34a; font-size: 13px;")
         h_speed.addWidget(self.speed_label)
+
+        # 기본 표준 속도(1.0x) 즉시 초기화 버튼
+        self.btn_reset_speed = QPushButton("⏮️ 1.0x (표준)")
+        self.btn_reset_speed.setToolTip("기본 배속인 1.0x (표준 속도)로 즉시 재설정합니다.")
+        self.btn_reset_speed.setStyleSheet("padding: 3px 8px; font-weight: bold; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px;")
+        self.btn_reset_speed.clicked.connect(lambda: self.set_speed_preset(10))
+        h_speed.addWidget(self.btn_reset_speed)
+
+        # 주요 배속 빠른 선택 버튼
+        btn_speed_08 = QPushButton("0.8x")
+        btn_speed_08.setToolTip("차분하고 느린 속도 (0.8x)")
+        btn_speed_08.setStyleSheet("padding: 3px 6px; font-size: 11px;")
+        btn_speed_08.clicked.connect(lambda: self.set_speed_preset(8))
+        h_speed.addWidget(btn_speed_08)
+
+        btn_speed_10 = QPushButton("1.0x")
+        btn_speed_10.setToolTip("기본 보통 속도 (1.0x)")
+        btn_speed_10.setStyleSheet("padding: 3px 6px; font-size: 11px; font-weight: bold; color: #16a34a;")
+        btn_speed_10.clicked.connect(lambda: self.set_speed_preset(10))
+        h_speed.addWidget(btn_speed_10)
+
+        btn_speed_12 = QPushButton("1.2x")
+        btn_speed_12.setToolTip("약간 빠른 속도 (1.2x)")
+        btn_speed_12.setStyleSheet("padding: 3px 6px; font-size: 11px;")
+        btn_speed_12.clicked.connect(lambda: self.set_speed_preset(12))
+        h_speed.addWidget(btn_speed_12)
+
+        btn_speed_15 = QPushButton("1.5x")
+        btn_speed_15.setToolTip("빠른 안내 속도 (1.5x)")
+        btn_speed_15.setStyleSheet("padding: 3px 6px; font-size: 11px;")
+        btn_speed_15.clicked.connect(lambda: self.set_speed_preset(15))
+        h_speed.addWidget(btn_speed_15)
+
         voice_layout.addLayout(h_speed)
         
         voice_group.setLayout(voice_layout)
@@ -734,9 +806,22 @@ class MainWindow(QMainWindow):
             self.dl_status.setText(f"설치 실패: {msg}")
             self.dl_status.setStyleSheet("color: red;")
             
+    def set_speed_preset(self, value):
+        self.speed_slider.setValue(value)
+        self.on_speed_changed(value)
+        self.auto_save_state()
+
     def on_speed_changed(self, value):
-        speed_val = value / 10.0
-        self.speed_label.setText(f"속도: {speed_val}x")
+        speed_val = round(value / 10.0, 1)
+        if speed_val == 1.0:
+            self.speed_label.setText("속도: 1.0x (표준)")
+            self.speed_label.setStyleSheet("font-weight: bold; color: #16a34a; font-size: 13px;")
+        elif speed_val < 1.0:
+            self.speed_label.setText(f"속도: {speed_val}x (느림)")
+            self.speed_label.setStyleSheet("font-weight: normal; color: #2563eb; font-size: 13px;")
+        else:
+            self.speed_label.setText(f"속도: {speed_val}x (빠름)")
+            self.speed_label.setStyleSheet("font-weight: normal; color: #d97706; font-size: 13px;")
         
     def setup_api_key(self):
         from PyQt6.QtWidgets import QInputDialog, QMessageBox
