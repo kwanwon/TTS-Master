@@ -1,6 +1,6 @@
 {
-  "version": "1.5.7",
+  "version": "1.5.8",
   "release_date": "2026-10-03",
   "app_name": "AIMaster_TTS",
-  "description": "스파링 마법사 QGridLayout 참조 누락 오류 수정, 셔틀런 목표 단계 완주 후 축하 및 휴식 종료 안내 멘트(아웃트로) 정식 탑재"
+  "description": "셔틀런 덕킹 방식 '덕킹 끄기' 선택 시 덕킹 감쇄량 자동 비활성화 및 미적용 안내 연동, 셔틀런 목표 단계 완주 후 축하 및 휴식 종료 안내 멘트 탑재, 스파링 마법사 QGridLayout 참조 오류 수정"
 }

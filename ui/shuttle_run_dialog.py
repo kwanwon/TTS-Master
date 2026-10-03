@@ -891,7 +891,8 @@ class ShuttleRunDialog(QDialog):
         vol_layout.addLayout(h_v4)
 
         h_v5 = QHBoxLayout()
-        h_v5.addWidget(QLabel("📉 덕킹 감쇄량:"))
+        self.lbl_duck_level = QLabel("📉 덕킹 감쇄량:")
+        h_v5.addWidget(self.lbl_duck_level)
         self.combo_duck_level = QComboBox()
         self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지 [추천]", -4.0)
         self.combo_duck_level.addItem("보통 감쇄 (-6 dB)", -6.0)
@@ -909,6 +910,9 @@ class ShuttleRunDialog(QDialog):
         h_v5.addWidget(btn_preset_music)
         h_v5.addWidget(btn_preset_voice)
         vol_layout.addLayout(h_v5)
+
+        self.combo_duck_mode.currentIndexChanged.connect(self._on_duck_mode_changed)
+        self._on_duck_mode_changed()
 
         vol_group.setLayout(vol_layout)
         content_layout.addWidget(vol_group)
@@ -1259,6 +1263,21 @@ class ShuttleRunDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "미리듣기 실패", f"구령 재생 실패: {e}")
 
+    def _on_duck_mode_changed(self):
+        if not hasattr(self, 'combo_duck_mode') or not hasattr(self, 'combo_duck_level'):
+            return
+        mode = self.combo_duck_mode.currentData()
+        is_active = (mode != "none")
+        self.combo_duck_level.setEnabled(is_active)
+        if hasattr(self, 'lbl_duck_level'):
+            self.lbl_duck_level.setEnabled(is_active)
+            if not is_active:
+                self.lbl_duck_level.setText("📉 덕킹 감쇄량 (덕킹 꺼짐 - 미적용):")
+                self.lbl_duck_level.setStyleSheet("color: #94a3b8; font-style: italic;")
+            else:
+                self.lbl_duck_level.setText("📉 덕킹 감쇄량:")
+                self.lbl_duck_level.setStyleSheet("")
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_mode_idx: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -1267,6 +1286,7 @@ class ShuttleRunDialog(QDialog):
             self.combo_duck_mode.setCurrentIndex(duck_mode_idx)
         if hasattr(self, 'combo_duck_level'):
             self.combo_duck_level.setCurrentIndex(duck_idx)
+        self._on_duck_mode_changed()
 
     def start_generation(self):
         dist_val = self.dist_btn_group.checkedId()
