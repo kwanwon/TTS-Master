@@ -690,7 +690,7 @@ class ShuttleRunWorker(QThread):
             except Exception:
                 pass
 
-            suggested_filename = make_shuttle_filename(level, distance, target_stages)
+            suggested_filename = make_shuttle_filename(preset_key, distance, target_stages)
             clean_base = os.path.splitext(suggested_filename)[0]
             output_master_path = os.path.join(
                 "projects", "temp_tts",
@@ -707,7 +707,8 @@ class ShuttleRunWorker(QThread):
                 "total_duration_sec": total_duration_sec,
                 "distance": distance,
                 "target_stages": target_stages,
-                "level": level
+                "level": preset_key,
+                "preset_key": preset_key
             }
             self.finished.emit(True, "셔틀런 음원이 성공적으로 생성되었습니다.", result_data)
 
