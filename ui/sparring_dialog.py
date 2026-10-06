@@ -93,10 +93,28 @@ def make_suggested_filename(mode: str, params: dict, duration_sec: float) -> str
         return f"콤비네이션_{kick_str}_{rounds}라운드.wav"
 
     elif mode == "rounds":
-        rounds = params.get("rounds", 3)
-        round_sec = params.get("round_sec", 120.0)
+        total_rounds = params.get("total_rounds", 3)
+        round_sec = params.get("round_sec", 90.0)
         r_m = int(round_sec // 60)
-        return f"정규스파링_{rounds}라운드_{r_m}분.wav"
+        r_s = int(round_sec % 60)
+        time_label = f"{r_m}분" if r_s == 0 else f"{r_m}분{r_s}초"
+
+        round_type = params.get("round_type", "real")
+        if round_type == "shadow":
+            type_label = "섀도우스파링"
+        elif round_type == "promise":
+            promise_det = params.get("promise_detail", "").strip()
+            if promise_det:
+                clean_prom = re.sub(r'[^\w가-힣]', '', promise_det)
+                type_label = f"약속스파링_{clean_prom}"
+            else:
+                type_label = "약속스파링"
+        elif round_type == "attack_defense":
+            type_label = "공수스파링_A공격B방어"
+        else:
+            type_label = "실전스파링"
+
+        return f"{type_label}_{total_rounds}라운드_{time_label}.wav"
 
     elif mode == "circuit":
         theme_key = params.get("theme", "power_agility")
@@ -1123,7 +1141,53 @@ class SparringDialog(QDialog):
         # ── 탭 4: 정규 스파링 라운드 ──
         tab_round = QWidget()
         l_rnd = QVBoxLayout(tab_round)
-        g_rnd_set = QGroupBox("1. 스파링 라운드 시간 설정")
+
+        # 1. 스파링 훈련 유형 선택
+        g_rnd_type = QGroupBox("1. 스파링 훈련 유형 선택")
+        l_rtype = QVBoxLayout(g_rnd_type)
+
+        h_rtype_sel = QHBoxLayout()
+        h_rtype_sel.addWidget(QLabel("🥊 훈련 유형:"))
+        self.combo_rnd_type = QComboBox()
+        self.combo_rnd_type.addItem("🥊 실전 스파링 (자유 대련 - 경기 룰 및 종료 구령)", "real")
+        self.combo_rnd_type.addItem("🏃 섀도우 스파링 (가상 상대 이미지 트레이닝 & 전신 풋워크)", "shadow")
+        self.combo_rnd_type.addItem("🤝 약속 스파링 (사전 합의된 공격/방어 기술 집중 훈련)", "promise")
+        self.combo_rnd_type.addItem("⚔️ A선수 공격 / B선수 방어 (공수 분리 역할 훈련)", "attack_defense")
+        h_rtype_sel.addWidget(self.combo_rnd_type, stretch=1)
+        l_rtype.addLayout(h_rtype_sel)
+
+        self.lbl_rnd_type_desc = QLabel()
+        self.lbl_rnd_type_desc.setStyleSheet("color: #475569; font-size: 11px; padding: 2px 0;")
+        self.lbl_rnd_type_desc.setWordWrap(True)
+        l_rtype.addWidget(self.lbl_rnd_type_desc)
+
+        # 1-1. 약속 스파링 세부 옵션 위젯
+        self.widget_promise_opt = QWidget()
+        l_prom = QHBoxLayout(self.widget_promise_opt)
+        l_prom.setContentsMargins(0, 4, 0, 0)
+        l_prom.addWidget(QLabel("🎯 약속 기술 내용:"))
+        self.txt_promise_detail = QLineEdit()
+        self.txt_promise_detail.setPlaceholderText("예: 앞발 찍기 후 돌려차기, 빠른 원투 후 백스텝 카운터")
+        l_prom.addWidget(self.txt_promise_detail, stretch=1)
+        l_rtype.addWidget(self.widget_promise_opt)
+
+        # 1-2. A공격 / B방어 공수 스파링 세부 옵션 위젯
+        self.widget_atk_def_opt = QWidget()
+        l_atk_def = QHBoxLayout(self.widget_atk_def_opt)
+        l_atk_def.setContentsMargins(0, 4, 0, 0)
+        l_atk_def.addWidget(QLabel("🔄 공수 진행 방식:"))
+        self.combo_atk_def_mode = QComboBox()
+        self.combo_atk_def_mode.addItem("🔁 라운드별 공수 자동 교대 (1R: A공격/B방어, 2R: B공격/A방어...)", "alternate")
+        self.combo_atk_def_mode.addItem("🅰️ A선수 공격 / B선수 방어 (전 라운드 고정)", "a_attack_only")
+        self.combo_atk_def_mode.addItem("🅱️ B선수 공격 / A선수 방어 (전 라운드 고정)", "b_attack_only")
+        l_atk_def.addWidget(self.combo_atk_def_mode, stretch=1)
+        l_rtype.addWidget(self.widget_atk_def_opt)
+
+        self.combo_rnd_type.currentIndexChanged.connect(self._on_rnd_type_changed)
+        l_rnd.addWidget(g_rnd_type)
+
+        # 2. 스파링 라운드 시간 설정
+        g_rnd_set = QGroupBox("2. 스파링 라운드 시간 설정")
         l_rnds = QHBoxLayout(g_rnd_set)
         
         l_rnds.addWidget(QLabel("⏱️ 1라운드 경기 시간:"))
@@ -1152,8 +1216,8 @@ class SparringDialog(QDialog):
         l_rnds.addStretch()
         l_rnd.addWidget(g_rnd_set)
 
-        # 2. 라운드 종료 신호 설정
-        g_rnd_sig = QGroupBox("2. 라운드 종료 신호 (선택)")
+        # 3. 라운드 종료 신호 설정
+        g_rnd_sig = QGroupBox("3. 라운드 종료 신호 (선택)")
         l_rsig = QHBoxLayout(g_rnd_sig)
         l_rsig.addWidget(QLabel("🔔 라운드 종료 신호:"))
         self.combo_rnd_stop_signal = QComboBox()
@@ -1167,6 +1231,9 @@ class SparringDialog(QDialog):
         l_rnd.addWidget(g_rnd_sig)
         l_rnd.addStretch()
         self.tabs.addTab(tab_round, "🥊 정규 스파링 라운드")
+
+        # 초기 상태 업데이트
+        self._on_rnd_type_changed()
 
         content_layout.addWidget(self.tabs)
 
@@ -1459,6 +1526,41 @@ class SparringDialog(QDialog):
         if tmpl_data:
             self.txt_outro_ment.setText(tmpl_data)
 
+    def _on_rnd_type_changed(self):
+        """정규 스파링 훈련 유형 변경 시 UI 상태 동적 전환"""
+        if not hasattr(self, 'combo_rnd_type'):
+            return
+        rnd_type = self.combo_rnd_type.currentData()
+        if rnd_type == "shadow":
+            self.lbl_rnd_type_desc.setText(
+                "💡 가상 상대를 이미지 트레이닝하며 전신 풋워크와 연속기를 구사합니다. "
+                "라운드 시작 '제 n라운드 섀도우 스파링 시작!' 및 종료 10초 전 '전력 스퍼트!' 구령이 송출됩니다."
+            )
+            self.widget_promise_opt.setVisible(False)
+            self.widget_atk_def_opt.setVisible(False)
+        elif rnd_type == "promise":
+            self.lbl_rnd_type_desc.setText(
+                "💡 사전에 합의된 공격/방어 기술을 집중 훈련합니다. "
+                "약속 기술을 입력하시면 매 라운드 시작 시 해당 기술명이 함께 호명되어 선수들의 집중도를 극대화합니다."
+            )
+            self.widget_promise_opt.setVisible(True)
+            self.widget_atk_def_opt.setVisible(False)
+        elif rnd_type == "attack_defense":
+            self.lbl_rnd_type_desc.setText(
+                "💡 한 선수는 공격, 한 선수는 방어만 수행하는 공수 특화 훈련입니다. "
+                "라운드별로 공수를 자동 교대하거나 특정 선수의 역할을 고정하여 진행할 수 있습니다."
+            )
+            self.widget_promise_opt.setVisible(False)
+            self.widget_atk_def_opt.setVisible(True)
+        else:  # real
+            self.lbl_rnd_type_desc.setText(
+                "💡 실전 경기와 동일한 환경으로 양 선수가 마주보고 자유 대련을 펼칩니다. "
+                "경기 시작 휘슬, 10초 전 '공격!' 구령, 종료 시 '갈려!' 및 최종 경기 종료 시 '차렷, 경례' 멘트가 지원됩니다."
+            )
+            self.widget_promise_opt.setVisible(False)
+            self.widget_atk_def_opt.setVisible(False)
+
+
     def set_vol_preset(self, bgm: int, sig: int, voice: int, duck_idx: int):
         self.slider_bgm_vol.setValue(bgm)
         self.slider_sig_vol.setValue(sig)
@@ -1573,6 +1675,9 @@ class SparringDialog(QDialog):
             params["rest_sec"] = float(self.sp_rnd_rest.value())
             params["total_rounds"] = self.sp_rnd_count.value()
             params["stop_signal"] = self.combo_rnd_stop_signal.currentData() if hasattr(self, 'combo_rnd_stop_signal') else "voice_kalyeo"
+            params["round_type"] = self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real"
+            params["promise_detail"] = self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else ""
+            params["atk_def_mode"] = self.combo_atk_def_mode.currentData() if hasattr(self, 'combo_atk_def_mode') else "alternate"
 
         self.btn_generate.setEnabled(False)
         self.progress_bar.setVisible(True)

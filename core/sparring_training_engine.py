@@ -694,7 +694,25 @@ class SparringTrainingEngine:
                             f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
                         )
                 elif mode == "rounds":
-                    intro_text = "지금부터 정규 스파링 라운드 훈련을 시작합니다. 양 선수 준비해 주세요!"
+                    round_type = params.get("round_type", "real")
+                    if round_type == "shadow":
+                        intro_text = "지금부터 섀도우 스파링 훈련을 시작합니다. 가상의 상대를 상상하며 실전처럼 스텝을 뛰고 공방 기술을 구사하세요. 준비해 주세요!"
+                    elif round_type == "promise":
+                        promise_note = params.get("promise_detail", "").strip()
+                        if promise_note:
+                            intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 '{promise_note}' 입니다. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
+                        else:
+                            intro_text = "지금부터 약속 스파링 훈련을 시작합니다. 약속된 기술과 공방 원칙을 준수하며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
+                    elif round_type == "attack_defense":
+                        atk_def_mode = params.get("atk_def_mode", "alternate")
+                        if atk_def_mode == "a_attack_only":
+                            intro_text = "지금부터 A선수 공격, B선수 방어 공수 특화 스파링 훈련을 시작합니다. A선수는 적극적으로 공격하고, B선수는 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                        elif atk_def_mode == "b_attack_only":
+                            intro_text = "지금부터 B선수 공격, A선수 방어 공수 특화 스파링 훈련을 시작합니다. B선수는 적극적으로 공격하고, A선수는 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                        else:
+                            intro_text = "지금부터 A선수와 B선수 공수 교대 스파링 훈련을 시작합니다. 공격 선수는 적극적으로 몰아붙이고, 방어 선수는 가드와 스텝으로 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                    else:
+                        intro_text = "지금부터 정규 실전 스파링 라운드 훈련을 시작합니다. 양 선수 마주보고 차렷, 경례! 준비해 주세요!"
                 else:
                     intro_text = "지금부터 스파링 훈련을 시작합니다. 준비해 주세요!"
 
@@ -1159,11 +1177,14 @@ class SparringTrainingEngine:
             duck_segments.append((int((curr_time + 1.5) * 1000), int((curr_time + 1.5 + outro_dur + 0.5) * 1000)))
             total_duration_sec = curr_time + 1.5 + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
 
-        # ── Mode 4: 정규 스파링 라운드 시뮬레이터 ──
+        # ── Mode 4: 정규 스파링 라운드 시뮬레이터 (실전 / 섀도우 / 약속 / A공격·B방어) ──
         elif mode == "rounds":
             round_sec = params.get("round_sec", 90.0)      # 1분 30초 (90초)
             rest_sec = params.get("rest_sec", 30.0)        # 휴식 30초
             total_rounds = params.get("total_rounds", 3)   # 3라운드
+            round_type = params.get("round_type", "real")  # real / shadow / promise / attack_defense
+            atk_def_mode = params.get("atk_def_mode", "alternate")
+            promise_detail = params.get("promise_detail", "").strip()
 
             for r in range(1, total_rounds + 1):
                 # 라운드 시작 멘트 & 휘슬
@@ -1176,23 +1197,56 @@ class SparringTrainingEngine:
                     "track": 1,
                     "vol": 2.5
                 })
+
+                # 라운드별 맞춤 시작 음성
+                if round_type == "shadow":
+                    round_start_text = f"제 {r}라운드 섀도우 스파링, 시작!"
+                elif round_type == "promise":
+                    if promise_detail:
+                        round_start_text = f"제 {r}라운드 약속 스파링! {promise_detail}! 시작!"
+                    else:
+                        round_start_text = f"제 {r}라운드 약속 스파링, 시작!"
+                elif round_type == "attack_defense":
+                    if atk_def_mode == "a_attack_only":
+                        round_start_text = f"제 {r}라운드! A선수 공격, B선수 방어! 시작!"
+                    elif atk_def_mode == "b_attack_only":
+                        round_start_text = f"제 {r}라운드! B선수 공격, A선수 방어! 시작!"
+                    else:
+                        # 1R: A공격/B방어, 2R: B공격/A방어 자동 교대
+                        if r % 2 == 1:
+                            round_start_text = f"제 {r}라운드! A선수 공격, B선수 방어! 시작!"
+                        else:
+                            round_start_text = f"제 {r}라운드! B선수 공격, A선수 방어! 시작!"
+                else:
+                    round_start_text = f"제 {r}라운드, 시작!"
+
+                round_start_dur = max(1.8, round(len(round_start_text) * 0.22, 2))
                 events.append({
                     "time": curr_time + 0.3,
                     "type": "voice",
-                    "text": f"제 {r}라운드, 시작!",
-                    "duration": 1.8,
+                    "text": round_start_text,
+                    "duration": round_start_dur,
                     "track": 2,
-                    "vol": 2.0
+                    "vol": 2.2
                 })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + 2.5) * 1000)))
+                duck_segments.append((int(curr_time * 1000), int((curr_time + round_start_dur + 0.8) * 1000)))
 
                 # 라운드 종료 10초 전 경고음
                 warn_time = curr_time + round_sec - 10.0
                 if round_sec >= 20:
+                    if round_type == "shadow":
+                        warn_text = "[종료 10초 전] 마지막 10초! 전력 스퍼트!"
+                    elif round_type == "attack_defense":
+                        warn_text = "[종료 10초 전] 마지막 10초! 전력 공격 몰아붙이세요!"
+                    elif round_type == "promise":
+                        warn_text = "[종료 10초 전] 마지막 10초! 침착하게 마무리!"
+                    else:
+                        warn_text = "[종료 10초 전] 마지막 10초! 공격!"
+
                     events.append({
                         "time": warn_time,
                         "type": "voice",
-                        "text": "[종료 10초 전] 마지막 10초! 공격!",
+                        "text": warn_text,
                         "duration": 2.0,
                         "track": 2,
                         "vol": 2.0
@@ -1223,30 +1277,51 @@ class SparringTrainingEngine:
 
                 if r < total_rounds:
                     # 휴식 멘트
+                    if round_type == "attack_defense" and atk_def_mode == "alternate":
+                        next_atk = "B선수" if r % 2 == 1 else "A선수"
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 다음 라운드는 {next_atk} 공격 차례입니다! 숨 고르세요."
+                    elif round_type == "shadow":
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 정돈하고 다음 섀도우 준비하세요."
+                    elif round_type == "promise":
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 가다듬고 다음 약속 공방 준비하세요."
+                    else:
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 물 마시고 숨 고르세요."
+
+                    rest_dur = max(2.5, round(len(rest_msg) * 0.22, 2))
                     events.append({
                         "time": curr_time,
                         "type": "voice",
-                        "text": f"휴식 {int(rest_sec)}초입니다. 물 마시고 숨 고르세요.",
-                        "duration": 3.0,
-                        "track": 2,
-                        "vol": 1.5
-                    })
-                    duck_segments.append((int(curr_time * 1000), int((curr_time + 3.2) * 1000)))
-                    curr_time += rest_sec
-                else:
-                    # 최종 경기 종료
-                    events.append({
-                        "time": curr_time + 0.5,
-                        "type": "voice",
-                        "text": "[훈련 종료] 경기 종료! 수고하셨습니다! 양 선수 마주보고 차렷, 경례!",
-                        "duration": 3.5,
+                        "text": rest_msg,
+                        "duration": rest_dur,
                         "track": 2,
                         "vol": 2.0
                     })
-                    duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 4.0) * 1000)))
-                    curr_time += 4.5
+                    duck_segments.append((int(curr_time * 1000), int((curr_time + rest_dur + 0.5) * 1000)))
+                    curr_time += rest_sec
+                else:
+                    # 최종 경기 종료
+                    if round_type == "shadow":
+                        final_msg = "[훈련 종료] 섀도우 스파링 종료! 모두 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
+                    elif round_type == "promise":
+                        final_msg = "[훈련 종료] 약속 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
+                    elif round_type == "attack_defense":
+                        final_msg = "[훈련 종료] 공수 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
+                    else:
+                        final_msg = "[훈련 종료] 경기 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
 
-            total_duration_sec = curr_time + 3.0
+                    final_dur = max(3.0, round(len(final_msg) * 0.22, 2))
+                    events.append({
+                        "time": curr_time + 0.5,
+                        "type": "voice",
+                        "text": final_msg,
+                        "duration": final_dur,
+                        "track": 2,
+                        "vol": 2.5
+                    })
+                    duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + final_dur + 0.5) * 1000)))
+                    curr_time += final_dur + 1.0
+
+            total_duration_sec = curr_time + 2.0
 
         # ── Mode 5: 도장 고강도 기능성 서킷 인터벌 (HIIT & Tabata) ──
         elif mode == "circuit":

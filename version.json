@@ -1,6 +1,6 @@
 {
-  "version": "1.6.2",
-  "release_date": "2026-10-04",
+  "version": "1.6.3",
+  "release_date": "2026-10-06",
   "app_name": "AIMaster_TTS",
-  "description": "셔틀런 음원 생성 시 preset_key 변수 참조 누락(name 'level' is not defined) 버그 수정 및 초등/전문선수 한글 파일명 자동 부여 안정화"
+  "description": "정규 스파링 라운드 4대 유형 구분(실전 스파링, 섀도우 스파링, 약속 스파링, A선수 공격/B선수 방어 공수 스파링) 및 맞춤 구령·파일명 자동 생성 지원"
 }
