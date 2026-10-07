@@ -23,6 +23,16 @@ from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
 
+class NoScrollComboBox(QComboBox):
+    """
+    마우스 휠 스크롤에 의한 원치 않는 값 변경 오작동을 방지하는 콤보박스.
+    마우스 휠 이벤트 발생 시 이벤트를 무시(ignore)하여 부모 스크롤 영역으로 전달하고,
+    클릭하여 드롭다운 팝업 목록이 열렸을 때만 항목 선택이 가능하도록 합니다.
+    """
+    def wheelEvent(self, event):
+        event.ignore()
+
+
 def vol_pct_to_db(pct: int) -> float:
     """선형 퍼센트(%) 볼륨을 데시벨(dB)로 변환 (0% -> -60dB 무음, 100% -> 0dB)"""
     if pct <= 0:
@@ -847,7 +857,7 @@ class ShuttleRunDialog(QDialog):
         # 5. 신호음 종류 선택
         sig_group = QGroupBox("5. 신호음 (턴 비프음) 종류 선택")
         sig_layout = QHBoxLayout()
-        self.sig_combo = QComboBox()
+        self.sig_combo = NoScrollComboBox()
         self.sig_combo.addItem("🔔 기본 전자 비프음 (880Hz 선명한 공인 비프)", "beep")
         self.sig_combo.addItem("📢 경기용 심판 휘슬 (2500Hz 고주파 호각)", "whistle")
         self.sig_combo.addItem("🥁 웅장한 대북/타격음 (기합 및 절도 있는 타격)", "drum")
@@ -907,7 +917,7 @@ class ShuttleRunDialog(QDialog):
         # 덕킹 모드 & 강도 & 프리셋
         h_v4 = QHBoxLayout()
         h_v4.addWidget(QLabel("📉 덕킹 방식:"))
-        self.combo_duck_mode = QComboBox()
+        self.combo_duck_mode = NoScrollComboBox()
         self.combo_duck_mode.addItem("🌟 스마트 덕킹 (음성 구령 시에만 살짝 감쇄, 비프음은 음악 유지 - 강력 추천)", "voice_only")
         self.combo_duck_mode.addItem("🎵 덕킹 끄기 (0 dB 감쇄 없음 - 음악 끊김 없이 원본 유지)", "none")
         self.combo_duck_mode.addItem("📉 전체 덕킹 (음성 구령 및 비프음 모두 감쇄)", "all")
@@ -917,7 +927,7 @@ class ShuttleRunDialog(QDialog):
         h_v5 = QHBoxLayout()
         self.lbl_duck_level = QLabel("📉 덕킹 감쇄량:")
         h_v5.addWidget(self.lbl_duck_level)
-        self.combo_duck_level = QComboBox()
+        self.combo_duck_level = NoScrollComboBox()
         self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지 [추천]", -4.0)
         self.combo_duck_level.addItem("보통 감쇄 (-6 dB)", -6.0)
         self.combo_duck_level.addItem("강한 감쇄 (-10 dB) - 구령 집중", -10.0)
@@ -953,7 +963,7 @@ class ShuttleRunDialog(QDialog):
 
         h_intro = QHBoxLayout()
         h_intro.addWidget(QLabel("  📋 안내 방송 문구:"))
-        self.combo_intro_style = QComboBox()
+        self.combo_intro_style = NoScrollComboBox()
         self.combo_intro_style.addItem(
             "🏆 도장 표준 안내 (방법 및 호흡 요령 - 약 11초)",
             "지금부터 심폐지구력 향상을 위한 왕복 오래달리기, 셔틀런을 시작합니다. 신호음이 울리면 반대편으로 달리고, 다음 신호음이 울리기 전에 반대편 선에 도착해야 합니다. 모두 준비하시고, 출발 신호에 맞춰 출발하세요!"
@@ -971,7 +981,7 @@ class ShuttleRunDialog(QDialog):
         self.cb_countdown.setChecked(True)
         self.cb_countdown.setStyleSheet("font-weight: bold; color: #1e3a8a;")
 
-        self.combo_countdown_style = QComboBox()
+        self.combo_countdown_style = NoScrollComboBox()
         self.combo_countdown_style.addItem("🇺🇸 영어 카운트다운 ('Three, Two, One' - 본토 원어민 발음)", "en_321")
         self.combo_countdown_style.addItem("🔔 전자 비프음 (띡, 띡, 띡 - 신호음 3박자)", "beep")
         self.combo_countdown_style.addItem("🇰🇷 한국어 친근한 멘트 ('준비되었나요? 준비! 셋, 둘, 하나')", "ko_ready")
@@ -999,7 +1009,7 @@ class ShuttleRunDialog(QDialog):
         h_voice = QHBoxLayout()
         self.cb_voice = QCheckBox("단계 상승 시 음성 구령 송출")
         self.cb_voice.setChecked(True)
-        self.voice_combo = QComboBox()
+        self.voice_combo = NoScrollComboBox()
         self.voice_combo.addItems([
             "선히 (한국어 여성, 표준 아나운서)",
             "인준 (한국어 남성, 또렷한 구령)",
@@ -1012,7 +1022,7 @@ class ShuttleRunDialog(QDialog):
         # 구령 스타일 선택 (한국어 표준 단계 기본값, 영어 Level 1, One, 1단 등)
         h_cue_style = QHBoxLayout()
         h_cue_style.addWidget(QLabel("  🥋 구령 스타일:"))
-        self.combo_cue_style = QComboBox()
+        self.combo_cue_style = NoScrollComboBox()
         self.combo_cue_style.addItem("📢 한국어 표준 단계 ('1단계!', '2단계!' - 시작 단어 제외)", "stage")
         self.combo_cue_style.addItem("🥋 한국어 초간결 단 ('1단!', '2단!', '3단!') - 5m 단거리 추천", "dan")
         self.combo_cue_style.addItem("🔢 한국어 초미니멀 숫자 ('1!', '2!', '3!') - 0.25초 순간 구령", "num")
@@ -1035,7 +1045,7 @@ class ShuttleRunDialog(QDialog):
 
         h_track = QHBoxLayout()
         h_track.addWidget(QLabel("🎛️ 타임라인 트랙 배치:"))
-        self.combo_track_layout = QComboBox()
+        self.combo_track_layout = NoScrollComboBox()
         self.combo_track_layout.addItem("단일 훈련 트랙 (트랙 2에 신호음+멘트 한 줄 순차 배치 - 시각적 혼동 방지 [추천])", "single")
         self.combo_track_layout.addItem("트랙 분리 (트랙 2: 신호음 / 트랙 3: 멘트 - 개별 볼륨 조정)", "split")
         h_track.addWidget(self.combo_track_layout, stretch=1)

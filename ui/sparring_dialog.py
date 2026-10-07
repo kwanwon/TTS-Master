@@ -28,6 +28,16 @@ from pydub import AudioSegment
 from pydub.effects import normalize
 
 
+class NoScrollComboBox(QComboBox):
+    """
+    마우스 휠 스크롤에 의한 원치 않는 값 변경 오작동을 방지하는 콤보박스.
+    마우스 휠 이벤트 발생 시 이벤트를 무시(ignore)하여 부모 스크롤 영역으로 전달하고,
+    클릭하여 드롭다운 팝업 목록이 열렸을 때만 항목 선택이 가능하도록 합니다.
+    """
+    def wheelEvent(self, event):
+        event.ignore()
+
+
 def vol_pct_to_db(pct: int) -> float:
     """선형 퍼센트(%) 볼륨을 데시벨(dB)로 변환 (0% -> -60dB 무음, 100% -> 0dB)"""
     if pct <= 0:
@@ -641,7 +651,7 @@ class SparringDialog(QDialog):
         # 1. 훈련 테마 선택
         g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택")
         l_ct = QVBoxLayout(g_c_theme)
-        self.combo_circuit_theme = QComboBox()
+        self.combo_circuit_theme = NoScrollComboBox()
         self.combo_circuit_theme.addItem("🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프", "power_agility")
         self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프", "agility_power_combo")
         self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 & 반사신경 콤보] 스텝·카운터킥·회전낙법 루프", "footwork_reaction_combo")
@@ -653,7 +663,7 @@ class SparringDialog(QDialog):
         # 2. 연령/수준별 맞춤 구령 언어 선택
         g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어")
         l_cl = QVBoxLayout(g_c_lang)
-        self.combo_circuit_lang = QComboBox()
+        self.combo_circuit_lang = NoScrollComboBox()
         self.combo_circuit_lang.addItem("👶 유치부·7세 미만 기초 [한-영 단어 믹스] (한국어 + 핵심 영어단어 조합)", "mix_kids")
         self.combo_circuit_lang.addItem("🎒 초등부 순차 구령 [한국어 선행 + 쉬운 영어] (동작 후 영어 멘트)", "dual_step")
         self.combo_circuit_lang.addItem("🇰🇷 일반부·정규 도장 [표준 한국어 구령]", "kr")
@@ -696,7 +706,7 @@ class SparringDialog(QDialog):
         # 세트 종료 신호 선택
         h_c_stop = QHBoxLayout()
         h_c_stop.addWidget(QLabel("🔔 세트 종료 및 휴식 신호:"))
-        self.combo_circuit_stop_signal = QComboBox()
+        self.combo_circuit_stop_signal = NoScrollComboBox()
         self.combo_circuit_stop_signal.addItem("🥋 음성: '갈려! 휴식!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_circuit_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 세트 종료)", "bell")
         self.combo_circuit_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
@@ -817,7 +827,7 @@ class SparringDialog(QDialog):
         # 타격 종료 및 교대 신호 선택
         h_rt_sig = QHBoxLayout()
         h_rt_sig.addWidget(QLabel("🔔 타격 종료 및 교대 신호:"))
-        self.combo_relay_stop_signal = QComboBox()
+        self.combo_relay_stop_signal = NoScrollComboBox()
         self.combo_relay_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_relay_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
         self.combo_relay_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
@@ -829,7 +839,7 @@ class SparringDialog(QDialog):
         # 릴레이 훈련 기술 템플릿 선택 드롭다운
         h_rt_tmpl = QHBoxLayout()
         h_rt_tmpl.addWidget(QLabel("📋 실전 훈련 템플릿:"))
-        self.combo_relay_template = QComboBox()
+        self.combo_relay_template = NoScrollComboBox()
         self.combo_relay_template.addItem("🥋 [실전 3인 방족술/미트] 1번: 잡고 몸통 밀기 / 2번: 암미트 전진 몸통 / 3번: 손미트 상단 끊어차기", "tmpl_bangjok")
         self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 1] A선수: 백스텝 받아차기 교차 상단 / B선수: 전진 몸통 후 사이드 왼발 상단", "tmpl_combo1")
         self.combo_relay_template.addItem("🎯 [카운터 & 반격 콤보] 1번: 앞발 컷트 후 뒷발 상단 / 2번: 사이드 스텝 뒤차기 카운터", "tmpl_counter")
@@ -961,7 +971,7 @@ class SparringDialog(QDialog):
 
         h_sig1 = QHBoxLayout()
         h_sig1.addWidget(QLabel("⚡ 타격 시작 신호:"))
-        self.combo_reac_signal = QComboBox()
+        self.combo_reac_signal = NoScrollComboBox()
         self.combo_reac_signal.addItem("📢 경기용 심판 휘슬 (호각)", "whistle")
         self.combo_reac_signal.addItem("🔔 전자 비프음 (880Hz 삑~익)", "beep")
         self.combo_reac_signal.addItem("🥁 웅장한 대북 타격음 (쿵)", "drum")
@@ -975,7 +985,7 @@ class SparringDialog(QDialog):
 
         h_sig2 = QHBoxLayout()
         h_sig2.addWidget(QLabel("🏁 훈련 종료 신호:"))
-        self.combo_reac_stop_signal = QComboBox()
+        self.combo_reac_stop_signal = NoScrollComboBox()
         self.combo_reac_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_reac_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
         self.combo_reac_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
@@ -993,7 +1003,7 @@ class SparringDialog(QDialog):
         
         h_tmpl = QHBoxLayout()
         h_tmpl.addWidget(QLabel("📋 훈련 템플릿 선택:"))
-        self.combo_cues_template = QComboBox()
+        self.combo_cues_template = NoScrollComboBox()
         self.combo_cues_template.addItem("🥋 [실전 스파링 콤보] 백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 상단!, 사이드 스텝 후 뒤차기!", "백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
         self.combo_cues_template.addItem("⚡ [스피드 연타] 1연타!, 2연타!, 3연타!, 앞발 나래차기!", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
         self.combo_cues_template.addItem("🛡️ [받아차기 / 카운터] 백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!", "백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!")
@@ -1053,7 +1063,7 @@ class SparringDialog(QDialog):
         
         h_cs1 = QHBoxLayout()
         h_cs1.addWidget(QLabel("타격 시작 신호음:"))
-        self.combo_start_signal = QComboBox()
+        self.combo_start_signal = NoScrollComboBox()
         self.combo_start_signal.addItem("📢 경기용 심판 휘슬 (호각 삐익~!)", "whistle")
         self.combo_start_signal.addItem("🔔 전자 비프음 (880Hz 삑~익!)", "beep")
         self.combo_start_signal.addItem("🥁 웅장한 대북 타격음 (쿵!)", "drum")
@@ -1062,7 +1072,7 @@ class SparringDialog(QDialog):
 
         h_cs2 = QHBoxLayout()
         h_cs2.addWidget(QLabel("연타 종료 신호:"))
-        self.combo_stop_signal = QComboBox()
+        self.combo_stop_signal = NoScrollComboBox()
         self.combo_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
         self.combo_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
@@ -1078,7 +1088,7 @@ class SparringDialog(QDialog):
         
         h_tmpl_step = QHBoxLayout()
         h_tmpl_step.addWidget(QLabel("📋 스텝 템플릿:"))
-        self.combo_step_tmpl = QComboBox()
+        self.combo_step_tmpl = NoScrollComboBox()
         self.combo_step_tmpl.addItem("🥋 [실전 스파링 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔", 
             "제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
         self.combo_step_tmpl.addItem("⚡ [스피드 순발력] 제자리 ➔ 사이드 ➔ 지그재그 ➔ 앞발 발바꿔 ➔ 페이크",
@@ -1103,7 +1113,7 @@ class SparringDialog(QDialog):
         
         h_tmpl_kick = QHBoxLayout()
         h_tmpl_kick.addWidget(QLabel("📋 공격 기술 템플릿:"))
-        self.combo_kick_tmpl = QComboBox()
+        self.combo_kick_tmpl = NoScrollComboBox()
         self.combo_kick_tmpl.addItem("🥋 [실전 스파링 콤보] 전진 몸통 후 사이드 상단, 백스텝 후 받아차기/교차 상단, 전진 몸통 3연타",
             "전진 몸통공격 후 사이드 스텝 상단, 백스텝 후 뒷발 받아차기 공격과 교차 상단 공격, 전진 몸통 3연타")
         self.combo_kick_tmpl.addItem("⚡ [스피드 연타 공격] 빠른 원투 몸통연타 후 상단 돌려차기, 앞발 나래차기 후 뒷발 상단, 제자리 3연타",
@@ -1125,7 +1135,7 @@ class SparringDialog(QDialog):
 
         h_kick_mode = QHBoxLayout()
         h_kick_mode.addWidget(QLabel("📢 기술 안내 방식:"))
-        self.combo_kick_mode = QComboBox()
+        self.combo_kick_mode = NoScrollComboBox()
         self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명 (본 훈련은 스텝 지시에만 집중 - 추천)", "intro_only")
         self.combo_kick_mode.addItem("🗣️ 시작 전 사전 안내 + 매 세트 스텝 지시 시 기술명 함께 호명", "each_set")
         h_kick_mode.addWidget(self.combo_kick_mode, stretch=1)
@@ -1148,7 +1158,7 @@ class SparringDialog(QDialog):
 
         h_rtype_sel = QHBoxLayout()
         h_rtype_sel.addWidget(QLabel("🥊 훈련 유형:"))
-        self.combo_rnd_type = QComboBox()
+        self.combo_rnd_type = NoScrollComboBox()
         self.combo_rnd_type.addItem("🥊 실전 스파링 (자유 대련 - 경기 룰 및 종료 구령)", "real")
         self.combo_rnd_type.addItem("🏃 섀도우 스파링 (가상 상대 이미지 트레이닝 & 전신 풋워크)", "shadow")
         self.combo_rnd_type.addItem("🤝 약속 스파링 (사전 합의된 공격/방어 기술 집중 훈련)", "promise")
@@ -1178,7 +1188,7 @@ class SparringDialog(QDialog):
 
         h_atk_mode = QHBoxLayout()
         h_atk_mode.addWidget(QLabel("🔄 공수 진행 방식:"))
-        self.combo_atk_def_mode = QComboBox()
+        self.combo_atk_def_mode = NoScrollComboBox()
         self.combo_atk_def_mode.addItem("🔁 라운드별 공수 자동 교대 (1R: A공격/B방어, 2R: B공격/A방어...)", "alternate")
         self.combo_atk_def_mode.addItem("🅰️ A선수 공격 / B선수 방어 (전 라운드 고정)", "a_attack_only")
         self.combo_atk_def_mode.addItem("🅱️ B선수 공격 / A선수 방어 (전 라운드 고정)", "b_attack_only")
@@ -1231,7 +1241,7 @@ class SparringDialog(QDialog):
         g_rnd_sig = QGroupBox("3. 라운드 종료 신호 (선택)")
         l_rsig = QHBoxLayout(g_rnd_sig)
         l_rsig.addWidget(QLabel("🔔 라운드 종료 신호:"))
-        self.combo_rnd_stop_signal = QComboBox()
+        self.combo_rnd_stop_signal = NoScrollComboBox()
         self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (태권도/격투기 경기 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_rnd_stop_signal.addItem("🛑 음성: '중지! 타임!'", "voice_stop")
         self.combo_rnd_stop_signal.addItem("✋ 음성: '그만! 타임!'", "voice_end")
@@ -1277,7 +1287,7 @@ class SparringDialog(QDialog):
         h_intro_opts.addWidget(self.cb_countdown)
 
         h_intro_opts.addWidget(QLabel("카운트다운 구령:"))
-        self.combo_cd_style = QComboBox()
+        self.combo_cd_style = NoScrollComboBox()
         self.combo_cd_style.addItem("🇺🇸 영어 본토 발음 (Three, Two, One)", "en_321")
         self.combo_cd_style.addItem("🏆 영어 스포츠 구령 (Are you ready? Ready! Three, Two, One)", "en_ready")
         self.combo_cd_style.addItem("🇰🇷 한국어 친근한 구령 (준비되었나요? 준비! 셋, 둘, 하나)", "ko_ready")
@@ -1293,7 +1303,7 @@ class SparringDialog(QDialog):
         h_opts.addWidget(self.cb_ducking)
 
         h_opts.addWidget(QLabel("구령 화자:"))
-        self.voice_combo = QComboBox()
+        self.voice_combo = NoScrollComboBox()
         self.voice_combo.addItems([
             "선히 (한국어 여성, 또렷함)",
             "인준 (한국어 남성, 힘찬 구령 추천)",
@@ -1307,7 +1317,7 @@ class SparringDialog(QDialog):
         h_outro = QVBoxLayout()
         h_outro_top = QHBoxLayout()
         h_outro_top.addWidget(QLabel("🏁 훈련 종료 멘트 (휴식/대기 안내):"))
-        self.combo_outro_tmpl = QComboBox()
+        self.combo_outro_tmpl = NoScrollComboBox()
         self.combo_outro_tmpl.addItem("🧘 [제자리 대기] 수고하셨습니다! 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요.",
             "수고하셨습니다! 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요.")
         self.combo_outro_tmpl.addItem("🤸 [전신 스트레칭] 수고하셨습니다! 가볍게 몸을 풀고 전신 스트레칭하며 쿨다운하세요.",
@@ -1378,7 +1388,7 @@ class SparringDialog(QDialog):
         # 4. 덕킹 강도 & 프리셋
         h_v4 = QHBoxLayout()
         h_v4.addWidget(QLabel("📉 오토덕킹 강도:"))
-        self.combo_duck_level = QComboBox()
+        self.combo_duck_level = NoScrollComboBox()
         self.combo_duck_level.addItem("부드러운 감쇄 (-4 dB) - 음악 비트 유지 [강력 추천]", -4.0)
         self.combo_duck_level.addItem("보통 감쇄 (-6 dB) - 균형 잡힌 사운드", -6.0)
         self.combo_duck_level.addItem("강한 감쇄 (-10 dB) - 구령 집중", -10.0)
