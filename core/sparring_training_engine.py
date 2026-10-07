@@ -706,11 +706,11 @@ class SparringTrainingEngine:
                     elif round_type == "attack_defense":
                         atk_def_mode = params.get("atk_def_mode", "alternate")
                         if atk_def_mode == "a_attack_only":
-                            intro_text = "지금부터 A선수 공격, B선수 방어 공수 특화 스파링 훈련을 시작합니다. A선수는 적극적으로 공격하고, B선수는 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                            intro_text = "지금부터 A선수 공격, B선수 방어 공수 특화 스파링 훈련을 시작합니다."
                         elif atk_def_mode == "b_attack_only":
-                            intro_text = "지금부터 B선수 공격, A선수 방어 공수 특화 스파링 훈련을 시작합니다. B선수는 적극적으로 공격하고, A선수는 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                            intro_text = "지금부터 B선수 공격, A선수 방어 공수 특화 스파링 훈련을 시작합니다."
                         else:
-                            intro_text = "지금부터 A선수와 B선수 공수 교대 스파링 훈련을 시작합니다. 공격 선수는 적극적으로 몰아붙이고, 방어 선수는 가드와 스텝으로 침착하게 방어하세요. 양 선수 준비해 주세요!"
+                            intro_text = "지금부터 A선수와 B선수 공수 교대 스파링 훈련을 시작합니다."
                     else:
                         intro_text = "지금부터 정규 실전 스파링 라운드 훈련을 시작합니다. 양 선수 마주보고 차렷, 경례! 준비해 주세요!"
                 else:
@@ -728,9 +728,40 @@ class SparringTrainingEngine:
             duck_segments.append((int(curr_time * 1000), int((curr_time + intro_dur + 0.5) * 1000)))
             curr_time += intro_dur + 0.8
 
-            # ⭐ [사용자 요청] 설명 후 받기자 미트 착용 및 위치 선정 대기 시간 (n초) + "모두 준비가 되었나요?" 확인
+            # ⭐ [사용자 요청] 공수 스파링(attack_defense) 시퀀스: 설명 ➔ 주의사항 ➔ 모두 준비 되었나요?
+            if mode == "rounds" and params.get("round_type") == "attack_defense":
+                caution_text = params.get("caution_text", "").strip()
+                if not caution_text:
+                    caution_text = "스파링 시 안전에 유의하세요. 방어 선수는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격 선수는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!"
+                
+                caut_dur = max(3.0, round(len(caution_text) * 0.22, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[주의사항] {caution_text}",
+                    "duration": caut_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + caut_dur + 0.5) * 1000)))
+                curr_time += caut_dur + 0.8
+
+                ready_prompt = "모두 준비가 되었나요?"
+                ready_dur = 1.8
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": f"[준비 확인] {ready_prompt}",
+                    "duration": ready_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + ready_dur + 0.5) * 1000)))
+                curr_time += ready_dur + 1.5
+
+            # ⭐ [사용자 요청] 설명 후 받기자 미트 착용 및 위치 선정 대기 시간 (n초) + "모두 준비가 되었나요?" 확인 (릴레이 등)
             prep_wait_sec = float(params.get("prep_wait_sec", 0.0))
-            if prep_wait_sec > 0:
+            if prep_wait_sec > 0 and mode != "rounds":
                 curr_time += prep_wait_sec
                 ready_prompt = "모두 준비가 되었나요?"
                 ready_dur = 1.8
@@ -743,11 +774,11 @@ class SparringTrainingEngine:
                     "vol": 2.5
                 })
                 duck_segments.append((int(curr_time * 1000), int((curr_time + ready_dur + 0.5) * 1000)))
-                # 사용자 요청: "모두 준비가 되었나요? 딜레이 2초 후에 시작"
                 curr_time += ready_dur + 2.0
 
         # 카운트다운 (Three, Two, One / 3-2-1)
-        if countdown_enabled:
+        # ⭐ [사용자 요청] 정규 스파링 라운드(rounds)는 카운트다운 제외, 릴레이(relay)는 1세트 종목 설명 뒤에 배치
+        if countdown_enabled and mode not in ("relay", "rounds"):
             cd_text = "[카운트다운] Three, Two, One"
             if cd_style == "ko_321":
                 cd_text = "[카운트다운] 셋, 둘, 하나"
@@ -758,7 +789,6 @@ class SparringTrainingEngine:
             elif cd_style == "beep":
                 cd_text = "[카운트다운] 전자 비프음 3회 (띡-띡-띡)"
 
-            # 3-2-1 각 숫자 사이에 1.5초 딜레이 배치: 총 소요시간 약 4.3초 (ready 포함 시 약 6.5초)
             cd_dur = 6.5 if "ready" in cd_style else 4.3
             events.append({
                 "time": curr_time,
@@ -771,7 +801,7 @@ class SparringTrainingEngine:
                 "vol": 2.0
             })
             duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
-            curr_time += cd_dur + 1.5  # 1(One) 발성 후 1.5초 긴장 딜레이 (사용자 요청: 3-1.5s, 2-1.5s, 1-1.5s)
+            curr_time += cd_dur + 1.5
 
         # ── Mode 1: 다자간 릴레이 순환 발차기 (1:1, 1:2, 1:3) ──
         if mode == "relay":
@@ -822,7 +852,36 @@ class SparringTrainingEngine:
                         "vol": 2.5
                     })
                     duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
-                    curr_time += call_dur + 1.0  # 음성 후 1.0초 정밀 긴장 딜레이
+                    curr_time += call_dur + 0.4
+
+                    # ⭐ [사용자 승인] 1세트 첫 번째 선수(c == 1, f == 1) 준비 멘트 직후에 카운트다운 배치!
+                    # 순서: [사전 안내] ➔ [1세트 설명: 앞차기! A선수 준비!] ➔ [카운트다운: 셋, 둘, 하나] ➔ [삑~익!]
+                    if c == 1 and f == 1 and countdown_enabled:
+                        cd_text = "[카운트다운] Three, Two, One"
+                        if cd_style == "ko_321":
+                            cd_text = "[카운트다운] 셋, 둘, 하나"
+                        elif cd_style == "ko_ready":
+                            cd_text = "[카운트다운] 준비되었나요? 준비! 셋, 둘, 하나"
+                        elif cd_style == "en_ready":
+                            cd_text = "[카운트다운] Are you ready? Ready! Three, Two, One"
+                        elif cd_style == "beep":
+                            cd_text = "[카운트다운] 전자 비프음 3회 (띡-띡-띡)"
+
+                        cd_dur = 6.5 if "ready" in cd_style else 4.3
+                        events.append({
+                            "time": curr_time,
+                            "type": "countdown",
+                            "text": cd_text,
+                            "cd_style": cd_style,
+                            "sound_file": os.path.join("effects", "countdown_beeps.wav") if cd_style == "beep" else os.path.join("effects", "countdown.wav"),
+                            "duration": cd_dur,
+                            "track": 2,
+                            "vol": 2.2
+                        })
+                        duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
+                        curr_time += cd_dur + 0.6
+                    else:
+                        curr_time += 0.5  # 카운트다운 없는 경우(교대 선수 또는 2세트 이후) 0.5초 호흡 긴장 딜레이
 
                     # 3. 타격 시작 신호음 (삑~익!)
                     events.append({
@@ -889,9 +948,12 @@ class SparringTrainingEngine:
                             # 세트의 마지막 선수 완료 후 다음 세트로 넘어가는 휴식/교대 대기
                             curr_time += change_sec
 
-            # 7. 모든 세트 종료 시 정중하고 자연스러운 마무리 멘트 (수고하셨습니다! 물 한잔 마시고 다음 준비!)
-            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
-            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            # 7. 모든 세트 종료 시 정중하고 자연스러운 마무리 멘트
+            user_outro = params.get("outro_text", "").strip()
+            if user_outro and "물 한잔" not in user_outro:
+                outro_text = user_outro
+            else:
+                outro_text = "릴레이 발차기 훈련 종료! 모두 수고하셨습니다. 장비 정리 후 제자리 앉아서 대기하세요."
             outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 0.5,
@@ -1058,8 +1120,11 @@ class SparringTrainingEngine:
             )
             curr_time += 0.3 + delta + 0.5
 
-            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
-            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            user_outro = params.get("outro_text", "").strip()
+            if user_outro and "물 한잔" not in user_outro:
+                outro_text = user_outro
+            else:
+                outro_text = "반응 훈련 종료! 모두 수고하셨습니다. 가볍게 몸을 풀고 제자리 앉아서 대기하세요."
             outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time,
@@ -1163,8 +1228,11 @@ class SparringTrainingEngine:
                 "track": 2,
                 "vol": 1.5
             })
-            default_outro = "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
-            outro_text = params.get("outro_text", default_outro).strip() or default_outro
+            user_outro = params.get("outro_text", "").strip()
+            if user_outro and "물 한잔" not in user_outro:
+                outro_text = user_outro
+            else:
+                outro_text = "스텝 연타 훈련 완료! 모두 수고하셨습니다. 가볍게 전신 스트레칭하며 다음 지시를 기다리세요."
             outro_dur = max(2.5, round(len(outro_text) * 0.22, 2))
             events.append({
                 "time": curr_time + 1.5,
@@ -1187,49 +1255,57 @@ class SparringTrainingEngine:
             promise_detail = params.get("promise_detail", "").strip()
 
             for r in range(1, total_rounds + 1):
-                # 라운드 시작 멘트 & 휘슬
+                # ⭐ [사용자 요청]
+                # 1) 초반(1라운드)에만 설명/지시사항을 넣고, 2라운드부터는 간결하게 구령 후 삐익!
+                # 2) 휘슬 뒤에 구령이 아니라, 구령(준비!) ➔ 휘슬(삐익!) 순서로 변경 (신호음으로 경기 시작)
+                if r == 1:
+                    if round_type == "shadow":
+                        round_call = "제 1라운드 섀도우 스파링! 준비!"
+                    elif round_type == "promise":
+                        if promise_detail:
+                            round_call = f"제 1라운드 약속 스파링! {promise_detail}! 준비!"
+                        else:
+                            round_call = "제 1라운드 약속 스파링! 준비!"
+                    elif round_type == "attack_defense":
+                        if atk_def_mode == "b_attack_only":
+                            round_call = "제 1라운드! B선수 공격, A선수 방어! 준비!"
+                        else:
+                            round_call = "제 1라운드! A선수 공격, B선수 방어! 준비!"
+                    else:
+                        round_call = "제 1라운드! 준비!"
+                else:
+                    if round_type == "attack_defense" and atk_def_mode == "alternate":
+                        current_atk = "A선수" if (r % 2 == 1) else "B선수"
+                        current_def = "B선수" if (r % 2 == 1) else "A선수"
+                        round_call = f"제 {r}라운드! {current_atk} 공격, {current_def} 방어! 준비!"
+                    else:
+                        round_call = f"제 {r}라운드! 준비!"
+
+                # 1. 먼저 "제 n라운드 ... 준비!" 음성 송출
+                round_call_dur = max(1.5, round(len(round_call) * 0.22, 2))
+                events.append({
+                    "time": curr_time,
+                    "type": "voice",
+                    "text": round_call,
+                    "duration": round_call_dur,
+                    "track": 2,
+                    "vol": 2.5
+                })
+                duck_segments.append((int(curr_time * 1000), int((curr_time + round_call_dur + 0.4) * 1000)))
+                curr_time += round_call_dur + 0.4  # "준비!" 발성 후 0.4초 긴장 딜레이
+
+                # 2. 그 다음 시작 신호음 (호각/휘슬 - 삐익~!) 으로 경기 시작!
                 events.append({
                     "time": curr_time,
                     "type": "whistle",
-                    "text": f"[{r}라운드 시작] 경기 시작 휘슬!",
+                    "text": f"[{r}라운드 시작 신호음] 경기 시작 휘슬!",
                     "sound_file": os.path.join("effects", "whistle.wav"),
                     "duration": 0.35,
                     "track": 1,
-                    "vol": 2.5
+                    "vol": 3.0
                 })
-
-                # 라운드별 맞춤 시작 음성
-                if round_type == "shadow":
-                    round_start_text = f"제 {r}라운드 섀도우 스파링, 시작!"
-                elif round_type == "promise":
-                    if promise_detail:
-                        round_start_text = f"제 {r}라운드 약속 스파링! {promise_detail}! 시작!"
-                    else:
-                        round_start_text = f"제 {r}라운드 약속 스파링, 시작!"
-                elif round_type == "attack_defense":
-                    if atk_def_mode == "a_attack_only":
-                        round_start_text = f"제 {r}라운드! A선수 공격, B선수 방어! 시작!"
-                    elif atk_def_mode == "b_attack_only":
-                        round_start_text = f"제 {r}라운드! B선수 공격, A선수 방어! 시작!"
-                    else:
-                        # 1R: A공격/B방어, 2R: B공격/A방어 자동 교대
-                        if r % 2 == 1:
-                            round_start_text = f"제 {r}라운드! A선수 공격, B선수 방어! 시작!"
-                        else:
-                            round_start_text = f"제 {r}라운드! B선수 공격, A선수 방어! 시작!"
-                else:
-                    round_start_text = f"제 {r}라운드, 시작!"
-
-                round_start_dur = max(1.8, round(len(round_start_text) * 0.22, 2))
-                events.append({
-                    "time": curr_time + 0.3,
-                    "type": "voice",
-                    "text": round_start_text,
-                    "duration": round_start_dur,
-                    "track": 2,
-                    "vol": 2.2
-                })
-                duck_segments.append((int(curr_time * 1000), int((curr_time + round_start_dur + 0.8) * 1000)))
+                duck_segments.append((int(curr_time * 1000), int((curr_time + 0.5) * 1000)))
+                curr_time += 0.4  # 신호음 직후부터 실경기 시간 시작
 
                 # 라운드 종료 10초 전 경고음
                 warn_time = curr_time + round_sec - 10.0
@@ -1237,7 +1313,7 @@ class SparringTrainingEngine:
                     if round_type == "shadow":
                         warn_text = "[종료 10초 전] 마지막 10초! 전력 스퍼트!"
                     elif round_type == "attack_defense":
-                        warn_text = "[종료 10초 전] 마지막 10초! 전력 공격 몰아붙이세요!"
+                        warn_text = "[종료 10초 전] 마지막 10초! 공격 몰아붙이세요!"
                     elif round_type == "promise":
                         warn_text = "[종료 10초 전] 마지막 10초! 침착하게 마무리!"
                     else:
@@ -1278,14 +1354,15 @@ class SparringTrainingEngine:
                 if r < total_rounds:
                     # 휴식 멘트
                     if round_type == "attack_defense" and atk_def_mode == "alternate":
-                        next_atk = "B선수" if r % 2 == 1 else "A선수"
-                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 다음 라운드는 {next_atk} 공격 차례입니다! 숨 고르세요."
+                        next_atk = "B선수" if (r % 2 == 1) else "A선수"
+                        next_def = "A선수" if (r % 2 == 1) else "B선수"
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 다음 라운드는 {next_atk} 공격, {next_def} 방어 차례입니다! 호흡 정돈하세요."
                     elif round_type == "shadow":
-                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 정돈하고 다음 섀도우 준비하세요."
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡을 가다듬고 다리 가볍게 털어주세요."
                     elif round_type == "promise":
-                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 가다듬고 다음 약속 공방 준비하세요."
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 정돈하고 다음 약속 공방 준비하세요."
                     else:
-                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 물 마시고 숨 고르세요."
+                        rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡 가다듬고 가볍게 스트레칭하며 다음 라운드를 준비하세요."
 
                     rest_dur = max(2.5, round(len(rest_msg) * 0.22, 2))
                     events.append({
@@ -1299,15 +1376,19 @@ class SparringTrainingEngine:
                     duck_segments.append((int(curr_time * 1000), int((curr_time + rest_dur + 0.5) * 1000)))
                     curr_time += rest_sec
                 else:
-                    # 최종 경기 종료
-                    if round_type == "shadow":
-                        final_msg = "[훈련 종료] 섀도우 스파링 종료! 모두 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
-                    elif round_type == "promise":
-                        final_msg = "[훈련 종료] 약속 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
-                    elif round_type == "attack_defense":
-                        final_msg = "[훈련 종료] 공수 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
+                    # 최종 경기 종료 멘트 (물 한잔 반복 문제 해결!)
+                    user_outro = params.get("outro_text", "").strip()
+                    if user_outro and "물 한잔" not in user_outro:
+                        final_msg = f"[훈련 종료] 경기 종료! {user_outro}"
                     else:
-                        final_msg = "[훈련 종료] 경기 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!"
+                        if round_type == "shadow":
+                            final_msg = "[훈련 종료] 섀도우 스파링 종료! 모두 수고하셨습니다. 가볍게 몸을 풀고 전신 스트레칭을 실시하세요."
+                        elif round_type == "promise":
+                            final_msg = "[훈련 종료] 약속 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다. 장비 정리 후 제자리 앉아서 대기하세요."
+                        elif round_type == "attack_defense":
+                            final_msg = "[훈련 종료] 공수 스파링 종료! 양 선수 마주보고 차렷, 경례! 수고하셨습니다. 다리 가볍게 털고 심호흡하며 스트레칭하세요."
+                        else:
+                            final_msg = "[훈련 종료] 경기 종료! 양 선수 마주보고 차렷, 경례! 모두 수고하셨습니다. 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요."
 
                     final_dur = max(3.0, round(len(final_msg) * 0.22, 2))
                     events.append({

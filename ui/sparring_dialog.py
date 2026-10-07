@@ -1173,14 +1173,25 @@ class SparringDialog(QDialog):
 
         # 1-2. A공격 / B방어 공수 스파링 세부 옵션 위젯
         self.widget_atk_def_opt = QWidget()
-        l_atk_def = QHBoxLayout(self.widget_atk_def_opt)
+        l_atk_def = QVBoxLayout(self.widget_atk_def_opt)
         l_atk_def.setContentsMargins(0, 4, 0, 0)
-        l_atk_def.addWidget(QLabel("🔄 공수 진행 방식:"))
+
+        h_atk_mode = QHBoxLayout()
+        h_atk_mode.addWidget(QLabel("🔄 공수 진행 방식:"))
         self.combo_atk_def_mode = QComboBox()
         self.combo_atk_def_mode.addItem("🔁 라운드별 공수 자동 교대 (1R: A공격/B방어, 2R: B공격/A방어...)", "alternate")
         self.combo_atk_def_mode.addItem("🅰️ A선수 공격 / B선수 방어 (전 라운드 고정)", "a_attack_only")
         self.combo_atk_def_mode.addItem("🅱️ B선수 공격 / A선수 방어 (전 라운드 고정)", "b_attack_only")
-        l_atk_def.addWidget(self.combo_atk_def_mode, stretch=1)
+        h_atk_mode.addWidget(self.combo_atk_def_mode, stretch=1)
+        l_atk_def.addLayout(h_atk_mode)
+
+        h_caution = QHBoxLayout()
+        h_caution.addWidget(QLabel("⚠️ 안전 주의사항:"))
+        self.txt_atk_def_caution = QLineEdit()
+        self.txt_atk_def_caution.setText("스파링 시 안전에 유의하세요. 방어 선수는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격 선수는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!")
+        self.txt_atk_def_caution.setPlaceholderText("공수 스파링 시작 전 송출될 안전 수칙 및 주의사항을 입력하세요")
+        h_caution.addWidget(self.txt_atk_def_caution, stretch=1)
+        l_atk_def.addLayout(h_caution)
         l_rtype.addWidget(self.widget_atk_def_opt)
 
         self.combo_rnd_type.currentIndexChanged.connect(self._on_rnd_type_changed)
@@ -1292,24 +1303,28 @@ class SparringDialog(QDialog):
         h_opts.addWidget(self.voice_combo)
         l_common.addLayout(h_opts)
 
-        # 훈련 종료 후 휴식/대기 안내 멘트 설정 (사용자 요청: 정렬 대신 물 한잔 및 다음 지시 대기/휴식)
+        # 훈련 종료 후 휴식/대기 안내 멘트 설정 (사용자 요청: 물 한잔 일변도 탈피 및 스트레칭, 제자리 대기 등 다양화)
         h_outro = QVBoxLayout()
         h_outro_top = QHBoxLayout()
         h_outro_top.addWidget(QLabel("🏁 훈련 종료 멘트 (휴식/대기 안내):"))
         self.combo_outro_tmpl = QComboBox()
-        self.combo_outro_tmpl.addItem("💧 [추천] 수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!",
-            "수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!")
-        self.combo_outro_tmpl.addItem("🥤 [간결] 수고하셨습니다! 물 한잔 마시고 다음 준비!",
-            "수고하셨습니다! 물 한잔 마시고 다음 준비!")
-        self.combo_outro_tmpl.addItem("⏳ [호흡 & 대기] 수고하셨습니다! 호흡 가다듬고 물 마시며 다음 준비하세요!",
-            "수고하셨습니다! 호흡 가다듬고 물 마시며 다음 준비하세요!")
+        self.combo_outro_tmpl.addItem("🧘 [제자리 대기] 수고하셨습니다! 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요.",
+            "수고하셨습니다! 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요.")
+        self.combo_outro_tmpl.addItem("🤸 [전신 스트레칭] 수고하셨습니다! 가볍게 몸을 풀고 전신 스트레칭하며 쿨다운하세요.",
+            "수고하셨습니다! 가볍게 몸을 풀고 전신 스트레칭하며 쿨다운하세요.")
+        self.combo_outro_tmpl.addItem("🧎 [심호흡 & 릴랙스] 모두 수고하셨습니다! 다리 가볍게 털고 심호흡하며 다음 지시를 기다리세요.",
+            "모두 수고하셨습니다! 다리 가볍게 털고 심호흡하며 다음 지시를 기다리세요.")
+        self.combo_outro_tmpl.addItem("🥋 [상호 경례 & 장비정리] 수고하셨습니다! 양 선수 마주보고 차렷, 경례! 장비 정리 후 제자리 대기하세요.",
+            "수고하셨습니다! 양 선수 마주보고 차렷, 경례! 장비 정리 후 제자리 대기하세요.")
+        self.combo_outro_tmpl.addItem("💧 [수분 섭취 & 호흡] 수고하셨습니다! 물 한잔 마시고 호흡 정돈하세요.",
+            "수고하셨습니다! 물 한잔 마시고 호흡 정돈하세요.")
         self.combo_outro_tmpl.addItem("🏁 [완전 종료] 오늘의 훈련이 모두 종료되었습니다. 수고하셨습니다!",
             "오늘의 훈련이 모두 종료되었습니다. 수고하셨습니다!")
         self.combo_outro_tmpl.currentIndexChanged.connect(self._on_outro_tmpl_changed)
         h_outro_top.addWidget(self.combo_outro_tmpl, stretch=1)
         h_outro.addLayout(h_outro_top)
 
-        self.txt_outro_ment = QLineEdit("수고하셨습니다! 물 한잔 마시고 다음 훈련 준비하세요!")
+        self.txt_outro_ment = QLineEdit("수고하셨습니다! 제자리에 바르게 앉아 호흡을 정돈하고 대기하세요.")
         self.txt_outro_ment.setPlaceholderText("훈련 종료 후 송출될 휴식 및 대기 안내 멘트를 자유롭게 입력하세요")
         h_outro.addWidget(self.txt_outro_ment)
         l_common.addLayout(h_outro)
@@ -1678,6 +1693,7 @@ class SparringDialog(QDialog):
             params["round_type"] = self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real"
             params["promise_detail"] = self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else ""
             params["atk_def_mode"] = self.combo_atk_def_mode.currentData() if hasattr(self, 'combo_atk_def_mode') else "alternate"
+            params["caution_text"] = self.txt_atk_def_caution.text().strip() if hasattr(self, 'txt_atk_def_caution') else ""
 
         self.btn_generate.setEnabled(False)
         self.progress_bar.setVisible(True)
