@@ -1275,30 +1275,9 @@ class SparringTrainingEngine:
 
             for r in range(1, total_rounds + 1):
                 # ⭐ [사용자 요청]
-                # 1) 초반(1라운드)에만 설명/지시사항을 넣고, 2라운드부터는 간결하게 구령 후 삐익!
-                # 2) 휘슬 뒤에 구령이 아니라, 구령(준비!) ➔ 휘슬(삐익!) 순서로 변경 (신호음으로 경기 시작)
-                if r == 1:
-                    if round_type == "shadow":
-                        round_call = "제 1라운드 섀도우 스파링! 준비!"
-                    elif round_type == "promise":
-                        if promise_detail:
-                            round_call = f"제 1라운드 약속 스파링! {promise_detail}! 준비!"
-                        else:
-                            round_call = "제 1라운드 약속 스파링! 준비!"
-                    elif round_type == "attack_defense":
-                        if atk_def_mode == "b_attack_only":
-                            round_call = "제 1라운드! B선수 공격, A선수 방어! 준비!"
-                        else:
-                            round_call = "제 1라운드! A선수 공격, B선수 방어! 준비!"
-                    else:
-                        round_call = "제 1라운드! 준비!"
-                else:
-                    if round_type == "attack_defense" and atk_def_mode == "alternate":
-                        current_atk = "A선수" if (r % 2 == 1) else "B선수"
-                        current_def = "B선수" if (r % 2 == 1) else "A선수"
-                        round_call = f"제 {r}라운드! {current_atk} 공격, {current_def} 방어! 준비!"
-                    else:
-                        round_call = f"제 {r}라운드! 준비!"
+                # 설명은 훈련 시작 전 [사전 안내]에서 한 번만 하고, 라운드마다 설명 중복 완전 제거!
+                # 모든 라운드는 간결하게 구령("제 n라운드! 준비!") ➔ 신호음(삐익!) 순서로만 경기 시작
+                round_call = f"제 {r}라운드! 준비!"
 
                 # 1. 먼저 "제 n라운드 ... 준비!" 음성 송출
                 round_call_dur = max(1.5, round(len(round_call) * 0.22, 2))

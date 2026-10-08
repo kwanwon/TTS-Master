@@ -185,23 +185,24 @@ class ShuttleRunEngine:
         bgm_audio: AudioSegment,
         duck_segments: List[tuple],
         duck_db: float = -4.0,
-        fade_down_ms: int = 400,
-        fade_up_ms: int = 650,
+        fade_down_ms: int = 1500,
+        fade_up_ms: int = 2000,
         fade_ms: Optional[int] = None,
         **kwargs
     ) -> AudioSegment:
         """
         Applies professional studio-grade smooth auto-ducking to the background music.
-        Smoothly ramps down BGM volume before voice segments (fade-down / attack)
-        and smoothly restores BGM volume after voice segments (fade-up / release).
-        Eliminates abrupt volume drops, clipping, and silence gaps.
+        Smoothly ramps down BGM volume 1.5s before voice segments (fade-down / attack)
+        and smoothly restores BGM volume over 2.0s after voice segments (fade-up / release).
+        Prevents volume flutter during short pauses between speech segments.
         """
         if not duck_segments or len(bgm_audio) == 0 or duck_db == 0.0:
             return bgm_audio
 
-        if fade_ms is not None:
-            fade_down_ms = fade_ms
-            fade_up_ms = int(fade_ms * 1.5)
+        if fade_ms is not None and "fade_down_ms" not in kwargs:
+            # Fallback only if custom fade_ms was explicitly provided without new params
+            fade_down_ms = max(1000, fade_ms)
+            fade_up_ms = max(1500, int(fade_ms * 1.5))
 
         # Target gain factor (e.g., -6 dB -> 10^(-6/20) ~= 0.501)
         target_gain = float(10.0 ** (duck_db / 20.0))
@@ -214,9 +215,9 @@ class ShuttleRunEngine:
         total_len_ms = len(bgm_audio)
 
         # 1. Merge overlapping or closely spaced duck segments
-        # If gap between segments is less than (fade_up_ms + fade_down_ms) * 0.7, merge them
-        # so volume doesn't bounce erratically between quick consecutive phrases
-        min_gap_ms = int((fade_up_ms + fade_down_ms) * 0.7)
+        # If gap between segments is less than 2.5s (2500ms), merge them seamlessly
+        # so volume does not flutter or bounce erratically during short speech pauses
+        min_gap_ms = max(2500, int(fade_up_ms * 1.0))
         sorted_segs = sorted(duck_segments, key=lambda x: x[0])
 
         merged_segs = []
