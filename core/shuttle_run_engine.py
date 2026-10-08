@@ -9,6 +9,7 @@ import os
 import math
 import uuid
 from typing import List, Dict, Any, Optional
+import numpy as np
 from pydub import AudioSegment
 from pydub.effects import normalize
 
@@ -184,51 +185,107 @@ class ShuttleRunEngine:
         bgm_audio: AudioSegment,
         duck_segments: List[tuple],
         duck_db: float = -4.0,
-        fade_ms: int = 250
+        fade_down_ms: int = 400,
+        fade_up_ms: int = 650,
+        fade_ms: Optional[int] = None,
+        **kwargs
     ) -> AudioSegment:
         """
-        Ducks background music volume by `duck_db` during periods specified in `duck_segments`
-        [(start_ms, end_ms), ...].
+        Applies professional studio-grade smooth auto-ducking to the background music.
+        Smoothly ramps down BGM volume before voice segments (fade-down / attack)
+        and smoothly restores BGM volume after voice segments (fade-up / release).
+        Eliminates abrupt volume drops, clipping, and silence gaps.
         """
-        if not duck_segments or len(bgm_audio) == 0:
+        if not duck_segments or len(bgm_audio) == 0 or duck_db == 0.0:
             return bgm_audio
 
-        # Merge overlapping duck segments
+        if fade_ms is not None:
+            fade_down_ms = fade_ms
+            fade_up_ms = int(fade_ms * 1.5)
+
+        # Target gain factor (e.g., -6 dB -> 10^(-6/20) ~= 0.501)
+        target_gain = float(10.0 ** (duck_db / 20.0))
+        target_gain = max(0.05, min(1.0, target_gain))
+
+        # Ensure 16-bit PCM for robust sample operations
+        if bgm_audio.sample_width != 2:
+            bgm_audio = bgm_audio.set_sample_width(2)
+
+        total_len_ms = len(bgm_audio)
+
+        # 1. Merge overlapping or closely spaced duck segments
+        # If gap between segments is less than (fade_up_ms + fade_down_ms) * 0.7, merge them
+        # so volume doesn't bounce erratically between quick consecutive phrases
+        min_gap_ms = int((fade_up_ms + fade_down_ms) * 0.7)
         sorted_segs = sorted(duck_segments, key=lambda x: x[0])
-        merged = []
-        for start_ms, end_ms in sorted_segs:
-            # Add padding of 100ms before and 200ms after
-            s = max(0, start_ms - 100)
-            e = min(len(bgm_audio), end_ms + 200)
-            if not merged:
-                merged.append([s, e])
+
+        merged_segs = []
+        for s, e in sorted_segs:
+            s = max(0, int(s))
+            e = min(total_len_ms, int(e))
+            if s >= e:
+                continue
+            if not merged_segs:
+                merged_segs.append([s, e])
             else:
-                prev = merged[-1]
-                if s <= prev[1]:
+                prev = merged_segs[-1]
+                if s <= prev[1] + min_gap_ms:
                     prev[1] = max(prev[1], e)
                 else:
-                    merged.append([s, e])
+                    merged_segs.append([s, e])
 
-        ducked_bgm = bgm_audio
-        # Apply ducking slice by slice
-        result = AudioSegment.empty()
-        curr_pos = 0
+        if not merged_segs:
+            return bgm_audio
 
-        for s_ms, e_ms in merged:
-            if s_ms > curr_pos:
-                result += ducked_bgm[curr_pos:s_ms]
+        # 2. Build smooth gain envelope across total timeline in ms resolution
+        envelope_ms = np.ones(total_len_ms, dtype=np.float32)
 
-            # Ducked slice with smooth crossfades
-            duck_slice = ducked_bgm[s_ms:e_ms] + duck_db
-            if len(duck_slice) > fade_ms * 2:
-                duck_slice = duck_slice.fade_in(fade_ms).fade_out(fade_ms)
-            result += duck_slice
-            curr_pos = e_ms
+        for s_ms, e_ms in merged_segs:
+            # Fade down (smooth Cosine S-curve ramp down from 1.0 to target_gain before/at voice start)
+            ramp_down_start = max(0, s_ms - fade_down_ms)
+            ramp_down_len = s_ms - ramp_down_start
+            if ramp_down_len > 0:
+                t = np.linspace(0.0, 1.0, ramp_down_len, endpoint=False, dtype=np.float32)
+                curve = target_gain + (1.0 - target_gain) * 0.5 * (1.0 + np.cos(np.pi * t))
+                envelope_ms[ramp_down_start:s_ms] = np.minimum(envelope_ms[ramp_down_start:s_ms], curve)
 
-        if curr_pos < len(ducked_bgm):
-            result += ducked_bgm[curr_pos:]
+            # Hold at target_gain during voice speech
+            envelope_ms[s_ms:e_ms] = np.minimum(envelope_ms[s_ms:e_ms], target_gain)
 
-        return result
+            # Fade up (smooth Cosine S-curve ramp up from target_gain to 1.0 after voice end)
+            ramp_up_end = min(total_len_ms, e_ms + fade_up_ms)
+            ramp_up_len = ramp_up_end - e_ms
+            if ramp_up_len > 0:
+                t = np.linspace(0.0, 1.0, ramp_up_len, endpoint=False, dtype=np.float32)
+                curve = target_gain + (1.0 - target_gain) * 0.5 * (1.0 - np.cos(np.pi * t))
+                envelope_ms[e_ms:ramp_up_end] = np.minimum(envelope_ms[e_ms:ramp_up_end], curve)
+
+        # 3. Apply envelope to audio samples
+        channels = bgm_audio.channels
+        frame_rate = bgm_audio.frame_rate
+        sample_width = bgm_audio.sample_width
+
+        raw_samples = np.array(bgm_audio.get_array_of_samples(), dtype=np.float32)
+        total_frames = len(raw_samples) // channels
+
+        time_indices_ms = (np.arange(total_frames, dtype=np.float32) * (1000.0 / frame_rate)).astype(np.int32)
+        time_indices_ms = np.clip(time_indices_ms, 0, total_len_ms - 1)
+        frame_envelope = envelope_ms[time_indices_ms]
+
+        if channels == 1:
+            ducked_samples = raw_samples * frame_envelope
+        else:
+            sample_envelope = np.repeat(frame_envelope, channels)
+            ducked_samples = raw_samples * sample_envelope
+
+        ducked_samples = np.clip(ducked_samples, -32768.0, 32767.0).astype(np.int16)
+
+        return AudioSegment(
+            data=ducked_samples.tobytes(),
+            sample_width=sample_width,
+            frame_rate=frame_rate,
+            channels=channels
+        )
 
     @classmethod
     def build_seamless_bgm(

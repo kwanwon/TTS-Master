@@ -1,6 +1,6 @@
 {
-  "version": "1.6.7",
+  "version": "1.6.8",
   "release_date": "2026-10-08",
   "app_name": "AIMaster_TTS",
-  "description": "정규 스파링 라운드 모드 일반 라운드 종료 구령(갈려 등) 및 최종 라운드 경기 종료 구령(그만, 중지 등) 분리 선택 지원"
+  "description": "음성 재생 시 BGM 오토덕킹 S-curve 페이드인/페이드아웃 게인 엔벨로프 적용(음악 끊김 및 급격한 볼륨 급변 제거)"
 }
