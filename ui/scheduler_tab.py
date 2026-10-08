@@ -3,12 +3,12 @@ import json
 import pygame
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QListWidgetItem,
-    QTabWidget, QGroupBox, QLabel, QSlider, QTableWidget, QTableWidgetItem, QCheckBox,
+    QTabWidget, QTabBar, QGroupBox, QLabel, QSlider, QTableWidget, QTableWidgetItem, QCheckBox,
     QComboBox, QHeaderView, QMenu, QInputDialog, QMessageBox, QFileDialog, QTimeEdit,
-    QSplitter
+    QSplitter, QApplication
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QTime
-from PyQt6.QtGui import QAction, QKeySequence, QColor, QDropEvent, QBrush
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QTime, QUrl, QMimeData
+from PyQt6.QtGui import QAction, QKeySequence, QColor, QDropEvent, QDragEnterEvent, QDragMoveEvent, QBrush, QDrag, QFont
 
 class PlaybackThread(QThread):
     item_playing = pyqtSignal(int)
@@ -89,56 +89,235 @@ class PlaybackThread(QThread):
         self._is_stopped = True
         self._is_paused = False
 
-class AudioPlaylistWidget(QListWidget):
-    total_time_changed = pyqtSignal()
-    
+class HoverTabBar(QTabBar):
+    """드래그 중에 탭 바 위에 마우스를 350ms 올리면 해당 탭으로 자동 스위칭"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setSingleShot(True)
+        self._hover_timer.setInterval(350)
+        self._hover_index = -1
+        self._hover_timer.timeout.connect(self._on_hover_timeout)
+
+    def _on_hover_timeout(self):
+        if self._hover_index >= 0:
+            parent_tab = self.parent()
+            if isinstance(parent_tab, QTabWidget):
+                parent_tab.setCurrentIndex(self._hover_index)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        event.acceptProposedAction()
+        event.accept()
+
+    def dragMoveEvent(self, event: QDragMoveEvent):
+        pos = event.position().toPoint() if hasattr(event, 'position') else event.pos()
+        idx = self.tabAt(pos)
+        if idx >= 0 and idx != self.currentIndex():
+            if idx != self._hover_index:
+                self._hover_index = idx
+                self._hover_timer.start()
+        else:
+            self._hover_timer.stop()
+            self._hover_index = -1
+        event.acceptProposedAction()
+        event.accept()
+
+    def dragLeaveEvent(self, event):
+        self._hover_timer.stop()
+        self._hover_index = -1
+
+
+class AudioPlaylistWidget(QListWidget):
+    total_time_changed = pyqtSignal()
+    
+    def __init__(self, session_name="수련1", scheduler_tab=None, parent=None):
+        super().__init__(parent)
+        self.session_name = session_name
+        self.scheduler_tab = scheduler_tab
+        
+        self.setAcceptDrops(True)
         self.setDragEnabled(True)
-        self.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self.setDragDropMode(QListWidget.DragDropMode.DragDrop)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
-        self.setAlternatingRowColors(True)
+        self.setAlternatingRowColors(False)
+        self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        
+        # 글씨 크기 대폭 확대(14px) 및 항목 행 높이/패딩 여백 넉넉하게 확장 (손떨림 방지 카드형 UI)
+        self.setStyleSheet("""
+            QListWidget {
+                background-color: #1a1e24;
+                border: 2px solid #30363d;
+                border-radius: 8px;
+                padding: 6px;
+                font-size: 14px;
+                color: #f0f6fc;
+            }
+            QListWidget::item {
+                min-height: 40px;
+                height: 40px;
+                padding: 6px 14px;
+                margin: 4px 2px;
+                border-radius: 6px;
+                background-color: #242933;
+                border: 1px solid #323b47;
+                color: #f0f6fc;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QListWidget::item:hover {
+                background-color: #2f3846;
+                border: 1px solid #58a6ff;
+                color: #ffffff;
+            }
+            QListWidget::item:selected {
+                background-color: #1f6feb;
+                border: 1px solid #79c0ff;
+                color: #ffffff;
+                font-weight: bold;
+            }
+        """)
         
         self.undo_stack = []
         self.clipboard = []
         
         self.itemDoubleClicked.connect(self.edit_delay)
         
-    def dragEnterEvent(self, event: QDropEvent):
-        if event.mimeData().hasUrls():
+    def startDrag(self, supportedActions):
+        selected = self.selectedItems()
+        if not selected:
+            return
+            
+        items_payload = []
+        for item in selected:
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if data:
+                items_payload.append(dict(data))
+                
+        mime = QMimeData()
+        mime.setData("application/x-aimaster-playlist-items", json.dumps(items_payload).encode("utf-8"))
+        
+        # OS 호환용 URLs 첨부
+        urls = [QUrl.fromLocalFile(d['path']) for d in items_payload if os.path.exists(d.get('path', ''))]
+        if urls:
+            mime.setUrls(urls)
+            
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+        drag.exec(Qt.DropAction.MoveAction | Qt.DropAction.CopyAction)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls() or event.mimeData().hasFormat("application/x-aimaster-playlist-items") or isinstance(event.source(), AudioPlaylistWidget):
             event.acceptProposedAction()
+            event.accept()
         else:
             super().dragEnterEvent(event)
             
-    def dragMoveEvent(self, event: QDropEvent):
+    def dragMoveEvent(self, event: QDragMoveEvent):
         if event.mimeData().hasUrls():
+            event.setDropAction(Qt.DropAction.CopyAction)
             event.acceptProposedAction()
+            event.accept()
+        elif event.mimeData().hasFormat("application/x-aimaster-playlist-items") or isinstance(event.source(), AudioPlaylistWidget):
+            event.setDropAction(Qt.DropAction.MoveAction)
+            event.acceptProposedAction()
+            event.accept()
         else:
             super().dragMoveEvent(event)
 
     def dropEvent(self, event: QDropEvent):
-        # Handle file drops from OS
+        pos = event.position().toPoint() if hasattr(event, 'position') else event.pos()
+        target_item = self.itemAt(pos)
+        drop_row = self.row(target_item) if target_item else self.count()
+        if drop_row < 0:
+            drop_row = self.count()
+
+        # 1. 수련 리스트 간 및 동일 리스트 내부 드래그 앤 드롭 이동
+        if event.mimeData().hasFormat("application/x-aimaster-playlist-items") or isinstance(event.source(), AudioPlaylistWidget):
+            items_payload = []
+            if event.mimeData().hasFormat("application/x-aimaster-playlist-items"):
+                try:
+                    raw = event.mimeData().data("application/x-aimaster-playlist-items").data()
+                    items_payload = json.loads(raw.decode("utf-8"))
+                except Exception:
+                    pass
+                    
+            source_widget = event.source()
+            if not items_payload and isinstance(source_widget, AudioPlaylistWidget):
+                items_payload = [item.data(Qt.ItemDataRole.UserRole) for item in source_widget.selectedItems() if item.data(Qt.ItemDataRole.UserRole)]
+
+            if items_payload:
+                if source_widget == self:
+                    # 동일 위젯 내부 순서 재배치
+                    selected_rows = sorted([self.row(item) for item in self.selectedItems()], reverse=True)
+                    for r in selected_rows:
+                        self.takeItem(r)
+                        if r < drop_row:
+                            drop_row -= 1
+                    drop_row = max(0, min(drop_row, self.count()))
+                    for i, data in enumerate(items_payload):
+                        self.insert_audio_file(drop_row + i, data['path'], data.get('delay', 0.0))
+                else:
+                    # 다른 수련 위젯에서 드롭 (수련1,2 -> 수련3,4 등 교차 이동)
+                    if isinstance(source_widget, AudioPlaylistWidget):
+                        selected_rows = sorted([source_widget.row(item) for item in source_widget.selectedItems()], reverse=True)
+                        for r in selected_rows:
+                            source_widget.takeItem(r)
+                        source_widget.total_time_changed.emit()
+
+                    drop_row = max(0, min(drop_row, self.count()))
+                    for i, data in enumerate(items_payload):
+                        self.insert_audio_file(drop_row + i, data['path'], data.get('delay', 0.0))
+
+                self.total_time_changed.emit()
+                event.acceptProposedAction()
+                event.accept()
+                return
+
+        # 2. OS 파일 탐색기(Finder)에서 음원 파일 및 폴더 드래그 앤 드롭
         if event.mimeData().hasUrls():
+            audio_exts = ('.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.wma')
+            dropped_paths = []
             for url in event.mimeData().urls():
-                path = url.toLocalFile()
-                if path.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a')):
-                    self.add_audio_file(path, 0.0)
+                p = url.toLocalFile()
+                if not p:
+                    continue
+                if os.path.isdir(p):
+                    # 폴더 드롭 시 내부 음원 재귀 탐색
+                    for root, _, files in os.walk(p):
+                        for f in sorted(files):
+                            if f.lower().endswith(audio_exts):
+                                dropped_paths.append(os.path.join(root, f))
+                elif p.lower().endswith(audio_exts):
+                    dropped_paths.append(p)
+
+            if dropped_paths:
+                drop_row = max(0, min(drop_row, self.count()))
+                for i, p in enumerate(dropped_paths):
+                    self.insert_audio_file(drop_row + i, p, 0.0)
+                self.total_time_changed.emit()
+
             event.acceptProposedAction()
-        else:
-            # Internal move
-            super().dropEvent(event)
-            self.total_time_changed.emit()
+            event.accept()
+            return
+
+        super().dropEvent(event)
+        self.total_time_changed.emit()
 
     def add_audio_file(self, path, delay=0.0):
+        self.insert_audio_file(self.count(), path, delay)
+
+    def insert_audio_file(self, row, path, delay=0.0):
         name = os.path.basename(path)
         item = QListWidgetItem(f"{name} (딜레이: {delay}초)")
         item.setData(Qt.ItemDataRole.UserRole, {'path': path, 'delay': float(delay)})
-        self.addItem(item)
+        self.insertItem(row, item)
         self.total_time_changed.emit()
         
     def edit_delay(self, item):
         data = item.data(Qt.ItemDataRole.UserRole)
+        if not data: return
         current_delay = data['delay']
         delay, ok = QInputDialog.getDouble(self, "딜레이 시간 수정", "대기할 딜레이 시간(초)을 입력하세요:", current_delay, 0.0, 3600.0, 1)
         if ok:
@@ -166,7 +345,7 @@ class AudioPlaylistWidget(QListWidget):
     def copy_items(self):
         self.clipboard = []
         for item in self.selectedItems():
-            self.clipboard.append(item.data(Qt.ItemDataRole.UserRole))
+            self.clipboard.append(dict(item.data(Qt.ItemDataRole.UserRole)))
             
     def cut_items(self):
         self.copy_items()
@@ -180,13 +359,13 @@ class AudioPlaylistWidget(QListWidget):
         if row < 0:
             row = self.count()
         else:
-            row += 1 # Insert below the currently selected item
+            row += 1
             
         added_items = []
         for i, data in enumerate(self.clipboard):
             name = os.path.basename(data['path'])
             item = QListWidgetItem(f"{name} (딜레이: {data['delay']}초)")
-            item.setData(Qt.ItemDataRole.UserRole, dict(data)) # copy dict
+            item.setData(Qt.ItemDataRole.UserRole, dict(data))
             self.insertItem(row + i, item)
             added_items.append(item)
             
@@ -212,7 +391,7 @@ class AudioPlaylistWidget(QListWidget):
         
         if type_ == 'remove':
             items = action[1]
-            for row, data in items: # Need to re-insert
+            for row, data in items:
                 name = os.path.basename(data['path'])
                 item = QListWidgetItem(f"{name} (딜레이: {data['delay']}초)")
                 item.setData(Qt.ItemDataRole.UserRole, data)
@@ -224,12 +403,50 @@ class AudioPlaylistWidget(QListWidget):
                 if row >= 0:
                     self.takeItem(row)
         self.total_time_changed.emit()
+
+    def transfer_to_session(self, target_session, is_move=True):
+        """다른 수련 칸으로 선택 항목을 일괄 이동 또는 복사"""
+        if not self.scheduler_tab or target_session not in self.scheduler_tab.playlists:
+            return
+            
+        target_playlist = self.scheduler_tab.playlists[target_session]
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return
+            
+        items_data = [dict(item.data(Qt.ItemDataRole.UserRole)) for item in selected_items if item.data(Qt.ItemDataRole.UserRole)]
+        
+        if is_move:
+            self.remove_items()
+            
+        for d in items_data:
+            target_playlist.add_audio_file(d['path'], d.get('delay', 0.0))
+            
+        target_playlist.total_time_changed.emit()
+        self.total_time_changed.emit()
         
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         
-        edit_action = menu.addAction("딜레이 시간 수정")
+        edit_action = menu.addAction("✏️ 딜레이 시간 수정")
         menu.addSeparator()
+        
+        # 다른 수련 칸으로 간편 이동 / 복사 서브메뉴
+        if self.scheduler_tab:
+            all_sessions = getattr(self.scheduler_tab, 'sessions', ["수련1", "수련2", "수련3", "수련4", "수련5", "수련6"])
+            other_sessions = [s for s in all_sessions if s != self.session_name]
+            
+            move_menu = menu.addMenu("🚀 다른 수련으로 이동 ➡️")
+            for s in other_sessions:
+                act = move_menu.addAction(f"[{s}]로 이동")
+                act.triggered.connect(lambda _, ts=s: self.transfer_to_session(ts, is_move=True))
+                
+            copy_menu = menu.addMenu("📋 다른 수련으로 복사 ➡️")
+            for s in other_sessions:
+                act = copy_menu.addAction(f"[{s}]로 복사")
+                act.triggered.connect(lambda _, ts=s: self.transfer_to_session(ts, is_move=False))
+            menu.addSeparator()
+
         copy_action = menu.addAction("복사 (Ctrl+C)")
         cut_action = menu.addAction("잘라내기 (Ctrl+X)")
         paste_action = menu.addAction("붙여넣기 (Ctrl+V)")
@@ -293,6 +510,7 @@ class SchedulerTab(QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         
         self.tabs = QTabWidget()
+        self.tabs.setTabBar(HoverTabBar(self.tabs))
         tab_pairs = [("수련1", "수련2"), ("수련3", "수련4"), ("수련5", "수련6")]
         
         for idx, (s1, s2) in enumerate(tab_pairs):
@@ -358,17 +576,28 @@ class SchedulerTab(QWidget):
         layout = QVBoxLayout(panel)
         
         title = QLabel(f"=== {session} ===")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        title.setStyleSheet("font-weight: bold; font-size: 15px; color: #58a6ff; padding: 4px;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
-        # Toolbar
+        # Toolbar (큼직하고 넉넉한 버튼 패딩 적용)
         toolbar = QHBoxLayout()
         btn_add = QPushButton("🎵 파일 추가")
         btn_play = QPushButton("▶️ 재생")
         btn_pause = QPushButton("⏸")
         btn_stop = QPushButton("⏹ 정지")
         btn_clear = QPushButton("🗑 전체 삭제")
+        
+        for btn in (btn_add, btn_play, btn_pause, btn_stop, btn_clear):
+            btn.setStyleSheet("""
+                QPushButton {
+                    min-height: 32px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                }
+            """)
         
         toolbar.addWidget(btn_add)
         toolbar.addWidget(btn_play)
@@ -377,8 +606,8 @@ class SchedulerTab(QWidget):
         toolbar.addWidget(btn_clear)
         layout.addLayout(toolbar)
         
-        # Playlist
-        playlist = AudioPlaylistWidget()
+        # Playlist (수련 명칭 및 상위 탭 참조 전달)
+        playlist = AudioPlaylistWidget(session, scheduler_tab=self)
         self.playlists[session] = playlist
         layout.addWidget(playlist)
         
@@ -490,12 +719,11 @@ class SchedulerTab(QWidget):
         for i in range(playlist.count()):
             item = playlist.item(i)
             if i == idx:
-                item.setBackground(QColor("#3498db"))
+                item.setBackground(QColor("#238636"))
                 item.setForeground(QColor("white"))
                 playlist.scrollToItem(item)
             else:
-                # Reset to default. Alternating row colors handles the rest
-                item.setBackground(QBrush()) # transparent
+                item.setBackground(QBrush())
                 item.setForeground(QBrush())
                 
     def clear_highlight(self, session):

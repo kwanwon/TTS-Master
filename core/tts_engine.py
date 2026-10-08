@@ -238,16 +238,15 @@ class EdgeTTSEngine:
             else:
                 tagged_chunks.append(raw)
 
-        # 2. 태그가 없는 일반 한국어 문장 중 영단어/영문장 스마트 감지
+        # 2. 태그가 없는 일반 문장 중 영단어/영문장 스마트 감지 (하이픈, 어포스트로피 포함)
         final_chunks = []
         for chunk in tagged_chunks:
             if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
                 final_chunks.append(chunk)
                 continue
 
-            # 영문 어구(알파벳 2자 이상 포함된 영문 구) 자동 분할
-            # 예: "안녕하세요 hi my name is Ryan 반갑습니다" -> ["안녕하세요", "[EN]hi my name is Ryan[/EN]", "반갑습니다"]
-            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[A-Za-z][A-Za-z0-9\s,\'\"\?!]{1,}[A-Za-z0-9\?!])', chunk)
+            # 영문 어구(알파벳 포함된 어구, 예: Push-up, Ready... go!, Let's go!) 분할
+            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[A-Za-z][A-Za-z0-9\s,\'\"\?\!\.\-]*[A-Za-z0-9\?\!])', chunk)
             for tok in tokens:
                 if not tok.strip():
                     continue
@@ -269,7 +268,28 @@ class EdgeTTSEngine:
                     if cur_ko.strip():
                         final_chunks.append(cur_ko.strip())
 
-        return final_chunks
+        # 3. 후처리: 발음 가능한 문자(한글/영문/숫자)가 없는 고립 기호 청크 정리
+        cleaned_chunks = []
+        for c in final_chunks:
+            c_strip = c.strip()
+            if not c_strip:
+                continue
+            if re.match(r'^\[딜레이\s*\d+(?:\.\d+)?\s*초\]$', c_strip):
+                cleaned_chunks.append(c_strip)
+                continue
+
+            inner = c_strip[4:-5].strip() if (c_strip.startswith("[EN]") and c_strip.endswith("[/EN]")) else c_strip
+            if not re.search(r'[A-Za-z0-9\uAC00-\uD7A3]', inner):
+                # 발음 가능한 문자가 없는 기호 단독 청크는 앞선 청크에 자연스럽게 병합
+                if cleaned_chunks and not cleaned_chunks[-1].startswith("[딜레이"):
+                    if cleaned_chunks[-1].endswith("[/EN]"):
+                        cleaned_chunks[-1] = cleaned_chunks[-1][:-5] + " " + inner + "[/EN]"
+                    else:
+                        cleaned_chunks[-1] += " " + inner
+                continue
+            cleaned_chunks.append(c_strip)
+
+        return cleaned_chunks
 
     def generate_audio(self, text, language="ko", speed=1.0):
         if not text.strip():
@@ -289,24 +309,34 @@ class EdgeTTSEngine:
             rate_str = f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
 
             async def _synthesize_chunk(chunk_text, voice):
+                # 발음 가능한 글자가 전혀 없으면 API 호출 생략
+                if not re.search(r'[A-Za-z0-9\uAC00-\uD7A3]', chunk_text):
+                    return AudioSegment.silent(duration=100)
                 try:
                     communicate = edge_tts.Communicate(chunk_text, voice, rate=rate_str)
                     mp3_fp = io.BytesIO()
                     async for c in communicate.stream():
                         if c['type'] == 'audio':
                             mp3_fp.write(c['data'])
+                    if mp3_fp.tell() == 0:
+                        raise ValueError("No audio bytes received")
                     mp3_fp.seek(0)
                     return AudioSegment.from_file(mp3_fp, format="mp3")
                 except Exception as inner_e:
                     print(f"[Edge-TTS] 화자 '{voice}' 실패 ({inner_e}) -> 기본 화자(선히)로 안전 재시도")
-                    fallback_voice = "ko-KR-SunHiNeural"
-                    communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
-                    mp3_fp = io.BytesIO()
-                    async for c in communicate.stream():
-                        if c['type'] == 'audio':
-                            mp3_fp.write(c['data'])
-                    mp3_fp.seek(0)
-                    return AudioSegment.from_file(mp3_fp, format="mp3")
+                    try:
+                        fallback_voice = "ko-KR-SunHiNeural"
+                        communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
+                        mp3_fp = io.BytesIO()
+                        async for c in communicate.stream():
+                            if c['type'] == 'audio':
+                                mp3_fp.write(c['data'])
+                        if mp3_fp.tell() > 0:
+                            mp3_fp.seek(0)
+                            return AudioSegment.from_file(mp3_fp, format="mp3")
+                    except Exception as fallback_e:
+                        print(f"[Edge-TTS] 기본 화자 재시도도 실패 ({fallback_e}) -> 무음 대체로 파이프라인 보호")
+                    return AudioSegment.silent(duration=100)
 
             for chunk in chunks:
                 if not chunk.strip():
@@ -343,9 +373,10 @@ class EdgeTTSEngine:
                 else:
                     seg = asyncio.run(_synthesize_chunk(chunk, voice))
 
-                if len(seg) > 50:
+                if seg and len(seg) > 50:
                     seg = seg.fade_out(20)
-                combined_audio += seg + silence
+                if seg:
+                    combined_audio += seg + silence
 
             if len(combined_audio) > 0:
                 try:
