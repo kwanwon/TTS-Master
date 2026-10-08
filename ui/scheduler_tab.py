@@ -1,6 +1,7 @@
 import os
 import json
 import pygame
+import re
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QListWidgetItem,
     QTabWidget, QTabBar, QGroupBox, QLabel, QSlider, QTableWidget, QTableWidgetItem, QCheckBox,
@@ -144,26 +145,26 @@ class AudioPlaylistWidget(QListWidget):
         self.setAlternatingRowColors(False)
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         
-        # 글씨 크기 대폭 확대(14px) 및 항목 행 높이/패딩 여백 넉넉하게 확장 (손떨림 방지 카드형 UI)
+        # 적당하고 쾌적한 컴팩트 크기 (높이 30px, 폰트 13px)
         self.setStyleSheet("""
             QListWidget {
                 background-color: #1a1e24;
                 border: 2px solid #30363d;
                 border-radius: 8px;
-                padding: 6px;
-                font-size: 14px;
+                padding: 4px;
+                font-size: 13px;
                 color: #f0f6fc;
             }
             QListWidget::item {
-                min-height: 40px;
-                height: 40px;
-                padding: 6px 14px;
-                margin: 4px 2px;
-                border-radius: 6px;
+                min-height: 28px;
+                height: 30px;
+                padding: 2px 10px;
+                margin: 2px 2px;
+                border-radius: 5px;
                 background-color: #242933;
                 border: 1px solid #323b47;
                 color: #f0f6fc;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 500;
             }
             QListWidget::item:hover {
@@ -183,6 +184,15 @@ class AudioPlaylistWidget(QListWidget):
         self.clipboard = []
         
         self.itemDoubleClicked.connect(self.edit_delay)
+
+    def mousePressEvent(self, event):
+        # 빈 공간을 클릭했을 때 선택 해제 -> 전체 재생 모드로 전환!
+        pos = event.position().toPoint() if hasattr(event, 'position') else event.pos()
+        item = self.itemAt(pos)
+        if not item:
+            self.clearSelection()
+            self.setCurrentItem(None)
+        super().mousePressEvent(event)
         
     def startDrag(self, supportedActions):
         selected = self.selectedItems()
@@ -215,6 +225,19 @@ class AudioPlaylistWidget(QListWidget):
             super().dragEnterEvent(event)
             
     def dragMoveEvent(self, event: QDragMoveEvent):
+        # [오토 스크롤] 드래그 중 창 상단/하단 가장자리에 마우스가 오면 자동으로 스크롤
+        pos = event.position().toPoint() if hasattr(event, 'position') else event.pos()
+        viewport_h = self.viewport().height()
+        margin = 40
+        scroll_bar = self.verticalScrollBar()
+        
+        if pos.y() < margin:
+            speed = max(4, int((margin - pos.y()) / 2))
+            scroll_bar.setValue(scroll_bar.value() - speed)
+        elif pos.y() > viewport_h - margin:
+            speed = max(4, int((pos.y() - (viewport_h - margin)) / 2))
+            scroll_bar.setValue(scroll_bar.value() + speed)
+
         if event.mimeData().hasUrls():
             event.setDropAction(Qt.DropAction.CopyAction)
             event.acceptProposedAction()
@@ -339,6 +362,9 @@ class AudioPlaylistWidget(QListWidget):
                 self.undo()
         elif event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
             self.remove_items()
+        elif event.key() == Qt.Key.Key_Escape:
+            self.clearSelection()
+            self.setCurrentItem(None)
         else:
             super().keyPressEvent(event)
             
@@ -447,6 +473,8 @@ class AudioPlaylistWidget(QListWidget):
                 act.triggered.connect(lambda _, ts=s: self.transfer_to_session(ts, is_move=False))
             menu.addSeparator()
 
+        deselect_action = menu.addAction("⬜ 선택 해제 (처음부터 전체 재생)")
+        menu.addSeparator()
         copy_action = menu.addAction("복사 (Ctrl+C)")
         cut_action = menu.addAction("잘라내기 (Ctrl+X)")
         paste_action = menu.addAction("붙여넣기 (Ctrl+V)")
@@ -461,6 +489,9 @@ class AudioPlaylistWidget(QListWidget):
         if action == edit_action:
             item = self.itemAt(event.pos())
             if item: self.edit_delay(item)
+        elif action == deselect_action:
+            self.clearSelection()
+            self.setCurrentItem(None)
         elif action == copy_action: self.copy_items()
         elif action == cut_action: self.cut_items()
         elif action == paste_action: self.paste_items()
@@ -483,6 +514,14 @@ class SchedulerTab(QWidget):
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self.check_schedule)
         self.schedule_timer.start(1000)
+        
+        # 재생 실시간 이퀄라이저 애니메이션 타이머 (0.25초 주기)
+        self.anim_timer = QTimer(self)
+        self.anim_timer.setInterval(250)
+        self.anim_timer.timeout.connect(self._on_anim_tick)
+        self.anim_frame = 0
+        self.active_playing = {} # session -> (item_index, base_text)
+        self.anim_timer.start()
         
         self.init_ui()
         self.load_state()
@@ -694,6 +733,10 @@ class SchedulerTab(QWidget):
         if selected:
             start_index = selected[0].row()
             
+        # 재생 시작 시 파란색 선택 해제 -> 재생 녹색 애니메이션이 가려지지 않음!
+        playlist.clearSelection()
+        playlist.setCurrentItem(None)
+            
         for i in range(playlist.count()):
             items.append(playlist.item(i).data(Qt.ItemDataRole.UserRole))
             
@@ -713,25 +756,70 @@ class SchedulerTab(QWidget):
     def on_stop(self, session):
         if session in self.play_threads:
             self.play_threads[session].stop()
+        self.clear_highlight(session)
             
     def highlight_item(self, session, idx):
         playlist = self.playlists[session]
-        for i in range(playlist.count()):
-            item = playlist.item(i)
-            if i == idx:
-                item.setBackground(QColor("#238636"))
-                item.setForeground(QColor("white"))
-                playlist.scrollToItem(item)
-            else:
-                item.setBackground(QBrush())
-                item.setForeground(QBrush())
+        # 이전 재생 항목 원복
+        if session in self.active_playing:
+            old_idx, old_base_txt = self.active_playing[session]
+            if 0 <= old_idx < playlist.count():
+                old_item = playlist.item(old_idx)
+                old_item.setText(old_base_txt)
+                old_item.setBackground(QBrush())
+                old_item.setForeground(QBrush())
+
+        if 0 <= idx < playlist.count():
+            item = playlist.item(idx)
+            cur_txt = item.text()
+            # 원본 텍스트 추출 (기존 애니메이션 접두사 및 재생중 접미사 제거)
+            base_txt = re.sub(r'^(?:🎵|▶️|🔊|🎶|⚡)\s*[\S]*\s*', '', cur_txt)
+            base_txt = re.sub(r'\s*\[🔊 재생중\]$', '', base_txt)
+            
+            self.active_playing[session] = (idx, base_txt)
+            item.setBackground(QColor("#238636"))
+            item.setForeground(QColor("#ffffff"))
+            item.setText(f"▶️ █▌ {base_txt} [🔊 재생중]")
+            playlist.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+            playlist.clearSelection()
+            playlist.setCurrentItem(None)
                 
     def clear_highlight(self, session):
         playlist = self.playlists[session]
+        if session in self.active_playing:
+            old_idx, old_base_txt = self.active_playing.pop(session)
+            if 0 <= old_idx < playlist.count():
+                old_item = playlist.item(old_idx)
+                old_item.setText(old_base_txt)
+                old_item.setBackground(QBrush())
+                old_item.setForeground(QBrush())
+                
         for i in range(playlist.count()):
             item = playlist.item(i)
             item.setBackground(QBrush())
             item.setForeground(QBrush())
+
+    def _on_anim_tick(self):
+        """재생 중인 곡 실시간 이퀄라이저 애니메이션 프레임 업데이트"""
+        if not self.active_playing:
+            return
+            
+        self.anim_frame = (self.anim_frame + 1) % 4
+        EQ_FRAMES = ["🎵 ▌", "▶️ █▌", "🔊 ██", "🎶 ▌█"]
+        PULSE_COLORS = ["#1b5e20", "#238636", "#2e7d32", "#238636"]
+        
+        icon = EQ_FRAMES[self.anim_frame]
+        bg_col = QColor(PULSE_COLORS[self.anim_frame])
+        
+        for session, (idx, base_txt) in list(self.active_playing.items()):
+            if session not in self.playlists:
+                continue
+            playlist = self.playlists[session]
+            if 0 <= idx < playlist.count():
+                item = playlist.item(idx)
+                item.setText(f"{icon} {base_txt} [🔊 재생중]")
+                item.setBackground(bg_col)
+                item.setForeground(QColor("#ffffff"))
 
     def check_schedule(self):
         now = QTime.currentTime()
