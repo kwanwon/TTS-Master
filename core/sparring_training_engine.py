@@ -1226,12 +1226,22 @@ class SparringTrainingEngine:
             for s in range(1, sets_count + 1):
                 step_name = step_types[(s - 1) % len(step_types)]
 
-                # 1. 스텝 지시 음성 (intro_only 시 스텝명만 또렷하게 지시, each_set 시 기술명 함께 호명)
-                if kick_announce_mode == "each_set" and kick_types:
-                    kick_name = kick_types[(s - 1) % len(kick_types)]
-                    cue_text = f"[{s}세트] {step_name}! {kick_name}!"
-                else:
+                # 1. 스텝 지시 음성 (each_set: 매 세트 기술명 함께 호명, first_set_only: 1세트만 기술 호명, intro_only: 스텝만 호명)
+                kick_name = kick_types[(s - 1) % len(kick_types)] if kick_types else ""
+                clean_kick = str(kick_name).rstrip(".!? ").strip()
+
+                if kick_announce_mode == "first_set_only" and clean_kick:
+                    if s == 1:
+                        cue_text = f"[1세트] {step_name}! 집중 기술: {clean_kick}!"
+                    else:
+                        cue_text = f"[{s}세트] {step_name}!"
+                elif kick_announce_mode == "intro_only":
                     cue_text = f"[{s}세트] {step_name}!"
+                else:  # each_set 기본값 (매 세트 스텝 + 기술 함께 호명)
+                    if clean_kick:
+                        cue_text = f"[{s}세트] {step_name}! {clean_kick}!"
+                    else:
+                        cue_text = f"[{s}세트] {step_name}!"
 
                 cue_dur = max(1.0, round(len(cue_text) * 0.22, 2))
                 events.append({

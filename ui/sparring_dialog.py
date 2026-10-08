@@ -1168,12 +1168,14 @@ class SparringDialog(QDialog):
         h_kick_mode = QHBoxLayout()
         h_kick_mode.addWidget(QLabel("📢 기술 안내 방식:"))
         self.combo_kick_mode = NoScrollComboBox()
-        self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명 (본 훈련은 스텝 지시에만 집중 - 추천)", "intro_only")
-        self.combo_kick_mode.addItem("🗣️ 시작 전 사전 안내 + 매 세트 스텝 지시 시 기술명 함께 호명", "each_set")
+        self.combo_kick_mode.addItem("🗣️ 매 세트 [스텝 + 집중 기술] 함께 호명 (실전 도장 훈련 - 강력 추천)", "each_set")
+        self.combo_kick_mode.addItem("🎯 1세트에서만 기술 설명 후 2세트부터는 스텝만 호명 (스피디 진행)", "first_set_only")
+        self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명 (본 훈련은 스텝 지시에만 집중)", "intro_only")
+        self.combo_kick_mode.setCurrentIndex(0)
         h_kick_mode.addWidget(self.combo_kick_mode, stretch=1)
         l_ckk.addLayout(h_kick_mode)
 
-        lbl_step_hint = QLabel("※ 앞부분 시작 설명에서 어떤 발차기 공격을 집중적으로 할 것인지 명확히 안내한 후, 본 훈련에서는 군더더기 없이 [스텝 지시] ➔ [삐익(신호음)] ➔ [전력 연타] ➔ [갈려/중지/종료음] 순서로 실전 스파링 훈련이 진행됩니다.")
+        lbl_step_hint = QLabel("※ 집중 훈련 기술을 입력하면 매 세트 스텝 지시와 함께 해당 발차기 공격이 호명되어 실전 타격 목표를 명확히 지도합니다. '1세트만 설명'을 선택하면 1세트에서만 기술을 설명하고 2세트부터는 스텝만 빠르게 호명됩니다.")
         lbl_step_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_ckk.addWidget(lbl_step_hint)
         l_combo.addWidget(g_combo_kicks)
@@ -1769,13 +1771,13 @@ class SparringDialog(QDialog):
             params["step_sec"] = float(self.sp_combo_step.value())
             params["combo_sec"] = float(self.sp_combo_strike.value())
             params["sets_count"] = self.sp_combo_sets.value()
-            raw_steps = self.txt_combo_steps.text().split(",")
-            params["step_types"] = [s.strip() for s in raw_steps if s.strip()]
+            raw_steps = [s.strip() for line in self.txt_combo_steps.text().splitlines() for s in line.split(",") if s.strip()]
+            params["step_types"] = raw_steps
             params["start_signal"] = self.combo_start_signal.currentData() or "whistle"
             params["stop_signal"] = self.combo_stop_signal.currentData() or "voice_kalyeo"
-            raw_kicks = self.txt_combo_kicks.text().split(",")
-            params["kick_types"] = [k.strip() for k in raw_kicks if k.strip()]
-            params["kick_announce_mode"] = self.combo_kick_mode.currentData() or "intro_only"
+            raw_kicks = [k.strip() for line in self.txt_combo_kicks.text().splitlines() for k in line.split(",") if k.strip()]
+            params["kick_types"] = raw_kicks
+            params["kick_announce_mode"] = self.combo_kick_mode.currentData() or "each_set"
 
         elif mode == "rounds":
             params["round_sec"] = float(self.sp_rnd_time.value())
