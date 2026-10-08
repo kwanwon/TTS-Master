@@ -1359,14 +1359,20 @@ class SparringTrainingEngine:
 
                 curr_time += round_sec
 
-                # 라운드 종료 신호 (갈려 / 중지 / 그만 / 경기장 벨 / 휘슬 / 비프)
-                stop_sig = params.get("stop_signal", "voice_kalyeo")
+                # 라운드 종료 신호 (일반 라운드는 stop_signal, 최종 라운드는 final_stop_signal)
+                if r == total_rounds:
+                    stop_sig = params.get("final_stop_signal") or "voice_end"
+                    stop_lbl = "최종 라운드 종료"
+                else:
+                    stop_sig = params.get("stop_signal", "voice_kalyeo")
+                    stop_lbl = f"{r}라운드 종료"
+
                 delta = cls._add_stop_signal_event(
                     events=events,
                     duck_segments=duck_segments,
                     curr_time=curr_time,
                     stop_signal=stop_sig,
-                    label=f"{r}라운드 종료"
+                    label=stop_lbl
                 )
                 curr_time += delta + 0.4
 

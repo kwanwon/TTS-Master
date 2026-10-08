@@ -1250,18 +1250,38 @@ class SparringDialog(QDialog):
         l_rnds.addStretch()
         l_rnd.addWidget(g_rnd_set)
 
-        # 3. 라운드 종료 신호 설정
+        # 3. 라운드 종료 신호 설정 (일반 라운드 및 최종 라운드 분리 선택)
         g_rnd_sig = QGroupBox("3. 라운드 종료 신호 (선택)")
-        l_rsig = QHBoxLayout(g_rnd_sig)
-        l_rsig.addWidget(QLabel("🔔 라운드 종료 신호:"))
+        l_rsig = QVBoxLayout(g_rnd_sig)
+
+        h_rsig1 = QHBoxLayout()
+        h_rsig1.addWidget(QLabel("🔔 일반 라운드 종료 구령 (1R ~):"))
         self.combo_rnd_stop_signal = NoScrollComboBox()
-        self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (태권도/격투기 경기 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (중간 라운드 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_rnd_stop_signal.addItem("🛑 음성: '중지! 타임!'", "voice_stop")
         self.combo_rnd_stop_signal.addItem("✋ 음성: '그만! 타임!'", "voice_end")
         self.combo_rnd_stop_signal.addItem("🔔 경기장 공/벨 (딩~동 라운드 종료)", "bell")
         self.combo_rnd_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
         self.combo_rnd_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        l_rsig.addWidget(self.combo_rnd_stop_signal, stretch=1)
+        h_rsig1.addWidget(self.combo_rnd_stop_signal, stretch=1)
+        l_rsig.addLayout(h_rsig1)
+
+        h_rsig2 = QHBoxLayout()
+        h_rsig2.addWidget(QLabel("🏁 최종(마지막) 라운드 종료 구령:"))
+        self.combo_rnd_final_stop_signal = NoScrollComboBox()
+        self.combo_rnd_final_stop_signal.addItem("✋ 음성: '그만! 타임!' (마지막 라운드 경기 종료 공식 구령 - 강력 추천)", "voice_end")
+        self.combo_rnd_final_stop_signal.addItem("🛑 음성: '중지! 타임!' (경기 종료 구령)", "voice_stop")
+        self.combo_rnd_final_stop_signal.addItem("🥋 음성: '갈려! 타임!'", "voice_kalyeo")
+        self.combo_rnd_final_stop_signal.addItem("🔔 경기장 공/벨 (딩~동 최종 종료)", "bell")
+        self.combo_rnd_final_stop_signal.addItem("📢 심판 호각 (종료 휘슬)", "whistle")
+        self.combo_rnd_final_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        h_rsig2.addWidget(self.combo_rnd_final_stop_signal, stretch=1)
+        l_rsig.addLayout(h_rsig2)
+
+        lbl_rnd_sig_tip = QLabel("💡 1, 2라운드 등 중간 라운드는 '갈려!'로 잠시 끊고, 마지막 라운드는 '그만!' 또는 '중지!'로 스파링을 완벽하게 끝냅니다.")
+        lbl_rnd_sig_tip.setStyleSheet("color: #0369a1; font-size: 11px; padding-left: 2px;")
+        l_rsig.addWidget(lbl_rnd_sig_tip)
+
         l_rnd.addWidget(g_rnd_sig)
         l_rnd.addStretch()
         self.tabs.addTab(tab_round, "🥊 정규 스파링 라운드")
@@ -1713,6 +1733,7 @@ class SparringDialog(QDialog):
             params["rest_sec"] = float(self.sp_rnd_rest.value())
             params["total_rounds"] = self.sp_rnd_count.value()
             params["stop_signal"] = self.combo_rnd_stop_signal.currentData() if hasattr(self, 'combo_rnd_stop_signal') else "voice_kalyeo"
+            params["final_stop_signal"] = self.combo_rnd_final_stop_signal.currentData() if hasattr(self, 'combo_rnd_final_stop_signal') else "voice_end"
             params["round_type"] = self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real"
             params["promise_detail"] = self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else ""
             params["atk_def_mode"] = self.combo_atk_def_mode.currentData() if hasattr(self, 'combo_atk_def_mode') else "alternate"
