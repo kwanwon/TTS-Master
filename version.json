@@ -1,6 +1,6 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "release_date": "2026-10-08",
   "app_name": "AIMaster_TTS",
-  "description": "BGM·신호음·음성 볼륨 슬라이더 청감 인지 곡선(Perceptual Curve) 적용, 마스터링 피크 가드 및 타임라인 볼륨 연동 최적화"
+  "description": "훈련 종료 후 음악 마지막 부분 5초 동안 천천히 0까지 완벽하게 감쇄되는 Cosine S-curve 아웃트로 페이드아웃 및 5.5초 여백 확보"
 }

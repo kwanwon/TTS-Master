@@ -983,7 +983,7 @@ class SparringTrainingEngine:
                 "vol": 2.5
             })
             duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + 0.5 + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + 0.5 + outro_dur + 2.0
+            total_duration_sec = curr_time + 0.5 + outro_dur + 5.5
 
         # ── Mode 2: 스텝 & 실전 기술 반응 훈련 ──
         elif mode == "reaction":
@@ -1154,7 +1154,7 @@ class SparringTrainingEngine:
                 "vol": 2.5
             })
             duck_segments.append((int(curr_time * 1000), int((curr_time + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
+            total_duration_sec = curr_time + outro_dur + 5.5  # 종료 후 5초 페이드아웃 넉넉한 딜레이 보장
 
         # ── Mode 3: 스텝 + 콤비네이션 연타 인터벌 ──
         elif mode == "combo":
@@ -1262,7 +1262,7 @@ class SparringTrainingEngine:
                 "vol": 2.5
             })
             duck_segments.append((int((curr_time + 1.5) * 1000), int((curr_time + 1.5 + outro_dur + 0.5) * 1000)))
-            total_duration_sec = curr_time + 1.5 + outro_dur + 2.0  # 종료 후 2초 이상의 넉넉한 딜레이 보장
+            total_duration_sec = curr_time + 1.5 + outro_dur + 5.5  # 종료 후 5초 페이드아웃 넉넉한 딜레이 보장
 
         # ── Mode 4: 정규 스파링 라운드 시뮬레이터 (실전 / 섀도우 / 약속 / A공격·B방어) ──
         elif mode == "rounds":
@@ -1406,7 +1406,7 @@ class SparringTrainingEngine:
                     duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + final_dur + 0.5) * 1000)))
                     curr_time += final_dur + 1.0
 
-            total_duration_sec = curr_time + 3.0
+            total_duration_sec = curr_time + 5.5  # 종료 멘트 후 5.5초 여유 (마지막 5초 동안 0까지 천천히 페이드아웃)
 
         # ── Mode 5: 도장 고강도 기능성 서킷 인터벌 (HIIT & Tabata) ──
         elif mode == "circuit":

@@ -525,7 +525,7 @@ class SparringWorker(QThread):
             if events:
                 last_ev = events[-1]
                 last_end_sec = last_ev["time"] + last_ev.get("duration", 1.0)
-                total_duration_sec = round(last_end_sec + 3.0, 2)
+                total_duration_sec = round(last_end_sec + 5.5, 2)
                 total_duration_ms = int(total_duration_sec * 1000)
 
             # 3. 타임라인 클립 구성

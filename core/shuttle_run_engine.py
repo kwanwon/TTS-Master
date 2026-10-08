@@ -261,7 +261,16 @@ class ShuttleRunEngine:
                 curve = target_gain + (1.0 - target_gain) * 0.5 * (1.0 - np.cos(np.pi * t))
                 envelope_ms[e_ms:ramp_up_end] = np.minimum(envelope_ms[e_ms:ramp_up_end], curve)
 
-        # 3. Apply envelope to audio samples
+        # 3. 전체 음악 트랙 마지막 5.0초(5,000ms) 동안 천천히 볼륨 0까지 완벽 페이드아웃 (Outro Fade-Out)
+        final_fade_out_ms = min(5000, total_len_ms)
+        if final_fade_out_ms > 1000:
+            fade_start_ms = total_len_ms - final_fade_out_ms
+            t_out = np.linspace(0.0, 1.0, final_fade_out_ms, endpoint=True, dtype=np.float32)
+            # Smooth Cosine decay curve: 0.5 * (1 + cos(pi * t_out)) goes smoothly from 1.0 down to 0.0
+            decay_curve = 0.5 * (1.0 + np.cos(np.pi * t_out))
+            envelope_ms[fade_start_ms:] = envelope_ms[fade_start_ms:] * decay_curve
+
+        # 4. Apply envelope to audio samples
         channels = bgm_audio.channels
         frame_rate = bgm_audio.frame_rate
         sample_width = bgm_audio.sample_width
@@ -341,8 +350,9 @@ class ShuttleRunEngine:
         else:
             combined = combined[:target_duration_ms]
 
-        # 3 seconds fade out at the very end
-        if len(combined) > 3000:
-            combined = combined.fade_out(3000)
+        # 5 seconds smooth fade out at the very end down to 0
+        final_fade_ms = min(5000, len(combined) // 2)
+        if final_fade_ms > 1000:
+            combined = combined.fade_out(final_fade_ms)
 
         return combined
