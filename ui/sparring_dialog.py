@@ -143,16 +143,22 @@ def make_suggested_filename(mode: str, params: dict, duration_sec: float) -> str
         return f"{type_label}_{total_rounds}라운드_{time_label}.wav"
 
     elif mode == "circuit":
-        theme_key = params.get("theme", "power_agility")
-        theme_names = {
-            "power_agility": "대련실전낙법",
-            "agility_power_combo": "순발력민첩성",
-            "footwork_reaction_combo": "풋워크카운터",
-            "core_balance_kicks": "코어밸런스"
-        }
-        theme_str = theme_names.get(theme_key, "서킷콤보")
-        cycles = params.get("cycles", 4)
-        return f"서킷인터벌_{theme_str}_{cycles}세트.wav"
+        custom_title = params.get("theme_title", "").strip()
+        if custom_title:
+            cleaned_title = re.sub(r'[^\w가-힣]', '', custom_title)[:12]
+            theme_str = cleaned_title if cleaned_title else "맞춤서킷"
+        else:
+            theme_key = params.get("theme_key", params.get("theme", "power_agility"))
+            theme_names = {
+                "power_agility": "대련실전낙법",
+                "agility_power_combo": "순발력민첩성",
+                "footwork_reaction_combo": "풋워크카운터",
+                "strength_endurance_combo": "근지구력파워",
+                "core_balance_kicks": "코어밸런스"
+            }
+            theme_str = theme_names.get(theme_key, "서킷콤보")
+        sets_count = params.get("sets_count", params.get("cycles", 8))
+        return f"서킷인터벌_{theme_str}_{sets_count}세트.wav"
 
     else:
         return f"스파링훈련_{mode}_{dur_m}분{dur_s}초.wav"
@@ -680,15 +686,23 @@ class SparringDialog(QDialog):
         l_circuit.addWidget(circuit_info)
 
         # 1. 훈련 테마 선택
-        g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택")
+        g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택 및 명칭 커스텀")
         l_ct = QVBoxLayout(g_c_theme)
         self.combo_circuit_theme = NoScrollComboBox()
         self.combo_circuit_theme.addItem("🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프", "power_agility")
         self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프", "agility_power_combo")
         self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 & 반사신경 콤보] 스텝·카운터킥·회전낙법 루프", "footwork_reaction_combo")
         self.combo_circuit_theme.addItem("💪 [근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷", "strength_endurance_combo")
+        self.combo_circuit_theme.addItem("✏️ [직접 입력] 도장 맞춤형 커스텀 테마 (자유 입력)", "custom")
         self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
         l_ct.addWidget(self.combo_circuit_theme)
+
+        h_theme_edit = QHBoxLayout()
+        h_theme_edit.addWidget(QLabel("✏️ 테마 명칭 (자유 수정):"))
+        self.txt_circuit_theme_title = QLineEdit("🥋 대련 실전 & 낙법 협응 콤보")
+        self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 🔥 도장 특화 하체 폭발 인터벌)")
+        h_theme_edit.addWidget(self.txt_circuit_theme_title, stretch=1)
+        l_ct.addLayout(h_theme_edit)
         l_circuit.addWidget(g_c_theme)
 
         # 2. 연령/수준별 맞춤 구령 언어 선택
@@ -1509,8 +1523,25 @@ class SparringDialog(QDialog):
     def _on_circuit_moves_text_changed(self):
         if not getattr(self, '_programmatic_circuit_text_update', False):
             self._circuit_moves_user_modified = True
+            # 사용자가 루틴을 직접 편집하면 테마 콤보박스를 'custom'으로 자연스럽게 동기화
+            if hasattr(self, 'combo_circuit_theme') and self.combo_circuit_theme.currentData() != "custom":
+                self.combo_circuit_theme.blockSignals(True)
+                for i in range(self.combo_circuit_theme.count()):
+                    if self.combo_circuit_theme.itemData(i) == "custom":
+                        self.combo_circuit_theme.setCurrentIndex(i)
+                        break
+                self.combo_circuit_theme.blockSignals(False)
 
     def _on_circuit_theme_changed(self, idx):
+        selected_theme = self.combo_circuit_theme.currentData()
+        if selected_theme == "custom":
+            if hasattr(self, 'txt_circuit_theme_title'):
+                cur_title = self.txt_circuit_theme_title.text().strip()
+                if not cur_title or any(p in cur_title for p in ["대련 실전", "순발력 &", "스파링 풋워크", "근지구력 &"]):
+                    self.txt_circuit_theme_title.setText("🔥 [도장 맞춤형 서킷 인터벌] 실전 콤보 루프")
+                self.txt_circuit_theme_title.setFocus()
+            return
+
         if getattr(self, '_circuit_moves_user_modified', False):
             reply = QMessageBox.question(
                 self,
@@ -1539,14 +1570,22 @@ class SparringDialog(QDialog):
         self._update_circuit_moves_text()
 
     def _update_circuit_moves_text(self):
+        theme_key = self.combo_circuit_theme.currentData() or "power_agility"
+        if theme_key == "custom":
+            return
+
         self._programmatic_circuit_text_update = True
         try:
-            theme_key = self.combo_circuit_theme.currentData() or "power_agility"
             lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
             theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES.get("power_agility", {}))
             exercises = theme_data.get("exercises", [])
 
             lang_field = "mix" if lang_mode == "mix_kids" else ("dual" if lang_mode == "dual_step" else ("en" if lang_mode == "en_advanced" else "kr"))
+
+            # 테마 명칭 필드 자동 동기화
+            if hasattr(self, 'txt_circuit_theme_title'):
+                preset_title = theme_data.get(f"name_{lang_field}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
+                self.txt_circuit_theme_title.setText(preset_title)
 
             lines = []
             for i, ex in enumerate(exercises, 1):
@@ -1741,6 +1780,7 @@ class SparringDialog(QDialog):
             params["rest_sec"] = float(self.sp_circuit_rest.value())
             params["sets_count"] = self.sp_circuit_sets.value()
             params["theme_key"] = self.combo_circuit_theme.currentData() or "power_agility"
+            params["theme_title"] = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
             params["language_mode"] = self.combo_circuit_lang.currentData() or "mix_kids"
             params["circuit_mode_type"] = "single" if hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked() else "cycle"
             params["custom_routine_text"] = self.txt_circuit_moves.toPlainText().strip()

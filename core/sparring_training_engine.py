@@ -437,7 +437,11 @@ class SparringTrainingEngine:
             exercises = [exercises[0]]
 
         lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
-        theme_title = theme_data.get(f"name_{lang_key}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
+        user_theme_title = params.get("theme_title", "").strip()
+        if user_theme_title:
+            theme_title = user_theme_title
+        else:
+            theme_title = theme_data.get(f"name_{lang_key}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
 
         events = []
         duck_segments = []
@@ -455,13 +459,13 @@ class SparringTrainingEngine:
                     tip_phrase = f" 요령은 {tip0}입니다." if tip0 else ""
 
                     if lang == "mix_kids":
-                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {clean_ex}!{tip_phrase} 매 세트 전력 무한 리핏! 준비해 주세요!"
+                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 이번 테마는 {theme_title}! 오늘의 집중 콤보는 {clean_ex}!{tip_phrase} 매 세트 전력 무한 리핏! 준비해 주세요!"
                     elif lang == "dual_step":
-                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 {clean_ex}.{tip_phrase} 매 세트 전력 반복하세요. 준비!"
+                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 테마는 {theme_title}. 오늘 집중 동작은 {clean_ex}.{tip_phrase} 매 세트 전력 반복하세요. 준비!"
                     elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's focused interval combo is {clean_ex}. Perform the combo loop non-stop during work intervals! Get ready!"
+                        intro_text = f"Attention team! Today's focused interval theme is {theme_title}. Single combo is {clean_ex}. Perform the combo loop non-stop during work intervals! Get ready!"
                     else:
-                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복합니다.{tip_phrase} 모두 준비해 주세요!"
+                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복합니다.{tip_phrase} 모두 준비해 주세요!"
                 else:
                     # 종목 순환 모드 (cycle)
                     # 등록된 콤보 루틴 요약 브리핑
@@ -473,13 +477,13 @@ class SparringTrainingEngine:
                     overview_str = ", ".join(combo_summaries)
 
                     if lang == "mix_kids":
-                        intro_text = f"지금부터 도장 파워 서킷 인터벌 스타트! 오늘 순환 루틴은 {overview_str}입니다. 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
+                        intro_text = f"지금부터 도장 파워 서킷 인터벌 스타트! 이번 테마는 {theme_title}! 오늘 순환 루틴은 {overview_str}입니다. 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
                     elif lang == "dual_step":
-                        intro_text = f"지금부터 도장 실전 서킷 인터벌 훈련을 시작합니다. - Circuit flow training! 오늘 순환 루틴은 {overview_str}입니다. 전력으로 무한 반복하세요. 모두 준비!"
+                        intro_text = f"지금부터 도장 실전 서킷 인터벌 훈련을 시작합니다. - Circuit flow training! 테마는 '{theme_title}'입니다. 오늘 순환 루틴은 {overview_str}입니다. 전력으로 무한 반복하세요. 모두 준비!"
                     elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's functional circuit flow includes {overview_str}. Perform the continuous combo loop non-stop! Get ready!"
+                        intro_text = f"Attention team! Today's functional circuit flow theme is {theme_title}. Includes {overview_str}. Perform the continuous combo loop non-stop! Get ready!"
                     else:
-                        intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 오늘 순환 루틴은 {overview_str}입니다. 각 세트마다 운동 시간 동안 쉬지 않고 전력으로 무한 반복합니다. 모두 준비해 주세요!"
+                        intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 오늘 순환 루틴은 {overview_str}입니다. 각 세트마다 운동 시간 동안 쉬지 않고 전력으로 무한 반복합니다. 모두 준비해 주세요!"
 
             intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
             events.append({
