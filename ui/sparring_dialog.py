@@ -45,18 +45,19 @@ def vol_pct_to_db(pct: int) -> float:
     return round(20.0 * math.log10(pct / 100.0), 2)
 
 
-def trim_audio_silence(seg: AudioSegment, threshold: float = -48.0) -> AudioSegment:
-    """TTS 음성의 앞쪽 무음은 깔끔히 자르고, 뒤쪽은 말끝 여운(모음/자음 감쇄)이 잘리지 않도록 450ms 안전 여백과 부드러운 페이드아웃 적용"""
+def trim_audio_silence(seg: AudioSegment, threshold: float = -52.0) -> AudioSegment:
+    """
+    TTS 음성의 앞쪽 무음은 깔끔히 자르되 초성(예: '모두'의 'ㅁ')이 잘리지 않도록 180ms 안전 버퍼를 확보하고,
+    뒤쪽은 말끝 여운(예: '~세요', '~다' 감쇄음)이 툭 끊기지 않도록 800ms 안전 여백을 넉넉히 보장합니다.
+    """
     try:
         from pydub.silence import detect_leading_silence
         lead = detect_leading_silence(seg, silence_threshold=threshold)
         trail = detect_leading_silence(seg.reverse(), silence_threshold=threshold)
-        # 말끝이 툭 끊기지 않도록 뒤쪽 무음 중 450ms를 넉넉히 남기고 60ms 페이드아웃 적용
-        safe_trail = max(0, trail - 450)
-        end_idx = max(lead, len(seg) - safe_trail)
-        trimmed = seg[lead:end_idx]
-        if len(trimmed) > 100:
-            trimmed = trimmed.fade_out(60)
+        safe_lead = max(0, lead - 180)
+        safe_trail = max(0, trail - 800)
+        end_idx = max(safe_lead + 80, len(seg) - safe_trail)
+        trimmed = seg[safe_lead:end_idx]
         return trimmed if len(trimmed) >= 80 else seg
     except Exception:
         return seg
@@ -314,6 +315,18 @@ class SparringWorker(QThread):
                 # 혹시라도 포함되었을 수 있는 '출발' 단어 완전 제거
                 clean_text = clean_text.replace("출발!", "").replace("출발", "").strip()
 
+                # 불필요한 따옴표(' " `) 제거 (TTS 호흡 지연 및 어색한 끊김 방지)
+                clean_text = clean_text.replace("'", "").replace('"', '').replace('`', '').strip()
+
+                # 서술어 중복 방어 정규화 (예: '됩니다.입니다' -> '됩니다.', '됩니다 입니다' -> '됩니다.')
+                import re
+                clean_text = re.sub(r'됩니다[\s\.]*입니다', '됩니다.', clean_text)
+                clean_text = re.sub(r'합니다[\s\.]*입니다', '합니다.', clean_text)
+                clean_text = re.sub(r'입니다[\s\.]*입니다', '입니다.', clean_text)
+                clean_text = re.sub(r'니다[\s\.]*입니다', '니다.', clean_text)
+                clean_text = re.sub(r'됩니다[\s\.]*니다', '됩니다.', clean_text)
+                clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
                 self.progress.emit(pct, f"훈련 구령 음성 합성 중 ({idx+1}/{len(voice_events)}): {clean_text[:12]}...")
 
                 if clean_text in voice_cache:
@@ -368,7 +381,7 @@ class SparringWorker(QThread):
                     if "갈려" in clean_text and not clean_text.endswith("~!"):
                         synth_text = clean_text.replace("갈려!", "갈~려!").replace("갈려", "갈~려")
 
-                    safe_cue_name = f"sp_{target_voice}_{abs(hash(synth_text))}.wav"
+                    safe_cue_name = f"sp_v3_{target_voice}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -492,12 +505,12 @@ class SparringWorker(QThread):
                 if is_voice:
                     st_ms = int(ev["time"] * 1000)
                     dur_ms = int(ev.get("duration", 0.5) * 1000)
-                    duck_segments.append((st_ms, st_ms + dur_ms + 200))
+                    duck_segments.append((st_ms, st_ms + dur_ms + 400))
 
             if events:
                 last_ev = events[-1]
                 last_end_sec = last_ev["time"] + last_ev.get("duration", 1.0)
-                total_duration_sec = round(last_end_sec + 2.0, 2)
+                total_duration_sec = round(last_end_sec + 3.0, 2)
                 total_duration_ms = int(total_duration_sec * 1000)
 
             # 3. 타임라인 클립 구성

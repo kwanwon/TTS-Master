@@ -436,14 +436,18 @@ class SparringTrainingEngine:
             if not intro_text:
                 if circuit_mode_type == "single":
                     ex0_name = exercises[0].get(lang_key, exercises[0].get("kr", ""))
+                    clean_ex = str(ex0_name).rstrip(".!? ").strip()
+                    import re
+                    is_pred = bool(re.search(r'(됩니다|합니다|입니다|습니다|된다|한다|이다)$', clean_ex))
+                    appended_ex = clean_ex if is_pred else f"{clean_ex}입니다"
                     if lang == "mix_kids":
-                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {ex0_name}입니다. 매 세트 전력 무한 리핏! 준비해 주세요!"
+                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {appended_ex}. 매 세트 전력 무한 리핏! 준비해 주세요!"
                     elif lang == "dual_step":
-                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 '{ex0_name}'입니다. 매 세트 전력 반복하세요. 준비!"
+                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 {appended_ex}. 매 세트 전력 반복하세요. 준비!"
                     elif lang in ("en", "en_advanced"):
                         intro_text = f"Attention team! Today's focused interval theme is {theme_title}. Perform the combo loop non-stop during work intervals! Get ready!"
                     else:
-                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 '{ex0_name}' 단일 콤보를 전 세트 동안 극한으로 반복하여 심폐지구력과 근력을 극대화합니다. 모두 준비해 주세요!"
+                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복하여 심폐지구력과 근력을 극대화합니다. 모두 준비해 주세요!"
                 else:
                     if lang == "mix_kids":
                         intro_text = f"지금부터 도장 파워 콤보 인터벌 스타트! 이번 테마는 {theme_title}입니다. 점프, 발차기, 롤링 낙법 콤보를 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
@@ -681,12 +685,22 @@ class SparringTrainingEngine:
                         kick_desc = ", ".join(kick_list[:3])
                         if len(kick_list) > 3:
                             kick_desc += f" 외 {len(kick_list)-3}개"
-                        intro_text = (
-                            f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
-                            f"이번 집중 훈련 공격 기술은 '{kick_desc}' 입니다. "
-                            f"지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, "
-                            f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
-                        )
+                        clean_kdesc = kick_desc.rstrip(".!? ").strip()
+                        import re
+                        if re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_kdesc):
+                            intro_text = (
+                                f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
+                                f"이번 집중 훈련 공격 기술은 {clean_kdesc}. "
+                                f"지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, "
+                                f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
+                            )
+                        else:
+                            intro_text = (
+                                f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
+                                f"이번 집중 훈련 공격 기술은 {clean_kdesc}입니다. "
+                                f"지시하는 스텝을 유지하다가 신호음이 울리면 전력으로 연타하고, "
+                                f"'{stop_label}' 신호에 맞춰 스텝으로 복귀하세요. 준비해 주세요!"
+                            )
                     else:
                         intro_text = (
                             f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
@@ -700,7 +714,12 @@ class SparringTrainingEngine:
                     elif round_type == "promise":
                         promise_note = params.get("promise_detail", "").strip()
                         if promise_note:
-                            intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 '{promise_note}' 입니다. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
+                            clean_note = promise_note.rstrip(".!? ").strip()
+                            import re
+                            if re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_note):
+                                intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 {clean_note}. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
+                            else:
+                                intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 {clean_note}입니다. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
                         else:
                             intro_text = "지금부터 약속 스파링 훈련을 시작합니다. 약속된 기술과 공방 원칙을 준수하며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
                     elif round_type == "attack_defense":
@@ -1402,7 +1421,7 @@ class SparringTrainingEngine:
                     duck_segments.append((int((curr_time + 0.5) * 1000), int((curr_time + final_dur + 0.5) * 1000)))
                     curr_time += final_dur + 1.0
 
-            total_duration_sec = curr_time + 2.0
+            total_duration_sec = curr_time + 3.0
 
         # ── Mode 5: 도장 고강도 기능성 서킷 인터벌 (HIIT & Tabata) ──
         elif mode == "circuit":

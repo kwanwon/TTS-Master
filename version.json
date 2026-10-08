@@ -1,6 +1,6 @@
 {
-  "version": "1.6.5",
+  "version": "1.6.6",
   "release_date": "2026-10-08",
   "app_name": "AIMaster_TTS",
-  "description": "드롭다운(콤보박스) 마우스 휠 스크롤 오작동 방지(NoScrollComboBox 적용) 및 시간·세트 조절 스핀박스 휠 조절 유지"
+  "description": "안내 멘트 서술어 중복(됩니다.입니다) 방어 정규화, 첫 음 누락 방지 안전 버퍼 및 종료 멘트 말끝 끊김 없는 고음질 무음 트리밍 적용"
 }
