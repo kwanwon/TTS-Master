@@ -17,7 +17,7 @@ TOTAL_DURATION = DEFAULT_MIN_DURATION  # 하위 호환용 기본값
 
 
 class AudioClipItem(QGraphicsRectItem):
-    def __init__(self, text, file_path, duration_sec, track_idx, time_sec, pps, parent=None):
+    def __init__(self, text, file_path, duration_sec, track_idx, time_sec, pps, vol_db=0.0, parent=None):
         super().__init__(parent)
         self.file_path = file_path
         self.text = text
@@ -25,6 +25,7 @@ class AudioClipItem(QGraphicsRectItem):
         self.track_idx = track_idx
         self.time_sec = time_sec
         self.pps = pps
+        self.vol_db = vol_db
         self.y_pos = 0
 
         self.setFlags(
@@ -286,8 +287,8 @@ class DAWTimeline(QGraphicsView):
         else:
             super().dropEvent(event)
 
-    def add_clip(self, text, file_path, time_sec, track_idx, duration_sec):
-        item = AudioClipItem(text, file_path, duration_sec, track_idx, time_sec, self.pps)
+    def add_clip(self, text, file_path, time_sec, track_idx, duration_sec, vol_db=0.0):
+        item = AudioClipItem(text, file_path, duration_sec, track_idx, time_sec, self.pps, vol_db=vol_db)
         self._scene.addItem(item)
         self._ensure_duration_for_clips()
         self.timelineChanged.emit()
@@ -299,7 +300,7 @@ class DAWTimeline(QGraphicsView):
                 data.append({
                     'time': item.time_sec,
                     'file': item.file_path,
-                    'vol': 0.0,
+                    'vol': getattr(item, 'vol_db', 0.0),
                     'track': item.track_idx,
                     'duration': item.duration_sec
                 })

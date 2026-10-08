@@ -939,15 +939,18 @@ class AudioEditorTab(QWidget):
                     if r == QMessageBox.StandardButton.Yes:
                         self.timeline_view.clear_all()
 
-                # 클립들을 타임라인에 배치
+                # 클립들을 타임라인에 배치 (배치 중 불필요한 background auto-mix 덮어쓰기 방지)
+                self.timeline_view.blockSignals(True)
                 for c in clips:
                     self.timeline_view.add_clip(
                         c["text"],
                         c["file"],
                         c["time"],
                         c["track"],
-                        c["duration"]
+                        c["duration"],
+                        vol_db=c.get("vol", 0.0)
                     )
+                self.timeline_view.blockSignals(False)
 
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)

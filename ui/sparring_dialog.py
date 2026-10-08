@@ -39,10 +39,25 @@ class NoScrollComboBox(QComboBox):
 
 
 def vol_pct_to_db(pct: int) -> float:
-    """선형 퍼센트(%) 볼륨을 데시벨(dB)로 변환 (0% -> -60dB 무음, 100% -> 0dB)"""
+    """
+    청감 인지 곡선(Perceptual Curve)을 적용하여 볼륨 슬라이더 조작 시 귀로 확연히 체감되도록 변환
+    - 0% -> -60dB (무음)
+    - 50% -> -8.4dB (확연히 절반 수준으로 감쇄)
+    - 70% -> -4.3dB (차분하고 안정적인 배경음)
+    - 100% -> 0.0dB (기준 볼륨)
+    - 120% -> +2.85dB (귀로 뚜렷하게 느껴지는 증폭)
+    - 130% -> +4.10dB (음악을 뚫고 나오는 우렁찬 발성)
+    - 150% -> +6.34dB (강력한 강조)
+    - 200% -> +10.84dB (극대화)
+    """
     if pct <= 0:
         return -60.0
-    return round(20.0 * math.log10(pct / 100.0), 2)
+    if pct == 100:
+        return 0.0
+    if pct < 100:
+        return round(28.0 * math.log10(pct / 100.0), 2)
+    else:
+        return round(36.0 * math.log10(pct / 100.0), 2)
 
 
 def trim_audio_silence(seg: AudioSegment, threshold: float = -52.0) -> AudioSegment:
@@ -582,10 +597,10 @@ class SparringWorker(QThread):
                 ins_ms = int(item["time"] * 1000)
                 master_canvas = master_canvas.overlay(seg, position=ins_ms)
 
-            try:
-                master_canvas = normalize(master_canvas)
-            except Exception:
-                pass
+            # 클리핑(치직거림) 방지 피크 리미터: 피크가 -0.5dBFS를 초과할 때만 안전하게 헤드룸 확보하여 볼륨 바 밸런스 100% 보존
+            if master_canvas.max_dBFS > -0.5:
+                headroom_cut = master_canvas.max_dBFS - (-0.5)
+                master_canvas = master_canvas - headroom_cut
 
             suggested_filename = make_suggested_filename(self.mode, self.params, total_duration_sec)
             clean_base = os.path.splitext(suggested_filename)[0]
