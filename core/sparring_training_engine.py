@@ -245,8 +245,9 @@ class SparringTrainingEngine:
         """
         Parses customized combo routine text into structured exercise dictionaries.
         Supports:
-          - "1번 콤보: ...", "1. ...", "[1세트] ..."
-          - Tip lines containing "지도 팁", "➔ [지도" attached to the previous combo
+          - "1번 콤보: ...", "1번: ...", "1. ...", "[1세트] ...", "1) ...", "1 - ...", "콤보 1: ..."
+          - Tip lines containing "지도 팁", "➔ [지도", "-> [지도", "지도 요령", "요령", "주의사항", "설명"
+          - Arrow bullet lines (->, ➔, ▶, =>) attached to the previous combo
           - Raw text lines
         """
         if not text or not text.strip():
@@ -257,35 +258,47 @@ class SparringTrainingEngine:
         exercises = []
         current_item = None
 
+        tip_markers = [
+            "[지도 팁]", "지도 팁", "➔ [지도", "-> [지도", "[지도팁]", "지도팁",
+            "[팁]", "팁:", "[요령]", "요령:", "지도 요령:", "지도요령:",
+            "★", "※", "[주의사항]", "주의사항:", "[설명]", "설명:"
+        ]
+
         for line in lines:
-            # Check if this line is an instructional tip
-            if any(marker in line for marker in ["[지도 팁]", "지도 팁", "➔ [지도", "★", "※"]):
+            is_tip_marker = any(m in line for m in tip_markers)
+            is_arrow_bullet = (current_item is not None) and bool(re.match(r"^(?:->|➔|▶|=>|[*•-])\s*", line))
+
+            if is_tip_marker or is_arrow_bullet:
                 if current_item:
-                    tip_part = line.split(":", 1)[-1].strip() if ":" in line else line
-                    current_item["tip"] = tip_part.replace("]", "").strip()
+                    tip_text = line
+                    for m in tip_markers:
+                        if m in tip_text:
+                            tip_text = tip_text.split(m, 1)[-1]
+                            break
+                    # Strip leading arrow/colons/brackets
+                    tip_text = re.sub(r"^(?:->|➔|▶|=>|[:\-\]\s•*])+", "", tip_text).strip()
+                    tip_text = tip_text.replace("]", "").strip()
+                    # Clean arrows inside tip for natural voice speech
+                    speech_tip = re.sub(r"\s*(?:->|➔|▶|=>)\s*", ", ", tip_text).strip()
+                    current_item["tip"] = tip_text
+                    current_item["speech_tip"] = speech_tip
                 continue
 
-            # Check if line starts with combo marker like '1번 콤보:', '1.', '[1세트]', '1)'
-            m = re.match(r"^(?:\[?\d+세트\]?|\d+번\s*(?:콤보)?|\d+[\.\)])\s*[:\-\.]?\s*(.+)$", line)
+            # Check if line starts with combo marker like '1번 콤보:', '1.', '[1세트]', '1)', '1 -', '콤보 1:'
+            m = re.match(r"^(?:\[?\d+세트\]?|\d+번\s*(?:콤보)?|\d+[\.\)\-]|콤보\s*\d+)\s*[:\-\.]?\s*(.+)$", line)
             if m:
                 combo_text = m.group(1).strip()
-                if combo_text:
-                    current_item = {
-                        "kr": combo_text,
-                        "mix": combo_text,
-                        "dual": combo_text,
-                        "en": combo_text,
-                        "tip": ""
-                    }
-                    exercises.append(current_item)
             else:
-                # Normal line without number prefix
+                combo_text = line.strip()
+
+            if combo_text:
                 current_item = {
-                    "kr": line,
-                    "mix": line,
-                    "dual": line,
-                    "en": line,
-                    "tip": ""
+                    "kr": combo_text,
+                    "mix": combo_text,
+                    "dual": combo_text,
+                    "en": combo_text,
+                    "tip": "",
+                    "speech_tip": ""
                 }
                 exercises.append(current_item)
 
@@ -434,29 +447,39 @@ class SparringTrainingEngine:
         if intro_enabled:
             intro_text = params.get("intro_text", "").strip()
             if not intro_text:
+                is_custom = bool(custom_routine_text and custom_routine_text.strip())
                 if circuit_mode_type == "single":
                     ex0_name = exercises[0].get(lang_key, exercises[0].get("kr", ""))
                     clean_ex = str(ex0_name).rstrip(".!? ").strip()
-                    import re
-                    is_pred = bool(re.search(r'(됩니다|합니다|입니다|습니다|된다|한다|이다)$', clean_ex))
-                    appended_ex = clean_ex if is_pred else f"{clean_ex}입니다"
+                    tip0 = exercises[0].get("speech_tip", exercises[0].get("tip", "")).strip().rstrip(".!? ")
+                    tip_phrase = f" 요령은 {tip0}입니다." if tip0 else ""
+
                     if lang == "mix_kids":
-                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {appended_ex}. 매 세트 전력 무한 리핏! 준비해 주세요!"
+                        intro_text = f"지금부터 단일 집중 파워 인터벌 스타트! 오늘의 집중 콤보는 {clean_ex}!{tip_phrase} 매 세트 전력 무한 리핏! 준비해 주세요!"
                     elif lang == "dual_step":
-                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 {appended_ex}. 매 세트 전력 반복하세요. 준비!"
+                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 오늘 집중 동작은 {clean_ex}.{tip_phrase} 매 세트 전력 반복하세요. 준비!"
                     elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's focused interval theme is {theme_title}. Perform the combo loop non-stop during work intervals! Get ready!"
+                        intro_text = f"Attention team! Today's focused interval combo is {clean_ex}. Perform the combo loop non-stop during work intervals! Get ready!"
                     else:
-                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복하여 심폐지구력과 근력을 극대화합니다. 모두 준비해 주세요!"
+                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복합니다.{tip_phrase} 모두 준비해 주세요!"
                 else:
+                    # 종목 순환 모드 (cycle)
+                    # 등록된 콤보 루틴 요약 브리핑
+                    combo_summaries = []
+                    for c_idx, ex_item in enumerate(exercises, 1):
+                        nm = ex_item.get(lang_key, ex_item.get("kr", ""))
+                        short_nm = nm.split(",")[0].strip().rstrip(".!?")
+                        combo_summaries.append(f"{c_idx}번 {short_nm}")
+                    overview_str = ", ".join(combo_summaries)
+
                     if lang == "mix_kids":
-                        intro_text = f"지금부터 도장 파워 콤보 인터벌 스타트! 이번 테마는 {theme_title}입니다. 점프, 발차기, 롤링 낙법 콤보를 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
+                        intro_text = f"지금부터 도장 파워 서킷 인터벌 스타트! 오늘 순환 루틴은 {overview_str}입니다. 운동 시간 동안 쉼 없이 무한 리핏! 레스트 타임에 릴랙스! 준비해 주세요!"
                     elif lang == "dual_step":
-                        intro_text = f"지금부터 도장 실전 복합 인터벌 훈련을 시작합니다. - Functional flow interval training! 테마는 '{theme_title}'입니다. 체력, 발차기, 낙법 콤보를 무한 반복하세요. 모두 준비!"
+                        intro_text = f"지금부터 도장 실전 서킷 인터벌 훈련을 시작합니다. - Circuit flow training! 오늘 순환 루틴은 {overview_str}입니다. 전력으로 무한 반복하세요. 모두 준비!"
                     elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's functional flow interval theme is {theme_title}. Perform the continuous combo loop non-stop during work intervals, and breathe deep during rest! Get ready!"
+                        intro_text = f"Attention team! Today's functional circuit flow includes {overview_str}. Perform the continuous combo loop non-stop! Get ready!"
                     else:
-                        intro_text = f"지금부터 도장 실전 복합 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 각 세트마다 체력, 발차기, 회전낙법이 결합된 연속 콤보를 운동 시간 동안 전력으로 쉬지 않고 무한 반복합니다. 모두 준비해 주세요!"
+                        intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 오늘 순환 루틴은 {overview_str}입니다. 각 세트마다 운동 시간 동안 쉬지 않고 전력으로 무한 반복합니다. 모두 준비해 주세요!"
 
             intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
             events.append({
@@ -484,16 +507,31 @@ class SparringTrainingEngine:
             # (A) 설명: 1세트는 필수, 2세트 이후는 cycle 모드일 때만 호명
             should_explain = (s == 1) or (circuit_mode_type == "cycle")
             if should_explain:
+                # 지도 요령(tip) 포함 여부 결정:
+                # 1) single 모드: 1세트에서 동작 요령 함께 설명
+                # 2) cycle 모드: 각 콤보가 처음 등장하는 1회차 순환(s <= len(exercises))에서 동작 요령 함께 설명
+                #    2회차 순환부터는 템포를 위해 핵심 동작명만 간결 호명
+                cur_tip = cur_ex.get("speech_tip", cur_ex.get("tip", "")).strip().rstrip(".!? ") if isinstance(cur_ex, dict) else ""
+                include_tip = False
+                if cur_tip:
+                    if circuit_mode_type == "single" and s == 1:
+                        include_tip = True
+                    elif circuit_mode_type == "cycle" and s <= len(exercises):
+                        include_tip = True
+
+                tip_speech = f" 요령은 {cur_tip}." if include_tip and cur_tip else ""
+                clean_name = str(ex_name).rstrip(".!? ").strip()
+
                 if s == 1 and circuit_mode_type == "single":
-                    call_text = f"[오늘의 집중 콤보] {ex_name}"
+                    call_text = f"[오늘의 집중 콤보] {clean_name}!{tip_speech}"
                 elif lang == "mix_kids":
-                    call_text = f"[{s}세트 콤보] {ex_name}"
+                    call_text = f"[{s}세트 콤보] {clean_name}!{tip_speech}"
                 elif lang == "dual_step":
-                    call_text = f"[{s}세트] {ex_name}"
+                    call_text = f"[{s}세트] {clean_name}!{tip_speech}"
                 elif lang in ("en", "en_advanced"):
-                    call_text = f"[Set {s} Flow] {ex_name}"
+                    call_text = f"[Set {s} Flow] {clean_name}!{tip_speech}"
                 else:
-                    call_text = f"[{s}세트 복합 콤보] {ex_name}"
+                    call_text = f"[{s}세트 복합 콤보] {clean_name}!{tip_speech}"
 
                 call_dur = max(1.8, round(len(call_text) * 0.20, 2))
                 events.append({

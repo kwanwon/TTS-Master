@@ -333,6 +333,9 @@ class SparringWorker(QThread):
                 # 불필요한 따옴표(' " `) 제거 (TTS 호흡 지연 및 어색한 끊김 방지)
                 clean_text = clean_text.replace("'", "").replace('"', '').replace('`', '').strip()
 
+                # 화살표 기호 정제 (TTS가 '화살표', '빼기' 등으로 발음하지 않고 자연스럽게 호흡하도록 쉼표로 변환)
+                clean_text = clean_text.replace("->", ", ").replace("➔", ", ").replace("▶", ", ").replace("=>", ", ")
+
                 # 서술어 중복 방어 정규화 (예: '됩니다.입니다' -> '됩니다.', '됩니다 입니다' -> '됩니다.')
                 import re
                 clean_text = re.sub(r'됩니다[\s\.]*입니다', '됩니다.', clean_text)
@@ -776,9 +779,10 @@ class SparringDialog(QDialog):
 
         self.txt_circuit_moves = QTextEdit()
         self.txt_circuit_moves.setMaximumHeight(170)
+        self.txt_circuit_moves.textChanged.connect(self._on_circuit_moves_text_changed)
         l_cm.addWidget(self.txt_circuit_moves)
 
-        lbl_moves_hint = QLabel("※ 위 콤보 내용을 직접 추가/수정/삭제할 수 있으며, 실제 음원에 그대로 반영됩니다. '종목 순환'은 매 세트 콤보를 호명하며 진행되고, '단일 종목 집중 반복'은 1세트에서만 1번 콤보를 설명하고 2세트부터는 설명 없이 준비 3,2,1로 빠르게 진행됩니다.")
+        lbl_moves_hint = QLabel("※ 위 콤보 동작과 [지도 팁]을 직접 수정/추가/삭제할 수 있으며, 실제 음원(사전 안내 및 세트별 설명)에 100% 반영됩니다. '종목 순환'은 각 콤보 첫 세트에서 지도 팁을 함께 설명하고, '단일 집중 반복'은 1세트에서만 콤보와 지도 팁을 설명한 뒤 2세트부터는 설명 없이 준비 3,2,1로 빠르게 진행됩니다.")
         lbl_moves_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         l_cm.addWidget(lbl_moves_hint)
         l_circuit.addWidget(g_c_moves)
@@ -1500,27 +1504,57 @@ class SparringDialog(QDialog):
         self.sp_circuit_rest.setValue(rest)
         self.sp_circuit_sets.setValue(sets)
 
+    def _on_circuit_moves_text_changed(self):
+        if not getattr(self, '_programmatic_circuit_text_update', False):
+            self._circuit_moves_user_modified = True
+
     def _on_circuit_theme_changed(self, idx):
+        if getattr(self, '_circuit_moves_user_modified', False):
+            reply = QMessageBox.question(
+                self,
+                "루틴 덮어쓰기 확인",
+                "현재 직접 편집한 콤보 루틴 내용이 있습니다.\n새로 선택한 테마의 기본 루틴으로 덮어쓰시겠습니까?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
 
     def _on_circuit_lang_changed(self, idx):
+        if getattr(self, '_circuit_moves_user_modified', False):
+            reply = QMessageBox.question(
+                self,
+                "언어 변경 확인",
+                "현재 직접 편집한 콤보 루틴 내용이 있습니다.\n선택한 언어의 기본 루틴으로 덮어쓰시겠습니까?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
 
     def _update_circuit_moves_text(self):
-        theme_key = self.combo_circuit_theme.currentData() or "power_agility"
-        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
-        theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES.get("power_agility", {}))
-        exercises = theme_data.get("exercises", [])
+        self._programmatic_circuit_text_update = True
+        try:
+            theme_key = self.combo_circuit_theme.currentData() or "power_agility"
+            lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+            theme_data = CIRCUIT_INTERVAL_THEMES.get(theme_key, CIRCUIT_INTERVAL_THEMES.get("power_agility", {}))
+            exercises = theme_data.get("exercises", [])
 
-        lang_field = "mix" if lang_mode == "mix_kids" else ("dual" if lang_mode == "dual_step" else ("en" if lang_mode == "en_advanced" else "kr"))
+            lang_field = "mix" if lang_mode == "mix_kids" else ("dual" if lang_mode == "dual_step" else ("en" if lang_mode == "en_advanced" else "kr"))
 
-        lines = []
-        for i, ex in enumerate(exercises, 1):
-            text = ex.get(lang_field, ex.get("kr", ""))
-            tip = ex.get("tip", "")
-            lines.append(f"{i}번 콤보: {text}\n   ➔ [지도 팁]: {tip}\n")
+            lines = []
+            for i, ex in enumerate(exercises, 1):
+                text = ex.get(lang_field, ex.get("kr", ""))
+                tip = ex.get("tip", "")
+                lines.append(f"{i}번 콤보: {text}\n   ➔ [지도 팁]: {tip}\n")
 
-        self.txt_circuit_moves.setPlainText("\n".join(lines).strip())
+            self.txt_circuit_moves.setPlainText("\n".join(lines).strip())
+        finally:
+            self._programmatic_circuit_text_update = False
 
     def browse_bgm(self):
         file_paths, _ = QFileDialog.getOpenFileNames(
