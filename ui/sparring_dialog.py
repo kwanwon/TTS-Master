@@ -399,13 +399,34 @@ class SparringWorker(QThread):
                     has_korean = bool(re.search(r'[가-힣]', clean_text))
                     has_english = bool(re.search(r'[a-zA-Z]', clean_text))
                     target_voice = en_voice if (has_english and not has_korean) else voice_id
-                    rate_val = "+10%" if (has_english and not has_korean) else "+0%"
+
+                    # ── [지도자 듀얼 톤 튜닝: 설명 vs 구령 분리] ──
+                    # 1) 설명형 멘트: 인트로, 휴식, 라운드 안내 등 차분하고 또렷한 전달력 위주 (+0%)
+                    # 2) 구령형 멘트: 시작!, 원투!, 바꿔!, 동작 지시 등 절도 있고 텐션감 있는 기합 톤 (+10% & 컴프레서 펀치)
+                    is_guidance = (
+                        len(clean_text) >= 18 or 
+                        any(clean_text.endswith(end) for end in ("합니다.", "입니다.", "됩니다.", "하세요.", "바랍니다.", "휴식", "휴식입니다", "준비하세요.")) or
+                        "안내" in clean_text or "훈련은" in clean_text or "호흡을" in clean_text or "가다듬" in clean_text or "테마는" in clean_text or "라운드입니다" in clean_text
+                    )
+
+                    if has_english and not has_korean:
+                        rate_val = "+10%"
+                    elif is_guidance:
+                        rate_val = "+0%"  # 설명은 차분하고 정확한 표준 아나운서/사범님 브리핑 속도
+                    else:
+                        rate_val = "+10%" # 구령은 늘어지지 않고 절도 있게 딱딱 끊어치는 텐션감
 
                     synth_text = clean_text
+                    # 구령 단문은 느낌표 강세가 없을 경우 추가하여 끊어치는 기합 유도
+                    if not is_guidance and not re.search(r'[!~]$', synth_text):
+                        synth_text += "!"
+
                     if "갈려" in clean_text and not clean_text.endswith("~!"):
                         synth_text = clean_text.replace("갈려!", "갈~려!").replace("갈려", "갈~려")
 
-                    safe_cue_name = f"sp_v3_{target_voice}_{abs(hash(synth_text))}.wav"
+                    # v4 캐시 키 (새 듀얼 파라미터 즉시 반영)
+                    cue_type_tag = "g" if is_guidance else "c"
+                    safe_cue_name = f"sp_v4_{target_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -418,6 +439,7 @@ class SparringWorker(QThread):
                             try:
                                 import edge_tts
                                 import io
+                                from pydub.effects import compress_dynamic_range, normalize
 
                                 async def _synth(t, v, path):
                                     comm = edge_tts.Communicate(t, v, rate=rate_val)
@@ -428,6 +450,22 @@ class SparringWorker(QThread):
                                     buf.seek(0)
                                     raw_seg = AudioSegment.from_file(buf, format="mp3")
                                     trimmed_seg = trim_audio_silence(raw_seg)
+
+                                    # ── 도장 보컬 사운드 마스터링 (자연스러운 명료도 & 펀치감 확보) ──
+                                    if not is_guidance and len(trimmed_seg) > 80:
+                                        # 구령 멘트: 음악에 묻히지 않도록 소프트 컴프레서 + 미세 게인 부스트
+                                        try:
+                                            trimmed_seg = compress_dynamic_range(trimmed_seg, threshold=-16.0, ratio=2.5, attack=5.0, release=50.0)
+                                            trimmed_seg = trimmed_seg + 1.8  # 1.8dB 펀치 게인
+                                        except Exception:
+                                            pass
+                                    elif is_guidance and len(trimmed_seg) > 80:
+                                        # 설명 멘트: 또렷하고 맑은 라디오 DJ 톤
+                                        try:
+                                            trimmed_seg = normalize(trimmed_seg)
+                                        except Exception:
+                                            pass
+
                                     trimmed_seg.export(path, format="wav")
 
                                 asyncio.run(_synth(synth_text, target_voice, v_path))
