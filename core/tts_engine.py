@@ -225,6 +225,14 @@ class EdgeTTSEngine:
         return True
 
     def _split_text(self, text, max_len=150):
+        # 0. 텍스트 사전 정제: 불필요한 번역 괄호 주석 제거 및 한국어 문맥 속 콩글리시 횟수/반복 표현 도장 표준어 정규화
+        text = re.sub(r'\(\s*[A-Za-z\s]+\s*\)', '', text)
+        text = re.sub(r'(\d+)\s*(?:타임스|타임즈|타임)\b', r'\1회', text)
+        text = re.sub(r'무한\s*(?:리핏|리피트)\b', '무한 반복', text)
+        text = re.sub(r'\b(?:리핏|리피트)\b', '반복', text)
+        text = re.sub(r'레스트\s*타임\b', '휴식 시간', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+
         # 1. $영어$ 태그를 최우선으로 확실하게 분리 (예: "안녕하세요$ hi$" -> ["안녕하세요", "$ hi$"])
         raw_chunks = re.split(r'(\$[^$]+\$)', text)
         tagged_chunks = []
@@ -238,15 +246,15 @@ class EdgeTTSEngine:
             else:
                 tagged_chunks.append(raw)
 
-        # 2. 태그가 없는 일반 문장 중 영단어/영문장 스마트 감지 (하이픈, 어포스트로피 포함)
+        # 2. 태그가 없는 일반 문장 중 영단어/영문장 스마트 감지 (숫자 접두 영문어구, 하이픈, 어포스트로피 포함)
         final_chunks = []
         for chunk in tagged_chunks:
             if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
                 final_chunks.append(chunk)
                 continue
 
-            # 영문 어구(알파벳 포함된 어구, 예: Push-up, Ready... go!, Let's go!) 분할
-            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|[A-Za-z][A-Za-z0-9\s,\'\"\?\!\.\-]*[A-Za-z0-9\?\!])', chunk)
+            # 영문 어구(숫자 접두 영문어구 포함, 예: 3 times, 1 round, Push-up, Ready... go!, Let's go!) 분할
+            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|(?:\d+\s+)?[A-Za-z][A-Za-z0-9\s,\'\"\?\!\.\-]*[A-Za-z0-9\?\!])', chunk)
             for tok in tokens:
                 if not tok.strip():
                     continue
