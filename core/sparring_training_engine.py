@@ -13,9 +13,28 @@ import os
 import random
 import uuid
 import math
+import re
 from typing import List, Dict, Any, Tuple
 from pydub import AudioSegment
 from core.shuttle_run_engine import ShuttleRunEngine
+
+
+def clean_speech_text(text: str) -> str:
+    """
+    TTS 음성 합성용 텍스트에서 이모지(도복 🥋, 번개 ⚡ 등) 및 화살표, 특수기호를 완벽하게 제거하여
+    '도복', '화살표' 같은 불필요한 단어가 발음되는 것을 원천 차단하고 순수 자연어 구령만 추출
+    """
+    if not text:
+        return ""
+    # 유니코드 이모지 (도복 🥋, 번개 ⚡, 달리기 🏃, 근육 💪, 펀치 🥊 등 전 범위)
+    t = re.sub(r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u203c-\u2049]', '', text)
+    # 화살표 및 불필요한 특수기호
+    t = re.sub(r'->|➔|▶|=>|◀|<-|★|※|#|@', ' ', t)
+    # 대괄호 문자 정리
+    t = t.replace('[', ' ').replace(']', ' ')
+    # 앞뒤 불필요한 기호 및 중복 공백 정제
+    t = re.sub(r'^[(\s\-_:]+|[)\s\-_:]+$', '', t)
+    return re.sub(r'\s+', ' ', t).strip()
 
 
 class BalancedCuePicker:
@@ -65,10 +84,10 @@ class BalancedCuePicker:
 # ── 도장 고강도 기능성 서킷 인터벌 4대 복합 콤보 테마 (체력 + 발차기 + 낙법/점프 무한 반복 루프) ──
 CIRCUIT_INTERVAL_THEMES = {
     "power_agility": {
-        "name_kr": "🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프",
-        "name_mix": "🥋 대련 실전 & 낙법 협응 콤보 (점프 & 킥 & 롤링 낙법)",
-        "name_dual": "🥋 대련 실전 & 낙법 협응 (Combat Kicks & Rolling Fall Combo)",
-        "name_en": "🥋 Dojo Combat & Breakfall Flow Interval",
+        "name_kr": "[대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프",
+        "name_mix": "대련 실전 & 낙법 협응 콤보 (점프 & 킥 & 롤링 낙법)",
+        "name_dual": "대련 실전 & 낙법 협응 (Combat Kicks & Rolling Fall Combo)",
+        "name_en": "Dojo Combat & Breakfall Flow Interval",
         "desc": "15~20초 동안 [체력 점프 ➔ 실전 발차기 ➔ 회전낙법/점프턴] 콤보를 전력으로 무한 반복하고 휴식하는 실전 대련 인터벌",
         "exercises": [
             {
@@ -102,10 +121,10 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "agility_power_combo": {
-        "name_kr": "⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프",
-        "name_mix": "⚡ 순발력 & 민첩성 폭발 콤보 (버피 & 점프 턴 & 나래 킥)",
-        "name_dual": "⚡ 순발력 & 민첩성 콤보 (Agility, Burpee & Fast Kick Flow)",
-        "name_en": "⚡ Agility & Explosive Kick Flow",
+        "name_kr": "[순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프",
+        "name_mix": "순발력 & 민첩성 폭발 콤보 (버피 & 점프 턴 & 나래 킥)",
+        "name_dual": "순발력 & 민첩성 콤보 (Agility, Burpee & Fast Kick Flow)",
+        "name_en": "Agility & Explosive Kick Flow",
         "desc": "15~20초 동안 [전신 순발력 ➔ 폭풍 스피드 발차기 ➔ 공중 방향전환]을 결합한 고강도 협응 인터벌",
         "exercises": [
             {
@@ -139,10 +158,10 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "footwork_reaction_combo": {
-        "name_kr": "🏃‍♂️ [스파링 풋워크 & 카운터 콤보] 스텝·카운터킥·회전낙법 루프",
-        "name_mix": "🏃‍♂️ 스파링 풋워크 & 반사신경 콤보 (스텝 & 카운터 킥 & 롤링 낙법)",
-        "name_dual": "🏃‍♂️ 스파링 풋워크 & 카운터 콤보 (Footwork, Counter Kicks & Breakfall)",
-        "name_en": "🏃‍♂️ Sparring Footwork & Reaction Flow",
+        "name_kr": "[스파링 풋워크 & 카운터 콤보] 스텝·카운터킥·회전낙법 루프",
+        "name_mix": "스파링 풋워크 & 반사신경 콤보 (스텝 & 카운터 킥 & 롤링 낙법)",
+        "name_dual": "스파링 풋워크 & 카운터 콤보 (Footwork, Counter Kicks & Breakfall)",
+        "name_en": "Sparring Footwork & Reaction Flow",
         "desc": "15~20초 동안 [대련 스텝 풋워크 ➔ 상대 격파 발차기 ➔ 낙법 회피 기립]을 무한 반복하는 실전 스파링 서킷",
         "exercises": [
             {
@@ -176,10 +195,10 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "strength_endurance_combo": {
-        "name_kr": "💪 [근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷",
-        "name_mix": "💪 근지구력 & 심폐 파워 콤보 (푸시업 & V업 복근 & 연속 킥)",
-        "name_dual": "💪 근지구력 & 심폐 파워 (Strength, Core & Continuous Kick Combo)",
-        "name_en": "💪 Endurance Strength & Striking Circuit",
+        "name_kr": "[근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷",
+        "name_mix": "근지구력 & 심폐 파워 콤보 (푸시업 & V업 복근 & 연속 킥)",
+        "name_dual": "근지구력 & 심폐 파워 (Strength, Core & Continuous Kick Combo)",
+        "name_en": "Endurance Strength & Striking Circuit",
         "desc": "15~20초 동안 [도장 특화 체력 단련 ➔ 전력 타격 ➔ 심폐 파워]를 한 세트로 묶어 무한 반복하는 서킷",
         "exercises": [
             {
@@ -439,53 +458,30 @@ class SparringTrainingEngine:
         lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
         user_theme_title = params.get("theme_title", "").strip()
         if user_theme_title:
-            theme_title = user_theme_title
+            theme_title = clean_speech_text(user_theme_title)
         else:
-            theme_title = theme_data.get(f"name_{lang_key}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
+            raw_title = theme_data.get(f"name_{lang_key}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
+            theme_title = clean_speech_text(raw_title)
 
         events = []
         duck_segments = []
         curr_time = 1.0
 
-        # 2. 서킷 인터벌 전용 사전 안내 방송 (스파링 멘트가 아닌 서킷 전용 멘트)
+        # 2. 서킷 인터벌 전용 사전 안내 방송 (실제 도장 수업에 최적화된 명확하고 힘찬 지도자 구령)
         if intro_enabled:
             intro_text = params.get("intro_text", "").strip()
             if not intro_text:
-                is_custom = bool(custom_routine_text and custom_routine_text.strip())
-                if circuit_mode_type == "single":
-                    ex0_name = exercises[0].get(lang_key, exercises[0].get("kr", ""))
-                    clean_ex = str(ex0_name).rstrip(".!? ").strip()
-                    tip0 = exercises[0].get("speech_tip", exercises[0].get("tip", "")).strip().rstrip(".!? ")
-                    tip_phrase = f" 요령은 {tip0}입니다." if tip0 else ""
-
-                    if lang == "mix_kids":
-                        intro_text = f"지금부터 단일 집중 파워 인터벌 훈련을 시작합니다! 이번 테마는 {theme_title}! 오늘의 집중 콤보는 {clean_ex}!{tip_phrase} 매 세트 전력으로 반복하세요! 모두 준비!"
-                    elif lang == "dual_step":
-                        intro_text = f"지금부터 단일 집중 인터벌 훈련을 시작합니다. - Focused interval training! 테마는 {theme_title}. 오늘 집중 동작은 {clean_ex}.{tip_phrase} 매 세트 전력 반복하세요. 준비!"
-                    elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's focused interval theme is {theme_title}. Single combo is {clean_ex}. Perform the combo loop non-stop during work intervals! Get ready!"
-                    else:
-                        intro_text = f"지금부터 단일 종목 집중 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 이번 훈련은 {clean_ex} 단일 콤보를 전 세트 동안 극한으로 반복합니다.{tip_phrase} 모두 준비해 주세요!"
+                clean_theme = theme_title if theme_title else "기능성 서킷 인터벌"
+                if lang in ("en", "en_advanced"):
+                    intro_text = f"Circuit interval training starts now! Today's theme is {clean_theme}. Push your limits every set! Get ready!"
+                elif lang == "mix_kids":
+                    intro_text = f"지금부터 도장 파워 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {clean_theme}! 쉬지 않고 전력으로 무한 반복! 모두 준비!"
+                elif lang == "dual_step":
+                    intro_text = f"지금부터 도장 실전 서킷 인터벌 훈련을 시작합니다. 이번 테마는 {clean_theme}입니다. 전력으로 무한 반복하세요. 모두 준비!"
                 else:
-                    # 종목 순환 모드 (cycle)
-                    # 등록된 콤보 루틴 요약 브리핑
-                    combo_summaries = []
-                    for c_idx, ex_item in enumerate(exercises, 1):
-                        nm = ex_item.get(lang_key, ex_item.get("kr", ""))
-                        short_nm = nm.split(",")[0].strip().rstrip(".!?")
-                        combo_summaries.append(f"{c_idx}번 {short_nm}")
-                    overview_str = ", ".join(combo_summaries)
+                    intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {clean_theme}입니다. 매 세트 전력으로 무한 반복하세요! 모두 준비해 주세요!"
 
-                    if lang == "mix_kids":
-                        intro_text = f"지금부터 도장 파워 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {theme_title}! 오늘 순환 루틴은 {overview_str}입니다. 운동 시간 동안 쉬지 않고 전력으로 반복하세요! 모두 준비!"
-                    elif lang == "dual_step":
-                        intro_text = f"지금부터 도장 실전 서킷 인터벌 훈련을 시작합니다. - Circuit flow training! 테마는 '{theme_title}'입니다. 오늘 순환 루틴은 {overview_str}입니다. 전력으로 무한 반복하세요. 모두 준비!"
-                    elif lang in ("en", "en_advanced"):
-                        intro_text = f"Attention team! Today's functional circuit flow theme is {theme_title}. Includes {overview_str}. Perform the continuous combo loop non-stop! Get ready!"
-                    else:
-                        intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 '{theme_title}'입니다. 오늘 순환 루틴은 {overview_str}입니다. 각 세트마다 운동 시간 동안 쉬지 않고 전력으로 무한 반복합니다. 모두 준비해 주세요!"
-
-            intro_dur = max(3.5, round(len(intro_text) * 0.22, 2))
+            intro_dur = max(2.8, round(len(intro_text) * 0.18, 2))
             events.append({
                 "time": curr_time,
                 "type": "voice",
@@ -494,7 +490,7 @@ class SparringTrainingEngine:
                 "track": 2,
                 "vol": 2.5
             })
-            curr_time += intro_dur + 0.8
+            curr_time += intro_dur + 0.6
 
         cd_sound_file = os.path.join("effects", "countdown_beeps.wav") if cd_style == "beep" else os.path.join("effects", "countdown.wav")
         cd_dur = 6.5 if "ready" in cd_style else 4.3
@@ -511,33 +507,22 @@ class SparringTrainingEngine:
             # (A) 설명: 1세트는 필수, 2세트 이후는 cycle 모드일 때만 호명
             should_explain = (s == 1) or (circuit_mode_type == "cycle")
             if should_explain:
-                # 지도 요령(tip) 포함 여부 결정:
-                # 1) single 모드: 1세트에서 동작 요령 함께 설명
-                # 2) cycle 모드: 각 콤보가 처음 등장하는 1회차 순환(s <= len(exercises))에서 동작 요령 함께 설명
-                #    2회차 순환부터는 템포를 위해 핵심 동작명만 간결 호명
-                cur_tip = cur_ex.get("speech_tip", cur_ex.get("tip", "")).strip().rstrip(".!? ") if isinstance(cur_ex, dict) else ""
-                include_tip = False
-                if cur_tip:
-                    if circuit_mode_type == "single" and s == 1:
-                        include_tip = True
-                    elif circuit_mode_type == "cycle" and s <= len(exercises):
-                        include_tip = True
+                # 이모지 및 불필요한 특수기호 완벽 제거
+                clean_name = clean_speech_text(str(ex_name).rstrip(".!? ").strip())
 
-                tip_speech = f" 요령은 {cur_tip}." if include_tip and cur_tip else ""
-                clean_name = str(ex_name).rstrip(".!? ").strip()
-
+                # 지도 팁(tip)은 지도자가 화면에서 참고하는 가이드이므로 음성에서는 배제하여 운동 템포 극대화
                 if s == 1 and circuit_mode_type == "single":
-                    call_text = f"[오늘의 집중 콤보] {clean_name}!{tip_speech}"
+                    call_text = f"[오늘의 집중 콤보] {clean_name}!"
                 elif lang == "mix_kids":
-                    call_text = f"[{s}세트 콤보] {clean_name}!{tip_speech}"
+                    call_text = f"[{s}세트] {clean_name}!"
                 elif lang == "dual_step":
-                    call_text = f"[{s}세트] {clean_name}!{tip_speech}"
+                    call_text = f"[{s}세트] {clean_name}!"
                 elif lang in ("en", "en_advanced"):
-                    call_text = f"[Set {s} Flow] {clean_name}!{tip_speech}"
+                    call_text = f"[Set {s}] {clean_name}!"
                 else:
-                    call_text = f"[{s}세트 복합 콤보] {clean_name}!{tip_speech}"
+                    call_text = f"[{s}세트] {clean_name}!"
 
-                call_dur = max(1.8, round(len(call_text) * 0.20, 2))
+                call_dur = max(1.5, round(len(call_text) * 0.16, 2))
                 events.append({
                     "time": curr_time,
                     "type": "voice",
@@ -546,7 +531,7 @@ class SparringTrainingEngine:
                     "track": 2,
                     "vol": 2.5
                 })
-                curr_time += call_dur + 0.5
+                curr_time += call_dur + 0.4
 
             # (B) 카운트다운 (준비 3, 2, 1): 설명 바로 뒤에 배치
             if countdown_enabled:

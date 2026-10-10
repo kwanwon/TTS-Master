@@ -229,7 +229,9 @@ class EdgeTTSEngine:
         from utils.hangul_composer import compose_hangul_jamo
         text = compose_hangul_jamo(text)
 
-        # 0. 텍스트 사전 정제: 불필요한 번역 괄호 주석 제거 및 한국어 문맥 속 콩글리시 횟수/반복 표현 도장 표준어 정규화
+        # 0. 텍스트 사전 정제: 이모지(도복 🥋 등) 및 화살표 특수기호 완벽 제거
+        text = re.sub(r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u203c-\u2049]', '', text)
+        text = re.sub(r'->|➔|▶|=>|◀|<-', ' ', text)
         text = re.sub(r'\(\s*[A-Za-z\s]+\s*\)', '', text)
         text = re.sub(r'(\d+)\s*(?:타임스|타임즈|타임)\b', r'\1회', text)
         text = re.sub(r'무한\s*(?:리핏|리피트)\b', '무한 반복', text)

@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-from core.sparring_training_engine import SparringTrainingEngine, CIRCUIT_INTERVAL_THEMES
+from core.sparring_training_engine import SparringTrainingEngine, CIRCUIT_INTERVAL_THEMES, clean_speech_text
 from core.shuttle_run_engine import ShuttleRunEngine
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
@@ -416,7 +416,7 @@ class SparringWorker(QThread):
                     v_path = os.path.join("projects", "temp_tts", f"sparring_v_{uuid.uuid4().hex[:6]}.wav")
                     import re
                     from utils.hangul_composer import compose_hangul_jamo
-                    clean_text = compose_hangul_jamo(clean_text)
+                    clean_text = clean_speech_text(compose_hangul_jamo(clean_text))
 
                     has_korean = bool(re.search(r'[가-힣]', clean_text))
                     has_english = bool(re.search(r'[a-zA-Z]', clean_text))
@@ -437,9 +437,9 @@ class SparringWorker(QThread):
                     if not is_guidance and not re.search(r'[!~]$', synth_text):
                         synth_text += "!"
 
-                    # v6 캐시 키 (하이브리드 바이링구얼 한영 분리 엔진 적용)
+                    # v7 캐시 키 (이모지 정제 및 단일 화자 안정화 엔진 적용)
                     cue_type_tag = "g" if is_guidance else "c"
-                    safe_cue_name = f"sp_v6_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
+                    safe_cue_name = f"sp_v7_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -453,7 +453,6 @@ class SparringWorker(QThread):
                                 import edge_tts
                                 import io
                                 from pydub.effects import compress_dynamic_range, normalize
-                                from core.tts_engine import EdgeTTSEngine
 
                                 async def _synth_single_segment(t: str, v: str) -> AudioSegment:
                                     comm = edge_tts.Communicate(t, v, rate=rate_val)
@@ -466,31 +465,16 @@ class SparringWorker(QThread):
                                     return trim_audio_silence(raw_seg)
 
                                 async def _synth_hybrid(full_text: str, path: str):
-                                    # 1. 순수 한국어 문장: 한국어 지도자 화자 100%
-                                    if has_korean and not has_english:
+                                    # 1. 한국어가 포함된 문장 (한국어 중심 또는 한국어+영어 외래어 혼합):
+                                    #    한국어 지도자 신경망(인준/선희)이 문장 전체를 한 호흡으로 자연스럽게 일관 합성!
+                                    #    중간에 화자가 바뀌며 톤/볼륨이 튀고 뒤죽박죽되는 현상 원천 차단.
+                                    if has_korean:
                                         combined = await _synth_single_segment(full_text, voice_id)
-                                    # 2. 순수 영어 문장: 미국 본토 원어민 화자 100%
+                                    # 2. 순수 영어 문장: 미국 본토 원어민 화자(Guy/Jenny) 100%
                                     elif has_english and not has_korean:
                                         combined = await _synth_single_segment(full_text, en_voice)
-                                    # 3. 한국어 + 영어 혼합 (하이브리드 바이링구얼: 한국어는 한국어로, 영어는 본토 영어로)
                                     else:
-                                        tts_helper = EdgeTTSEngine()
-                                        chunks = tts_helper._split_text(full_text)
-                                        combined = AudioSegment.empty()
-                                        for c in chunks:
-                                            c_strip = c.strip()
-                                            if not c_strip:
-                                                continue
-                                            if c_strip.startswith("[EN]") and c_strip.endswith("[/EN]"):
-                                                en_content = c_strip[4:-5].strip()
-                                                if en_content:
-                                                    seg = await _synth_single_segment(en_content, en_voice)
-                                                    combined += seg + AudioSegment.silent(duration=100)
-                                            else:
-                                                ko_content = re.sub(r'[\s\-]+$', '', c_strip).strip()
-                                                if ko_content:
-                                                    seg = await _synth_single_segment(ko_content, voice_id)
-                                                    combined += seg + AudioSegment.silent(duration=100)
+                                        combined = await _synth_single_segment(full_text, voice_id)
 
                                     # ── 도장 보컬 사운드 마스터링 (명료도 & 펀치감) ──
                                     if not is_guidance and len(combined) > 80:
@@ -776,7 +760,7 @@ class SparringDialog(QDialog):
 
         h_theme_edit = QHBoxLayout()
         h_theme_edit.addWidget(QLabel("✏️ 테마 명칭 (자유 수정):"))
-        self.txt_circuit_theme_title = QLineEdit("🥋 대련 실전 & 낙법 협응 콤보")
+        self.txt_circuit_theme_title = QLineEdit("대련 실전 & 낙법 협응 콤보")
         self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 🔥 도장 특화 하체 폭발 인터벌)")
         h_theme_edit.addWidget(self.txt_circuit_theme_title, stretch=1)
         l_ct.addLayout(h_theme_edit)
@@ -1662,7 +1646,7 @@ class SparringDialog(QDialog):
             # 테마 명칭 필드 자동 동기화
             if hasattr(self, 'txt_circuit_theme_title'):
                 preset_title = theme_data.get(f"name_{lang_field}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
-                self.txt_circuit_theme_title.setText(preset_title)
+                self.txt_circuit_theme_title.setText(clean_speech_text(preset_title))
 
             lines = []
             for i, ex in enumerate(exercises, 1):
