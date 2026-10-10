@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
-  "release_date": "2026-10-10",
+  "version": "1.8.1",
+  "release_date": "2026-10-11",
   "app_name": "AIMaster_TTS",
-  "description": "스파링 마법사 이모지(도복/화살표) 음성 발음 원천 차단, 서킷 인터벌 도장 실전 구령 정비 및 단일 화자 한영 일관 합성 엔진 안정화"
+  "description": "CustomTextEdit setText 호환성 버그 수정 (시작 시 창 미표시 크래시 해결) 및 앱 실행 안정화"
 }

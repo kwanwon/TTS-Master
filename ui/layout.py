@@ -127,9 +127,9 @@ class MainWindow(QMainWindow):
         self.update_voice_combo_items()
         
         if state.get("local_input_text"):
-            self.local_input_text.setText(state["local_input_text"])
+            self.local_input_text.setPlainText(state["local_input_text"])
         if state.get("api_input_text"):
-            self.api_input_text.setText(state["api_input_text"])
+            self.api_input_text.setPlainText(state["api_input_text"])
         if state.get("last_dir"):
             self.last_dir = state["last_dir"]
         saved_engine = state.get("engine_combo", "Edge-TTS (초고음질 온라인)")
@@ -354,6 +354,10 @@ class MainWindow(QMainWindow):
                 from PyQt6.QtCore import Qt
                 self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
                 self.textChanged.connect(self._on_text_changed)
+
+            def setText(self, text: str):
+                """QTextEdit와의 하위 호환성을 위해 setText 호출을 setPlainText로 자동 연결"""
+                self.setPlainText(str(text or ""))
 
             def _on_text_changed(self):
                 text = self.toPlainText()
