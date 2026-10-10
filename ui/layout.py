@@ -5,8 +5,7 @@ import platform
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QTextEdit, QPushButton, QComboBox, QListWidget,
-    QGroupBox, QFileDialog, QMessageBox, QTabWidget, QScrollArea,
+    QLabel, QTextEdit, QPlainTextEdit, QPushButton, QComboBox, QListWidget,
     QGroupBox, QFileDialog, QMessageBox, QTabWidget, QScrollArea,
     QProgressBar, QSlider, QInputDialog, QSizePolicy, QRadioButton
 )
@@ -344,12 +343,32 @@ class MainWindow(QMainWindow):
         self.settings_file = "settings.json"
         self.load_settings()
 
-        # Enter 키 이벤트를 가로채서 바로 렌더링되도록 커스텀
-        class CustomTextEdit(QTextEdit):
+        # Enter 키 이벤트를 가로채서 바로 렌더링되고 macOS 한글 자모 분리 현상을 실시간 자동 조립하는 고성능 TextEdit
+        from utils.hangul_composer import compose_hangul_jamo
+
+        class CustomTextEdit(QPlainTextEdit):
             def __init__(self, parent=None, layout_ref=None, is_api=False):
                 super().__init__(parent)
                 self.layout_ref = layout_ref
                 self.is_api = is_api
+                from PyQt6.QtCore import Qt
+                self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
+                self.textChanged.connect(self._on_text_changed)
+
+            def _on_text_changed(self):
+                text = self.toPlainText()
+                composed = compose_hangul_jamo(text)
+                if composed != text:
+                    cursor = self.textCursor()
+                    pos = cursor.position()
+                    diff = len(text) - len(composed)
+                    self.blockSignals(True)
+                    self.setPlainText(composed)
+                    new_pos = max(0, pos - diff)
+                    cursor.setPosition(min(new_pos, len(composed)))
+                    self.setTextCursor(cursor)
+                    self.blockSignals(False)
+
             def keyPressEvent(self, event):
                 from PyQt6.QtCore import Qt
                 if event.key() == Qt.Key.Key_Return and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):

@@ -225,6 +225,10 @@ class EdgeTTSEngine:
         return True
 
     def _split_text(self, text, max_len=150):
+        # -1. 분리된 한글 자모 복원 자동 결합 (macOS ㅌㅔㅅㅡㅌㅡ 분리 현상 방어)
+        from utils.hangul_composer import compose_hangul_jamo
+        text = compose_hangul_jamo(text)
+
         # 0. 텍스트 사전 정제: 불필요한 번역 괄호 주석 제거 및 한국어 문맥 속 콩글리시 횟수/반복 표현 도장 표준어 정규화
         text = re.sub(r'\(\s*[A-Za-z\s]+\s*\)', '', text)
         text = re.sub(r'(\d+)\s*(?:타임스|타임즈|타임)\b', r'\1회', text)
@@ -248,13 +252,14 @@ class EdgeTTSEngine:
 
         # 2. 태그가 없는 일반 문장 중 영단어/영문장 스마트 감지 (숫자 접두 영문어구, 하이픈, 어포스트로피 포함)
         final_chunks = []
+        pattern = r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|(?:\d+\s+)?(?:[A-Za-z][A-Za-z0-9\'\"\?\!\.\-]*\s*)+(?:[A-Za-z\?\!]))'
         for chunk in tagged_chunks:
             if chunk.startswith("[EN]") and chunk.endswith("[/EN]"):
                 final_chunks.append(chunk)
                 continue
 
             # 영문 어구(숫자 접두 영문어구 포함, 예: 3 times, 1 round, Push-up, Ready... go!, Let's go!) 분할
-            tokens = re.split(r'(\[딜레이\s*\d+(?:\.\d+)?\s*초\]|(?:\d+\s+)?[A-Za-z][A-Za-z0-9\s,\'\"\?\!\.\-]*[A-Za-z0-9\?\!])', chunk)
+            tokens = re.split(pattern, chunk)
             for tok in tokens:
                 if not tok.strip():
                     continue
@@ -276,7 +281,7 @@ class EdgeTTSEngine:
                     if cur_ko.strip():
                         final_chunks.append(cur_ko.strip())
 
-        # 3. 후처리: 발음 가능한 문자(한글/영문/숫자)가 없는 고립 기호 청크 정리
+        # 3. 후처리: 발음 가능한 문자(한글/영문/숫자)가 없는 고립 기호 청크 정리 및 연속 [EN] 청크 병합
         cleaned_chunks = []
         for c in final_chunks:
             c_strip = c.strip()
@@ -295,7 +300,14 @@ class EdgeTTSEngine:
                     else:
                         cleaned_chunks[-1] += " " + inner
                 continue
-            cleaned_chunks.append(c_strip)
+
+            # 연속된 [EN] 청크는 하나로 깔끔하게 병합하여 원어민 화자가 단숨에 읽도록 처리
+            if cleaned_chunks and cleaned_chunks[-1].startswith("[EN]") and cleaned_chunks[-1].endswith("[/EN]") and c_strip.startswith("[EN]") and c_strip.endswith("[/EN]"):
+                prev_text = cleaned_chunks[-1][4:-5].strip()
+                curr_text = c_strip[4:-5].strip()
+                cleaned_chunks[-1] = f"[EN]{prev_text} {curr_text}[/EN]"
+            else:
+                cleaned_chunks.append(c_strip)
 
         return cleaned_chunks
 

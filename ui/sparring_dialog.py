@@ -415,9 +415,11 @@ class SparringWorker(QThread):
 
                     v_path = os.path.join("projects", "temp_tts", f"sparring_v_{uuid.uuid4().hex[:6]}.wav")
                     import re
+                    from utils.hangul_composer import compose_hangul_jamo
+                    clean_text = compose_hangul_jamo(clean_text)
+
                     has_korean = bool(re.search(r'[가-힣]', clean_text))
                     has_english = bool(re.search(r'[a-zA-Z]', clean_text))
-                    target_voice = en_voice if (has_english and not has_korean) else voice_id
 
                     # ── [지도자 듀얼 톤 튜닝: 설명 vs 구령 분리] ──
                     # 1) 설명형 멘트: 인트로, 휴식, 라운드 안내 등 차분하고 또렷한 전달력 위주 (+0%)
@@ -428,21 +430,16 @@ class SparringWorker(QThread):
                         "안내" in clean_text or "훈련은" in clean_text or "호흡을" in clean_text or "가다듬" in clean_text or "테마는" in clean_text or "라운드입니다" in clean_text
                     )
 
-                    if has_english and not has_korean:
-                        rate_val = "+10%"
-                    elif is_guidance:
-                        rate_val = "+0%"  # 설명은 차분하고 정확한 표준 아나운서/사범님 브리핑 속도
-                    else:
-                        rate_val = "+10%" # 구령은 늘어지지 않고 절도 있게 딱딱 끊어치는 텐션감
+                    rate_val = "+0%" if is_guidance else "+10%"
 
                     synth_text = clean_text
                     # 구령 단문은 느낌표 강세가 없을 경우 추가하여 끊어치는 기합 유도
                     if not is_guidance and not re.search(r'[!~]$', synth_text):
                         synth_text += "!"
 
-                    # v5 캐시 키 (정제된 도장 음성 파라미터 즉시 반영)
+                    # v6 캐시 키 (하이브리드 바이링구얼 한영 분리 엔진 적용)
                     cue_type_tag = "g" if is_guidance else "c"
-                    safe_cue_name = f"sp_v5_{target_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
+                    safe_cue_name = f"sp_v6_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -456,8 +453,9 @@ class SparringWorker(QThread):
                                 import edge_tts
                                 import io
                                 from pydub.effects import compress_dynamic_range, normalize
+                                from core.tts_engine import EdgeTTSEngine
 
-                                async def _synth(t, v, path):
+                                async def _synth_single_segment(t: str, v: str) -> AudioSegment:
                                     comm = edge_tts.Communicate(t, v, rate=rate_val)
                                     buf = io.BytesIO()
                                     async for chunk in comm.stream():
@@ -465,26 +463,51 @@ class SparringWorker(QThread):
                                             buf.write(chunk['data'])
                                     buf.seek(0)
                                     raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                    trimmed_seg = trim_audio_silence(raw_seg)
+                                    return trim_audio_silence(raw_seg)
 
-                                    # ── 도장 보컬 사운드 마스터링 (자연스러운 명료도 & 펀치감 확보) ──
-                                    if not is_guidance and len(trimmed_seg) > 80:
-                                        # 구령 멘트: 음악에 묻히지 않도록 소프트 컴프레서 + 미세 게인 부스트
+                                async def _synth_hybrid(full_text: str, path: str):
+                                    # 1. 순수 한국어 문장: 한국어 지도자 화자 100%
+                                    if has_korean and not has_english:
+                                        combined = await _synth_single_segment(full_text, voice_id)
+                                    # 2. 순수 영어 문장: 미국 본토 원어민 화자 100%
+                                    elif has_english and not has_korean:
+                                        combined = await _synth_single_segment(full_text, en_voice)
+                                    # 3. 한국어 + 영어 혼합 (하이브리드 바이링구얼: 한국어는 한국어로, 영어는 본토 영어로)
+                                    else:
+                                        tts_helper = EdgeTTSEngine()
+                                        chunks = tts_helper._split_text(full_text)
+                                        combined = AudioSegment.empty()
+                                        for c in chunks:
+                                            c_strip = c.strip()
+                                            if not c_strip:
+                                                continue
+                                            if c_strip.startswith("[EN]") and c_strip.endswith("[/EN]"):
+                                                en_content = c_strip[4:-5].strip()
+                                                if en_content:
+                                                    seg = await _synth_single_segment(en_content, en_voice)
+                                                    combined += seg + AudioSegment.silent(duration=100)
+                                            else:
+                                                ko_content = re.sub(r'[\s\-]+$', '', c_strip).strip()
+                                                if ko_content:
+                                                    seg = await _synth_single_segment(ko_content, voice_id)
+                                                    combined += seg + AudioSegment.silent(duration=100)
+
+                                    # ── 도장 보컬 사운드 마스터링 (명료도 & 펀치감) ──
+                                    if not is_guidance and len(combined) > 80:
                                         try:
-                                            trimmed_seg = compress_dynamic_range(trimmed_seg, threshold=-16.0, ratio=2.5, attack=5.0, release=50.0)
-                                            trimmed_seg = trimmed_seg + 1.8  # 1.8dB 펀치 게인
+                                            combined = compress_dynamic_range(combined, threshold=-16.0, ratio=2.5, attack=5.0, release=50.0)
+                                            combined = combined + 1.8
                                         except Exception:
                                             pass
-                                    elif is_guidance and len(trimmed_seg) > 80:
-                                        # 설명 멘트: 또렷하고 맑은 라디오 DJ 톤
+                                    elif is_guidance and len(combined) > 80:
                                         try:
-                                            trimmed_seg = normalize(trimmed_seg)
+                                            combined = normalize(combined)
                                         except Exception:
                                             pass
 
-                                    trimmed_seg.export(path, format="wav")
+                                    combined.export(path, format="wav")
 
-                                asyncio.run(_synth(synth_text, target_voice, v_path))
+                                asyncio.run(_synth_hybrid(synth_text, v_path))
                                 if os.path.exists(v_path) and os.path.getsize(v_path) > 500:
                                     generated = True
                                     import shutil
