@@ -760,10 +760,11 @@ class SparringDialog(QDialog):
         g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택 및 명칭 커스텀")
         l_ct = QVBoxLayout(g_c_theme)
         self.combo_circuit_theme = NoScrollComboBox()
-        self.combo_circuit_theme.addItem("🥋 [대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 무한 루프", "power_agility")
-        self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 순환 루프", "agility_power_combo")
-        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 & 반사신경 콤보] 스텝·카운터킥·회전낙법 루프", "footwork_reaction_combo")
-        self.combo_circuit_theme.addItem("💪 [근지구력 & 심폐 협응 파워 콤보] 푸시업·복근·연타킥 전신 서킷", "strength_endurance_combo")
+        self.combo_circuit_theme.addItem("🥋 [대련 실전 & 낙법 협응] 점프·발차기·회전낙법 루프", "power_agility")
+        self.combo_circuit_theme.addItem("⚡ [순발력 & 민첩성 폭발] 버피·점프턴·나래차기 루프", "agility_power_combo")
+        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 & 카운터] 스텝·컷트·뒤차기 루프", "footwork_reaction_combo")
+        self.combo_circuit_theme.addItem("💪 [근지구력 & 전신 파워] 푸시업·복근·연타킥 서킷", "strength_endurance_combo")
+        self.combo_circuit_theme.addItem("🔥 [겨루기 실전 전술 콤보] 나래차기·뒤후리기·돌개차기 루프", "taekwondo_sparring_tactics")
         self.combo_circuit_theme.addItem("✏️ [직접 입력] 도장 맞춤형 커스텀 테마 (자유 입력)", "custom")
         self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
         l_ct.addWidget(self.combo_circuit_theme)
@@ -781,8 +782,8 @@ class SparringDialog(QDialog):
         l_cl = QVBoxLayout(g_c_lang)
         self.combo_circuit_lang = NoScrollComboBox()
         self.combo_circuit_lang.addItem("🇰🇷 일반부·정규 도장 [표준 한국어 구령 - 강력 추천]", "kr")
-        self.combo_circuit_lang.addItem("👶 유치부·7세 미만 기초 [한-영 단어 믹스] (한국어 + 핵심 영어단어 조합)", "mix_kids")
-        self.combo_circuit_lang.addItem("🎒 초등부 순차 구령 [한국어 선행 + 쉬운 영어] (동작 후 영어 멘트)", "dual_step")
+        self.combo_circuit_lang.addItem("🌱 입문형 바이링구얼 [한국어 설명 + 핵심 실전 영어 지시어] (초·중·고 추천)", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ 도장 실전 바이링구얼 [한국어 구령 + 원어민 콤보 콜] (이중언어 듀얼)", "dual_step")
         self.combo_circuit_lang.addItem("🇺🇸 상급반·국제 지도 [원어민 영어 전용 Full English]", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
         l_cl.addWidget(self.combo_circuit_lang)
@@ -851,7 +852,7 @@ class SparringDialog(QDialog):
         g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (직접 편집 가능)")
         l_cm = QVBoxLayout(g_c_moves)
 
-        # 진행 방식 선택 (종목 순환 vs 단일 종목 집중 반복)
+        # 진행 방식 선택 (종목 순환 vs 단일 종목 집중 반복) 및 콤보 랜덤 생성 버튼
         h_cm_mode = QHBoxLayout()
         h_cm_mode.addWidget(QLabel("🎯 진행 방식:"))
         self.rb_circuit_cycle = QRadioButton("🔄 세트마다 종목 순환 (1번➔2번➔3번 콤보 순환)")
@@ -860,6 +861,14 @@ class SparringDialog(QDialog):
         h_cm_mode.addWidget(self.rb_circuit_cycle)
         h_cm_mode.addWidget(self.rb_circuit_single)
         h_cm_mode.addStretch()
+
+        self.btn_shuffle_circuit = QPushButton("🎲 오늘의 새로운 콤보 무작위 생성 (새 루틴)")
+        self.btn_shuffle_circuit.setToolTip("현재 테마의 풍부한 동작 라이브러리에서 매일 다른 신선한 콤보 루틴을 무작위로 자동 조합합니다.")
+        self.btn_shuffle_circuit.setStyleSheet(
+            "background-color: #4f46e5; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; font-size: 12px;"
+        )
+        self.btn_shuffle_circuit.clicked.connect(self._shuffle_circuit_moves)
+        h_cm_mode.addWidget(self.btn_shuffle_circuit)
         l_cm.addLayout(h_cm_mode)
 
         self.txt_circuit_moves = QTextEdit()
@@ -1640,6 +1649,33 @@ class SparringDialog(QDialog):
         self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
 
+    def _shuffle_circuit_moves(self):
+        """현재 테마의 풍부한 동작 라이브러리에서 무작위로 4개의 신선한 콤보를 자동 추출"""
+        theme_key = self.combo_circuit_theme.currentData() or "power_agility"
+        if theme_key == "custom":
+            QMessageBox.information(self, "커스텀 모드", "직접 입력 모드에서는 원하는 콤보와 지도 팁을 자유롭게 작성하실 수 있습니다.")
+            return
+
+        lang_mode = self.combo_circuit_lang.currentData() or "kr"
+        lang_field = "mix" if lang_mode == "mix_kids" else ("dual" if lang_mode == "dual_step" else ("en" if lang_mode == "en_advanced" else "kr"))
+
+        random_exercises = SparringTrainingEngine.get_random_circuit_routine(theme_key, lang_mode, count=4)
+        if not random_exercises:
+            return
+
+        self._programmatic_circuit_text_update = True
+        try:
+            lines = []
+            for i, ex in enumerate(random_exercises, 1):
+                text = ex.get(lang_field, ex.get("kr", ""))
+                tip = ex.get("tip", "")
+                lines.append(f"{i}번 콤보: {text}\n   ➔ [지도 팁]: {tip}\n")
+
+            self.txt_circuit_moves.setPlainText("\n".join(lines).strip())
+            self._circuit_moves_user_modified = False
+        finally:
+            self._programmatic_circuit_text_update = False
+
     def _update_circuit_moves_text(self):
         theme_key = self.combo_circuit_theme.currentData() or "power_agility"
         if theme_key == "custom":
@@ -1659,7 +1695,9 @@ class SparringDialog(QDialog):
                 self.txt_circuit_theme_title.setText(clean_speech_text(preset_title))
 
             lines = []
-            for i, ex in enumerate(exercises, 1):
+            # 기본 4개 콤보 표시
+            display_exercises = exercises[:4] if len(exercises) >= 4 else exercises
+            for i, ex in enumerate(display_exercises, 1):
                 text = ex.get(lang_field, ex.get("kr", ""))
                 tip = ex.get("tip", "")
                 lines.append(f"{i}번 콤보: {text}\n   ➔ [지도 팁]: {tip}\n")
