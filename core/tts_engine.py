@@ -237,6 +237,18 @@ class EdgeTTSEngine:
         text = re.sub(r'무한\s*(?:리핏|리피트)\b', '무한 반복', text)
         text = re.sub(r'\b(?:리핏|리피트)\b', '반복', text)
         text = re.sub(r'레스트\s*타임\b', '휴식 시간', text)
+        # 가운뎃점(·), 불릿, 슬래시(/) 등은 자연스러운 쉼(공백)으로 처리
+        text = re.sub(r'[·•\/\\]', ' ', text)
+        # & 기호 변환: 한글 문맥에서는 자연스럽게 '그리고', 영문 문맥에서는 'and'로 명확히 처리
+        text = re.sub(r'([가-힣])\s*&\s*([가-힣])', r'\1 그리고 \2', text)
+        text = re.sub(r'([가-힣])\s*&', r'\1 그리고 ', text)
+        text = re.sub(r'&\s*([가-힣])', r' 그리고 \1', text)
+        text = re.sub(r'([A-Za-z])\s*&\s*([A-Za-z])', r'\1 and \2', text)
+        text = re.sub(r'\s*&\s*', ' 그리고 ', text)
+        # 한글과 영단어 and가 붙어 발음이 꼬이는 현상 완벽 방어 ("점프and" -> "점프 그리고", "and발차기" -> "그리고 발차기")
+        text = re.sub(r'([가-힣])\s*and\s*([가-힣])', r'\1 그리고 \2', text, flags=re.IGNORECASE)
+        text = re.sub(r'([가-힣])\s*and\b', r'\1 그리고 ', text, flags=re.IGNORECASE)
+        text = re.sub(r'\band\s*([가-힣])', r' 그리고 \1', text, flags=re.IGNORECASE)
         # 한국어 문맥에서 '3회'가 '셋'이나 '셋 회'로 어색하게 읽히는 현상 방지 (한자어 수사 '삼 회' 표준화)
         ko_count_map = {
             '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',

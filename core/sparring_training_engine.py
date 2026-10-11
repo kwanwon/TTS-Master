@@ -30,10 +30,18 @@ def clean_speech_text(text: str) -> str:
     t = re.sub(r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u203c-\u2049]', '', text)
     # 화살표 및 불필요한 특수기호
     t = re.sub(r'->|➔|▶|=>|◀|<-|★|※|#|@', ' ', t)
+    # 가운뎃점(·), 불릿, 슬래시(/) 등은 자연스러운 쉼(공백)으로 처리
+    t = re.sub(r'[·•\/\\]', ' ', t)
     # 한글과 영단어 and가 붙어 발음이 꼬이는 현상 완벽 방어 ("점프and" -> "점프 그리고", "and발차기" -> "그리고 발차기")
     t = re.sub(r'([가-힣])\s*and\s*([가-힣])', r'\1 그리고 \2', t, flags=re.IGNORECASE)
     t = re.sub(r'([가-힣])\s*and\b', r'\1 그리고 ', t, flags=re.IGNORECASE)
     t = re.sub(r'\band\s*([가-힣])', r' 그리고 \1', t, flags=re.IGNORECASE)
+    # & 기호 변환: 한글 문맥에서는 자연스럽게 '그리고', 영문 문맥에서는 'and'로 명확히 처리
+    t = re.sub(r'([가-힣])\s*&\s*([가-힣])', r'\1 그리고 \2', t)
+    t = re.sub(r'([가-힣])\s*&', r'\1 그리고 ', t)
+    t = re.sub(r'&\s*([가-힣])', r' 그리고 \1', t)
+    t = re.sub(r'([A-Za-z])\s*&\s*([A-Za-z])', r'\1 and \2', t)
+    t = re.sub(r'\s*&\s*', ' 그리고 ', t)
     # 한국어 문맥에서 '3회'가 '셋'이나 '셋 회'로 어색하게 읽히는 현상 원천 방지 (한자어 수사 '삼 회' 표준화)
     ko_count_map = {
         '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
@@ -94,9 +102,9 @@ class BalancedCuePicker:
 # ── 도장 고강도 기능성 서킷 인터벌 5대 복합 콤보 테마 (체력 + 발차기 + 낙법/점프 무한 반복 루프) ──
 CIRCUIT_INTERVAL_THEMES = {
     "power_agility": {
-        "name_kr": "[대련 실전 & 낙법 협응 콤보] 점프·발차기·회전낙법 루프",
-        "name_mix": "[대련 실전 & 낙법 협응] 파워 점프 & 나래차기 루프",
-        "name_dual": "[대련 실전 & 낙법 협응] 파워 점프 & 나래차기 루프",
+        "name_kr": "[대련 실전 그리고 낙법 협응 콤보] 점프·발차기·회전낙법 루프",
+        "name_mix": "[대련 실전 그리고 낙법 협응] 파워 점프 그리고 나래차기 루프",
+        "name_dual": "[대련 실전 그리고 낙법 협응] 파워 점프 그리고 나래차기 루프",
         "name_en": "Dojo Combat & Breakfall Flow Interval",
         "desc": "15~20초 동안 [체력 점프 ➔ 실전 발차기 ➔ 회전낙법/점프턴] 콤보를 전력으로 무한 반복하고 휴식하는 실전 대련 인터벌",
         "exercises": [
@@ -145,9 +153,9 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "agility_power_combo": {
-        "name_kr": "[순발력 & 민첩성 폭발 콤보] 버피·점프턴·나래차기 루프",
-        "name_mix": "[순발력 & 민첩성 폭발] 버피 & 나래차기 루프",
-        "name_dual": "[순발력 & 민첩성 폭발] 버피 & 나래차기 루프",
+        "name_kr": "[순발력 그리고 민첩성 폭발 콤보] 버피·점프턴·나래차기 루프",
+        "name_mix": "[순발력 그리고 민첩성 폭발] 버피 그리고 나래차기 루프",
+        "name_dual": "[순발력 그리고 민첩성 폭발] 버피 그리고 나래차기 루프",
         "name_en": "Agility & Explosive Kick Flow",
         "desc": "15~20초 동안 [전신 순발력 ➔ 폭풍 스피드 발차기 ➔ 공중 방향전환]을 결합한 고강도 협응 인터벌",
         "exercises": [
@@ -196,9 +204,9 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "footwork_reaction_combo": {
-        "name_kr": "[스파링 풋워크 & 카운터 공방] 스텝·컷트·뒤차기 루프",
-        "name_mix": "[스파링 풋워크 & 카운터] 스텝·컷트·뒤차기 루프",
-        "name_dual": "[스파링 풋워크 & 카운터] 스텝·컷트·뒤차기 루프",
+        "name_kr": "[스파링 풋워크 그리고 카운터 공방] 스텝·컷트·뒤차기 루프",
+        "name_mix": "[스파링 풋워크 그리고 카운터] 스텝 그리고 컷트 루프",
+        "name_dual": "[스파링 풋워크 그리고 카운터] 스텝 그리고 컷트 루프",
         "name_en": "Sparring Footwork & Reaction Flow",
         "desc": "15~20초 동안 [대련 스텝 풋워크 ➔ 상대 격파 발차기 ➔ 낙법 회피 기립]을 무한 반복하는 실전 스파링 서킷",
         "exercises": [
@@ -247,9 +255,9 @@ CIRCUIT_INTERVAL_THEMES = {
         ]
     },
     "strength_endurance_combo": {
-        "name_kr": "[근지구력 & 전신 파워 서킷] 푸시업·복근·연타킥 서킷",
-        "name_mix": "[근지구력 & 전신 파워] 푸시업·복근·연타킥 서킷",
-        "name_dual": "[근지구력 & 전신 파워] 푸시업·복근·연타킥 서킷",
+        "name_kr": "[근지구력 그리고 전신 파워 서킷] 푸시업·복근·연타킥 서킷",
+        "name_mix": "[근지구력 그리고 전신 파워] 푸시업·복근·연타킥 서킷",
+        "name_dual": "[근지구력 그리고 전신 파워] 푸시업·복근·연타킥 서킷",
         "name_en": "Endurance Strength & Striking Circuit",
         "desc": "15~20초 동안 [도장 특화 체력 단련 ➔ 전력 타격 ➔ 심폐 파워]를 한 세트로 묶어 무한 반복하는 서킷",
         "exercises": [
@@ -616,6 +624,7 @@ class SparringTrainingEngine:
                 intro_text = re.sub(r'원어민\s*구령에\s*맞춰', '구령에 맞춰', intro_text)
                 intro_text = re.sub(r'한국어\s*설명과\s*', '', intro_text)
                 intro_text = re.sub(r'\s+', ' ', intro_text).strip()
+                intro_text = clean_speech_text(intro_text)
 
             intro_dur = max(2.8, round(len(intro_text) * 0.18, 2))
             events.append({

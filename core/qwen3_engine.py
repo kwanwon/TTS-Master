@@ -132,6 +132,18 @@ class Qwen3Engine:
         return cleaned
 
     def _split_text(self, text, max_len=150):
+        # 가운뎃점(·), 불릿, 슬래시(/) 등은 자연스러운 쉼(공백)으로 처리
+        text = re.sub(r'[·•\/\\]', ' ', text)
+        # & 기호 변환: 한글 문맥에서는 자연스럽게 '그리고', 영문 문맥에서는 'and'로 명확히 처리
+        text = re.sub(r'([가-힣])\s*&\s*([가-힣])', r'\1 그리고 \2', text)
+        text = re.sub(r'([가-힣])\s*&', r'\1 그리고 ', text)
+        text = re.sub(r'&\s*([가-힣])', r' 그리고 \1', text)
+        text = re.sub(r'([A-Za-z])\s*&\s*([A-Za-z])', r'\1 and \2', text)
+        text = re.sub(r'\s*&\s*', ' 그리고 ', text)
+        # 한글과 영단어 and가 붙어 발음이 꼬이는 현상 완벽 방어
+        text = re.sub(r'([가-힣])\s*and\s*([가-힣])', r'\1 그리고 \2', text, flags=re.IGNORECASE)
+        text = re.sub(r'([가-힣])\s*and\b', r'\1 그리고 ', text, flags=re.IGNORECASE)
+        text = re.sub(r'\band\s*([가-힣])', r' 그리고 \1', text, flags=re.IGNORECASE)
         # 1. $영어$ 태그를 기준으로 먼저 분할
         raw_chunks = re.split(r'(\$[^$]+\$)', text)
         final_chunks = []

@@ -1,6 +1,6 @@
 {
-  "version": "1.8.8",
+  "version": "1.8.9",
   "release_date": "2026-10-11",
   "app_name": "AIMaster_TTS",
-  "description": "실시간 즉시 말하기 모듈 NameError 원천 해결, 전역 예외 처리기(sys.excepthook) 크래시 방어벽 구축"
+  "description": "서킷 인터벌 테마 명칭 및 & 기호 음성 정규화(한국어 문맥 '그리고', 영문 문맥 'and'), 가운뎃점 음성 정제"
 }
