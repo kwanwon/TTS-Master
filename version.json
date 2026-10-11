@@ -1,6 +1,6 @@
 {
-  "version": "1.8.2",
+  "version": "1.8.3",
   "release_date": "2026-10-11",
   "app_name": "AIMaster_TTS",
-  "description": "유치부 대화형 코칭 및 초등부 한/영 듀얼 보이스 완전 분리 합성 파이프라인 탑재"
+  "description": "macOS 한글 입력기(IME) 타이핑 시 자모 분리 현상 원천 해결 (실시간 입력 세션 보존 및 전송/붙여넣기 시 완전 조합 구조 적용)"
 }

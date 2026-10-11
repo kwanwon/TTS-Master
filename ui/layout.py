@@ -343,39 +343,45 @@ class MainWindow(QMainWindow):
         self.settings_file = "settings.json"
         self.load_settings()
 
-        # Enter 키 이벤트를 가로채서 바로 렌더링되고 macOS 한글 자모 분리 현상을 실시간 자동 조립하는 고성능 TextEdit
+        # macOS 한글 IME(두벌식) 조합 세션을 온전히 보존하면서 붙여넣기 및 전송 시 완벽 조합을 보장하는 고성능 TextEdit
         from utils.hangul_composer import compose_hangul_jamo
 
-        class CustomTextEdit(QPlainTextEdit):
+        class CustomTextEdit(QTextEdit):
             def __init__(self, parent=None, layout_ref=None, is_api=False):
                 super().__init__(parent)
                 self.layout_ref = layout_ref
                 self.is_api = is_api
                 from PyQt6.QtCore import Qt
                 self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
-                self.textChanged.connect(self._on_text_changed)
 
-            def setText(self, text: str):
-                """QTextEdit와의 하위 호환성을 위해 setText 호출을 setPlainText로 자동 연결"""
-                self.setPlainText(str(text or ""))
+            def insertFromMimeData(self, source):
+                """클립보드 등 외부 텍스트 붙여넣기 시 분리된 한글 자모(NFD)를 온전한 한글로 즉시 조합 삽입"""
+                if source.hasText():
+                    composed = compose_hangul_jamo(source.text())
+                    self.insertPlainText(composed)
+                else:
+                    super().insertFromMimeData(source)
 
-            def _on_text_changed(self):
+            def focusOutEvent(self, event):
+                """입력 포커스를 벗어날 때 혹시 남아있는 분리 자모가 있다면 온전한 한글로 안전 보정"""
+                super().focusOutEvent(event)
                 text = self.toPlainText()
                 composed = compose_hangul_jamo(text)
                 if composed != text:
                     cursor = self.textCursor()
                     pos = cursor.position()
-                    diff = len(text) - len(composed)
-                    self.blockSignals(True)
                     self.setPlainText(composed)
-                    new_pos = max(0, pos - diff)
-                    cursor.setPosition(min(new_pos, len(composed)))
+                    cursor.setPosition(min(pos, len(composed)))
                     self.setTextCursor(cursor)
-                    self.blockSignals(False)
 
             def keyPressEvent(self, event):
                 from PyQt6.QtCore import Qt
                 if event.key() == Qt.Key.Key_Return and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                    # Enter 즉시 송출 시에도 최종 조합 정규화 후 실행
+                    text = self.toPlainText()
+                    composed = compose_hangul_jamo(text)
+                    if composed != text:
+                        self.setPlainText(composed)
                     if self.layout_ref:
                         if self.is_api and hasattr(self.layout_ref, 'api_stream_audio_logic'):
                             self.layout_ref.api_stream_audio_logic()
@@ -901,7 +907,7 @@ class MainWindow(QMainWindow):
                 self.api_voice_combo.setCurrentIndex(0)
 
     def local_stream_audio_logic(self):
-        text = self.local_input_text.toPlainText().strip()
+        text = compose_hangul_jamo(self.local_input_text.toPlainText().strip())
         if not text:
             return
             
@@ -936,7 +942,7 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             
             # 방금 렌더링한 내용 저장 로직용 (텍스트, 속도, 화자 일치 여부 판별)
-            self.last_rendered_text = self.local_input_text.toPlainText().strip()
+            self.last_rendered_text = compose_hangul_jamo(self.local_input_text.toPlainText().strip())
             self.last_rendered_speed = self.speed_slider.value() / 10.0
             self.last_rendered_voice = self.voice_combo.currentText()
         else:
@@ -945,7 +951,7 @@ class MainWindow(QMainWindow):
             self.dl_status.setText(f"❌ {err_msg}")
 
     def api_stream_audio_logic(self):
-        text = self.api_input_text.toPlainText().strip()
+        text = compose_hangul_jamo(self.api_input_text.toPlainText().strip())
         if not text:
             return
 
@@ -1039,7 +1045,7 @@ class MainWindow(QMainWindow):
         self.playback_state = "STOPPED"
 
     def on_save_audio(self):
-        text = self.local_input_text.toPlainText().strip()
+        text = compose_hangul_jamo(self.local_input_text.toPlainText().strip())
         if not text:
             QMessageBox.warning(self, "경고", "텍스트를 입력해주세요.")
             return
