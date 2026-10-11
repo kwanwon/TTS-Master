@@ -131,23 +131,23 @@ CIRCUIT_INTERVAL_THEMES = {
             },
             {
                 "kr": "바닥 푸시업 2회 후 백스텝, 카운터 뒤차기! 쉼 없이 반복!",
-                "mix": "바닥 푸시업 2회 후 백스텝, 카운터 뒤차기! - Two sets! Step back! Back kick!",
-                "dual": "바닥 푸시업 2세트 후 백스텝 카운터 뒤차기! - Two sets, step back, counter back kick!",
-                "en": "Two sets pushups, explosive step back, counter back kick! Non-stop loop!",
+                "mix": "바닥 푸시업 2회 후 백스텝, 카운터 뒤차기! - Two pushups! Step back! Back kick!",
+                "dual": "바닥 푸시업 2세트 후 백스텝 카운터 뒤차기! - Two pushups, step back, counter back kick!",
+                "en": "Two pushups, explosive step back, counter back kick! Non-stop loop!",
                 "tip": "바닥 푸시업 2회 ➔ 기립 백스텝 ➔ 카운터 뒤차기 무한 반복"
             },
             {
                 "kr": "제자리 턱점프 2회 후 뛰어 돌개차기! 쉼 없이 반복!",
-                "mix": "제자리 턱점프 2회 후 뛰어 돌개차기! - Two times! Tornado kick! Go!",
-                "dual": "턱점프 2회 후 공중 360도 돌개차기! - Two times, jumping tornado kick!",
-                "en": "Two times tuck jumps, jumping tornado 360 kick! Non-stop loop!",
+                "mix": "제자리 턱점프 2회 후 뛰어 돌개차기! - Two tuck jumps! Tornado kick! Go!",
+                "dual": "턱점프 2회 후 공중 360도 돌개차기! - Two tuck jumps, jumping tornado kick!",
+                "en": "Two tuck jumps, jumping tornado 360 kick! Non-stop loop!",
                 "tip": "무릎 턱점프 2회 ➔ 공중 회전 돌개차기 ➔ 착지 후 대련자세 무한 반복"
             },
             {
                 "kr": "사이드 스텝 좌우 터치 후 빠른 상단차기! 쉼 없이 반복!",
-                "mix": "사이드 스텝 좌우 터치 후 빠른 상단차기! - Two times! Fast high kick! Switch!",
-                "dual": "사이드 스텝 좌우 터치 후 전광석화 상단차기! - Two times, rapid high kick!",
-                "en": "Two times step touch, rapid lead high kick! Keep moving!",
+                "mix": "사이드 스텝 좌우 터치 후 빠른 상단차기! - Two side touches! Fast high kick! Switch!",
+                "dual": "사이드 스텝 좌우 터치 후 전광석화 상단차기! - Two side touches, rapid high kick!",
+                "en": "Two side touches, rapid lead high kick! Keep moving!",
                 "tip": "좌우 사이드 스텝 바닥 터치 ➔ 앞발 기습 상단차기 무한 반복"
             }
         ]
@@ -212,28 +212,28 @@ CIRCUIT_INTERVAL_THEMES = {
         "exercises": [
             {
                 "kr": "사이드 스텝 좌우 터치 후 카운터 뒤차기! 쉼 없이 반복!",
-                "mix": "사이드 스텝 터치 후 카운터 뒤차기! - Two times! Counter back kick!",
-                "dual": "사이드 스텝 좌우 터치 후 백스텝 카운터 뒤차기! - Two times, counter back kick!",
+                "mix": "사이드 스텝 터치 후 카운터 뒤차기! - Side touch! Counter back kick!",
+                "dual": "사이드 스텝 좌우 터치 후 백스텝 카운터 뒤차기! - Side touch, counter back kick!",
                 "en": "Two times step touch, counter back kick! Non-stop loop!",
                 "tip": "사이드 스텝 좌우 바닥 터치 ➔ 한 걸음 빠지며 카운터 뒤차기 무한 반복"
             },
             {
                 "kr": "앞뒤 스텝 3단 전진 후 앞발 컷트, 상단 돌려차기! 쉼 없이 반복!",
-                "mix": "앞뒤 스텝 후 앞발 컷트, 상단 돌려차기! - Three times! Cut kick! High roundhouse kick!",
-                "dual": "앞뒤 리듬 스텝 후 앞발 컷트와 상단 돌려차기! - Three times, lead cut, high kick!",
+                "mix": "앞뒤 스텝 후 앞발 컷트, 상단 돌려차기! - In and out! Cut kick! High kick!",
+                "dual": "앞뒤 리듬 스텝 후 앞발 컷트와 상단 돌려차기! - In and out steps, lead cut, high kick!",
                 "en": "Three times in-and-out steps, lead cut to high kick! Non-stop loop!",
                 "tip": "앞뒤 리듬 스텝 3회 ➔ 앞발 컷트 저지 ➔ 뒷발 상단 돌려차기 무한 반복"
             },
             {
                 "kr": "양발 스위치 2회 후 전진 몸통 3연타! 쉼 없이 반복!",
-                "mix": "양발 스위치 2회 후 전진 몸통 3연타! - Two times! Three body kicks!",
-                "dual": "스탠스 스위치 2회 후 전진 몸통 3연타! - Two times, triple body kicks!",
+                "mix": "양발 스위치 2회 후 전진 몸통 3연타! - Two switches! Three body kicks!",
+                "dual": "스탠스 스위치 2회 후 전진 몸통 3연타! - Two switches, triple body kicks!",
                 "en": "Two times stance switches, three body kicks! Non-stop loop!",
                 "tip": "대련 자세 양발 스위치 2회 ➔ 밀고 들어가며 몸통 3연타 무한 반복"
             },
             {
                 "kr": "지그재그 회피 스텝 후 기습 나래차기! 쉼 없이 반복!",
-                "mix": "지그재그 회피 스텝 후 기습 나래차기! - Fast step! Surprise double kicks!",
+                "mix": "지그재그 회피 스텝 후 기습 나래차기! - Zigzag steps! Double kicks!",
                 "dual": "지그재그 사각 회피 후 기습 나래차기! - Zigzag evasion, rapid double kicks!",
                 "en": "Zigzag evasion footwork, surprise double kicks! Non-stop loop!",
                 "tip": "공격선 비켜서는 지그재그 스텝 ➔ 공중 나래차기 연타 무한 반복"
@@ -263,43 +263,43 @@ CIRCUIT_INTERVAL_THEMES = {
         "exercises": [
             {
                 "kr": "손바닥 푸시업 2회 후 기립 몸통 3연타! 쉼 없이 반복!",
-                "mix": "손바닥 푸시업 2회 후 몸통 3연타! - Two sets! Stand up! Three body kicks!",
-                "dual": "바닥 푸시업 2회 후 스프링 기립 몸통 3연타! - Two sets, spring up, three body kicks!",
+                "mix": "손바닥 푸시업 2회 후 몸통 3연타! - Two pushups! Pop up! Three body kicks!",
+                "dual": "바닥 푸시업 2회 후 스프링 기립 몸통 3연타! - Two pushups, spring up, three body kicks!",
                 "en": "Two sets pushups, spring up, three body kicks! Non-stop loop!",
                 "tip": "가슴 바닥 푸시업 2회 ➔ 스프링 기립 전진 몸통 3연타 무한 반복"
             },
             {
                 "kr": "마운틴 클라이머 6회 후 교차 나래차기! 쉼 없이 반복!",
-                "mix": "마운틴 클라이머 6회 후 교차 나래차기! - Six times! Double kicks!",
-                "dual": "마운틴 클라이머 6회 후 공중 나래차기! - Six times, jumping double kicks!",
+                "mix": "마운틴 클라이머 6회 후 교차 나래차기! - Six climbers! Double kicks!",
+                "dual": "마운틴 클라이머 6회 후 공중 나래차기! - Six climbers, jumping double kicks!",
                 "en": "Six times mountain climbers, alternating double kicks! Non-stop loop!",
                 "tip": "엎드려 마운틴 클라이머 6회 ➔ 재빨리 일어나 공중 나래차기 무한 반복"
             },
             {
                 "kr": "V업 복근 2회 후 기립 좌우 하이킥! 쉼 없이 반복!",
-                "mix": "V업 복근 2회 후 기립 하이킥! - Two sets! Stand up! High kick!",
-                "dual": "V업 복근 2회 후 오뚝이 기립 좌우 하이킥! - Two sets, spring up, double high kicks!",
+                "mix": "V업 복근 2회 후 기립 하이킥! - Two V-ups! Pop up! High kick!",
+                "dual": "V업 복근 2회 후 오뚝이 기립 좌우 하이킥! - Two V-ups, spring up, double high kicks!",
                 "en": "Two sets V-ups, stand up quick, two high kicks! Non-stop loop!",
                 "tip": "손끝 발끝 V업 복근 2회 ➔ 반동으로 일어나 좌우 하이킥 무한 반복"
             },
             {
                 "kr": "쪼그려 점프 3회 후 앞발 컷트, 카운터 뒤차기! 쉼 없이 반복!",
-                "mix": "쪼그려 점프 3회 후 컷트, 뒤차기! - Three times! Cut kick! Back kick!",
-                "dual": "스쿼트 점프 3회 후 앞발 컷트 카운터 뒤차기! - Three times, front cut, back kick!",
+                "mix": "쪼그려 점프 3회 후 컷트, 뒤차기! - Three squat jumps! Cut kick! Back kick!",
+                "dual": "스쿼트 점프 3회 후 앞발 컷트 카운터 뒤차기! - Three squat jumps, front cut, back kick!",
                 "en": "Three times squat jumps, front cut, counter back kick! Non-stop loop!",
                 "tip": "깊게 쪼그려 점프 3회 ➔ 앞발 컷트 ➔ 번개 카운터 뒤차기 무한 반복"
             },
             {
                 "kr": "플랭크 잭 4회 후 기립 연속 돌려차기! 쉼 없이 반복!",
-                "mix": "플랭크 잭 4회 후 연속 돌려차기! - Four times! Continuous kicks!",
-                "dual": "플랭크 잭 4회 후 스프링 기립 연속 돌려차기! - Four times, rapid roundhouse kicks!",
+                "mix": "플랭크 잭 4회 후 연속 돌려차기! - Four plank jacks! Pop up! Continuous kicks!",
+                "dual": "플랭크 잭 4회 후 스프링 기립 연속 돌려차기! - Four plank jacks, spring up, rapid kicks!",
                 "en": "Four times plank jacks, spring up, rapid roundhouse kicks! Keep going!",
                 "tip": "플랭크 다리 벌렸다 모으기 4회 ➔ 스프링 기립 연속 돌려차기 무한 반복"
             },
             {
                 "kr": "팔벌려뛰기 4회 후 전방 낙법, 기립 몸통 2연타! 쉼 없이 반복!",
-                "mix": "팔벌려뛰기 4회 후 전방 낙법, 몸통 2연타! - Four times! Breakfall! Two body kicks!",
-                "dual": "점핑 잭 4회 후 전방 회전낙법과 몸통 2연타! - Four times, rolling breakfall, two body kicks!",
+                "mix": "팔벌려뛰기 4회 후 전방 낙법, 몸통 2연타! - Four jumping jacks! Breakfall! Two body kicks!",
+                "dual": "점핑 잭 4회 후 전방 회전낙법과 몸통 2연타! - Four jumping jacks, rolling breakfall, two body kicks!",
                 "en": "Four times jumping jacks, forward roll breakfall, two body kicks! Push it!",
                 "tip": "팔벌려뛰기 4회 ➔ 전방 회전낙법 기립 ➔ 몸통 2연타 무한 반복"
             }
@@ -734,24 +734,107 @@ class SparringTrainingEngine:
             )
 
             if not is_final_set:
-                if lang == "mix_kids":
-                    rest_ment = "휴식! 호흡 가다듬고 다음 세트 준비! - Deep breath! Catch your breath!"
-                elif lang == "dual_step":
-                    rest_ment = "휴식! 심호흡하고 다음 세트 준비! - Catch your breath, get ready!"
+                rest_style = params.get("rest_style", "auto_mix")
+                if rest_style == "none":
+                    rest_ment = ""
+                elif lang in ("mix_kids", "dual_step"):
+                    # Catch your breath! 와 Take a break! 본토 실전 멘트 세트별 유연 순환
+                    if rest_style == "catch_breath":
+                        catch_list = [
+                            "휴식! 호흡 가다듬고 다음 세트 준비! - Catch your breath! Deep breath!",
+                            "휴식! 심호흡 크게 들이쉬고 내쉬세요! - Breathe in, breathe out! Catch your breath!",
+                            "휴식! 숨 고르고 다음 동작 집중! - Catch your breath! Focus on the next set!",
+                            "휴식! 호흡 정돈하고 다리 가볍게 털어! - Catch your breath! Shake your legs!"
+                        ]
+                        rest_ment = catch_list[(s - 1) % len(catch_list)]
+                    elif rest_style == "take_break":
+                        break_list = [
+                            "휴식! 잠깐 쉬고 다리 가볍게 털어주세요! - Take a break! Shake it off!",
+                            "휴식! 물 한 모금 마시고 집중 유지하자! - Take a break! Quick water break!",
+                            "휴식! 잠깐 쉬고 템포 유지하자! - Take a break! Stay focused, get ready!",
+                            "휴식! 잠시 휴식하고 다음 콤보 준비! - Take a break! Great pace, keep it up!"
+                        ]
+                        rest_ment = break_list[(s - 1) % len(break_list)]
+                    elif rest_style == "water_break":
+                        water_list = [
+                            "휴식! 물 한 모금 마시고 호흡 가다듬어! - Water break! Catch your breath!",
+                            "휴식! 잠깐 쉬고 수분 보충하세요! - Take a break! Quick water break!",
+                            "휴식! 수분 섭취하고 다음 세트 준비! - Hydrate up! Catch your breath!"
+                        ]
+                        rest_ment = water_list[(s - 1) % len(water_list)]
+                    elif rest_style == "kr_only":
+                        kr_list = [
+                            "휴식! 호흡 가다듬고 다음 세트 준비하세요.",
+                            "휴식! 심호흡하고 다리 가볍게 털어주세요.",
+                            "휴식! 물 한 모금 마시고 집중 유지하세요.",
+                            "휴식! 깊게 숨 들이쉬고 다음 동작 준비하세요."
+                        ]
+                        rest_ment = kr_list[(s - 1) % len(kr_list)]
+                    else:  # auto_mix (기본값: Catch your breath!와 Take a break!가 매 세트 번갈아 완벽 순환)
+                        mix_cues = [
+                            "휴식! 호흡 가다듬고 다음 세트 준비! - Catch your breath! Deep breath!",
+                            "휴식! 잠깐 쉬고 다리 가볍게 털어주세요! - Take a break! Shake it off!",
+                            "휴식! 심호흡 크게 들이쉬고 내쉬세요! - Breathe in, breathe out! Catch your breath!",
+                            "휴식! 물 한 모금 마시고 집중 유지하자! - Take a break! Quick water break!",
+                            "휴식! 숨 고르고 가볍게 스텝 밟아! - Catch your breath! Walk it off!",
+                            "휴식! 잠깐 쉬고 템포 유지하자! - Take a break! Stay focused, get ready!",
+                            "휴식! 호흡 정돈하고 다리 가볍게 털어! - Catch your breath! Shake your legs!",
+                            "휴식! 잠시 휴식하고 다음 콤보 준비! - Take a break! Great pace, keep it up!"
+                        ]
+                        rest_ment = mix_cues[(s - 1) % len(mix_cues)]
                 elif lang in ("en", "en_advanced"):
-                    rest_ment = "Rest and breathe! Next exercise coming up!"
-                else:
-                    rest_ment = "휴식! 호흡 가다듬고 다음 세트 준비하세요."
+                    if rest_style == "catch_breath":
+                        en_catch = [
+                            "Catch your breath! Deep breath, get ready!",
+                            "Breathe in, breathe out! Catch your breath!",
+                            "Catch your breath! Walk it off, stay loose!",
+                            "Catch your breath! Focus on the next set!"
+                        ]
+                        rest_ment = en_catch[(s - 1) % len(en_catch)]
+                    elif rest_style == "take_break":
+                        en_break = [
+                            "Take a break! Shake out the legs and reset!",
+                            "Take a break! Great tempo, stay focused!",
+                            "Take a break! Shake it off, keep pushing!",
+                            "Take a break! Great pace, keep it up!"
+                        ]
+                        rest_ment = en_break[(s - 1) % len(en_break)]
+                    elif rest_style == "water_break":
+                        en_water = [
+                            "Water break! Catch your breath and reset!",
+                            "Take a break! Quick water break, stay ready!",
+                            "Hydrate up! Catch your breath for the next round!"
+                        ]
+                        rest_ment = en_water[(s - 1) % len(en_water)]
+                    else:  # auto_mix
+                        en_mix = [
+                            "Catch your breath! Deep breath, recover for the next set!",
+                            "Take a break! Shake out the legs and reset!",
+                            "Breathe in, breathe out! Catch your breath!",
+                            "Take a break! Quick water break, stay focused!",
+                            "Catch your breath! Walk it off, stay loose!",
+                            "Take a break! Great pace, keep pushing!"
+                        ]
+                        rest_ment = en_mix[(s - 1) % len(en_mix)]
+                else:  # kr
+                    kr_cues = [
+                        "휴식! 호흡 가다듬고 다음 세트 준비하세요.",
+                        "휴식! 심호흡하고 다리 가볍게 털어주세요.",
+                        "휴식! 물 한 모금 마시고 집중 유지하세요.",
+                        "휴식! 깊게 숨 들이쉬고 다음 동작 준비하세요."
+                    ]
+                    rest_ment = kr_cues[(s - 1) % len(kr_cues)]
 
-                r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
-                events.append({
-                    "time": curr_time + delta + 0.3,
-                    "type": "voice",
-                    "text": f"[휴식] {rest_ment}",
-                    "duration": r_dur,
-                    "track": 2,
-                    "vol": 2.2
-                })
+                if rest_ment:
+                    r_dur = max(1.8, round(len(rest_ment) * 0.20, 2))
+                    events.append({
+                        "time": curr_time + delta + 0.3,
+                        "type": "voice",
+                        "text": f"[휴식] {rest_ment}",
+                        "duration": r_dur,
+                        "track": 2,
+                        "vol": 2.2
+                    })
                 curr_time += rest_sec
             else:
                 curr_time += delta + 0.5

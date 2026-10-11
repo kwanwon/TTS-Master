@@ -783,16 +783,20 @@ class SparringDialog(QDialog):
         l_ct.addLayout(h_theme_edit)
         l_circuit.addWidget(g_c_theme)
 
-        # 2. 연령/수준별 맞춤 구령 언어 선택
-        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어")
+        # 2. 연령/수준별 맞춤 구령 언어 선택 (도장 현장 실전 용어 기반)
+        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어 (도장 현장 실전 용어)")
         l_cl = QVBoxLayout(g_c_lang)
         self.combo_circuit_lang = NoScrollComboBox()
-        self.combo_circuit_lang.addItem("🇰🇷 일반부·정규 도장 [표준 한국어 구령 - 강력 추천]", "kr")
-        self.combo_circuit_lang.addItem("🌱 초·중·고 추천 [동작 구령 + 핵심 실전 영어 지시어]", "mix_kids")
-        self.combo_circuit_lang.addItem("⚡ 실전 대련 심화 [동작 구령 + 본토 콤보 콜]", "dual_step")
-        self.combo_circuit_lang.addItem("🇺🇸 국제반·영어 전용 [Full English Command]", "en_advanced")
+        self.combo_circuit_lang.addItem("🇰🇷 [도장 한국어 전용] 표준 동작 설명 및 힘찬 기합 구령", "kr")
+        self.combo_circuit_lang.addItem("🌱 [도장 현장 영어: 액션 콜] 한국어 동작 + 본토 실전 지시어 (Three times! Double kicks! Go!)", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ [도장 대련 영어: 전술 콤보] 본토 대련 테크닉 구령 (Lead cut, back kick, non-stop!)", "dual_step")
+        self.combo_circuit_lang.addItem("🇺🇸 [본토 도장 풀 잉글리시] Full English Dojo Drill (원어민 코치 실전 진행)", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
         l_cl.addWidget(self.combo_circuit_lang)
+
+        lbl_lang_guide = QLabel("💡 <b>현장 영어 지도 팁</b>: 횟수/동작/방향(One time!, Two pushups!, Step back!)을 짧고 명확한 본토 실전 용어로 자주 들려주어 수련생들이 자연스럽게 체득합니다.")
+        lbl_lang_guide.setStyleSheet("color: #0284c7; font-size: 11px;")
+        l_cl.addWidget(lbl_lang_guide)
         l_circuit.addWidget(g_c_lang)
 
         # 3. 시간 및 세트 설정
@@ -828,7 +832,7 @@ class SparringDialog(QDialog):
 
         # 세트 종료 신호 선택
         h_c_stop = QHBoxLayout()
-        h_c_stop.addWidget(QLabel("🔔 세트 종료 및 휴식 신호:"))
+        h_c_stop.addWidget(QLabel("🔔 세트 종료 및 정지 신호:"))
         self.combo_circuit_stop_signal = NoScrollComboBox()
         self.combo_circuit_stop_signal.addItem("🥋 음성: '갈려! 휴식!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
         self.combo_circuit_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 세트 종료)", "bell")
@@ -838,6 +842,19 @@ class SparringDialog(QDialog):
         self.combo_circuit_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
         h_c_stop.addWidget(self.combo_circuit_stop_signal, stretch=1)
         l_ctime.addLayout(h_c_stop)
+
+        # 쉬는 상황 맞춤 휴식 멘트 선택 (Catch your breath! & Take a break!)
+        h_c_rest = QHBoxLayout()
+        h_c_rest.addWidget(QLabel("🧘 쉬는 시간 음성 (휴식 구령):"))
+        self.combo_circuit_rest_style = NoScrollComboBox()
+        self.combo_circuit_rest_style.addItem("🔄 [본토 실전 순환] Catch your breath! & Take a break! 번갈아 구령 (강력 추천)", "auto_mix")
+        self.combo_circuit_rest_style.addItem("💨 [호흡 집중형] 'Catch your breath! Deep breath!' (호흡 가다듬기 위주)", "catch_breath")
+        self.combo_circuit_rest_style.addItem("☕ [휴식/재정비형] 'Take a break! Shake it off!' (휴식 및 재충전 위주)", "take_break")
+        self.combo_circuit_rest_style.addItem("💧 [수분 섭취/회복형] 'Take a break! Quick water break! Catch your breath!'", "water_break")
+        self.combo_circuit_rest_style.addItem("🇰🇷 [한국어 전용] '휴식! 호흡 가다듬고 다음 세트 준비하세요'", "kr_only")
+        self.combo_circuit_rest_style.addItem("🔇 [무음 휴식] 신호음만 울림 (멘트 생략)", "none")
+        h_c_rest.addWidget(self.combo_circuit_rest_style, stretch=1)
+        l_ctime.addLayout(h_c_rest)
 
         # 빠른 프리셋 버튼
         h_c_preset = QHBoxLayout()
@@ -1904,6 +1921,7 @@ class SparringDialog(QDialog):
             params["circuit_mode_type"] = "single" if hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked() else "cycle"
             params["custom_routine_text"] = self.txt_circuit_moves.toPlainText().strip()
             params["stop_signal"] = self.combo_circuit_stop_signal.currentData() if hasattr(self, 'combo_circuit_stop_signal') else "voice_kalyeo"
+            params["rest_style"] = self.combo_circuit_rest_style.currentData() if hasattr(self, 'combo_circuit_rest_style') else "auto_mix"
 
         elif mode == "relay":
             fighters = 2 if self.rb_relay_11.isChecked() else (3 if self.rb_relay_12.isChecked() else 4)
