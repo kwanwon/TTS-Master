@@ -102,53 +102,53 @@ class BalancedCuePicker:
 # ── 도장 고강도 기능성 서킷 인터벌 5대 복합 콤보 테마 (체력 + 발차기 + 낙법/점프 무한 반복 루프) ──
 CIRCUIT_INTERVAL_THEMES = {
     "power_agility": {
-        "name_kr": "[대련 실전 그리고 낙법 협응 콤보] 점프·발차기·회전낙법 루프",
-        "name_mix": "[대련 실전 그리고 낙법 협응] 파워 점프 그리고 나래차기 루프",
-        "name_dual": "[대련 실전 그리고 낙법 협응] 파워 점프 그리고 나래차기 루프",
-        "name_en": "Dojo Combat & Breakfall Flow Interval",
-        "desc": "15~20초 동안 [체력 점프 ➔ 실전 발차기 ➔ 회전낙법/점프턴] 콤보를 전력으로 무한 반복하고 휴식하는 실전 대련 인터벌",
+        "name_kr": "[실전 대련과 낙법 협응] 점프·발차기·전방낙법 루프",
+        "name_mix": "[실전 대련과 낙법 협응] 파워 점프와 나래차기 루프",
+        "name_dual": "[실전 대련과 낙법 협응] 파워 점프와 나래차기 루프",
+        "name_en": "Combat & Forward Breakfall Flow Interval",
+        "desc": "점프와 발차기, 전방낙법을 쉼 없이 연결하여 실전 순발력과 신체 협응력을 기르는 훈련",
         "exercises": [
             {
-                "kr": "쪼그려 점프 3회 후 나래차기 연타, 회전낙법 기립! 쉼 없이 반복!",
-                "mix": "쪼그려 점프 3회 후 나래차기! - Three times! Double kicks! Breakfall!",
-                "dual": "쪼그려 점프 3회 후 나래차기와 회전낙법! - Three times, double kicks, rolling breakfall!",
-                "en": "Three times squat jumps, rapid double kicks, rolling breakfall! Non-stop loop!",
-                "tip": "쪼그려 점프 3회 ➔ 양발 나래차기 연타 ➔ 전방 회전낙법 후 기립 무한 반복"
+                "kr": "스쿼트 점프 3회 후 나래차기 연타, 전방낙법 후 신속히 일어나기! 쉼 없이 반복!",
+                "mix": "스쿼트 점프 3회 후 나래차기와 전방낙법! - Three squat jumps! Double kicks! Front roll breakfall!",
+                "dual": "스쿼트 점프 3회 후 나래차기와 전방낙법! - Three squat jumps, double kicks, front roll breakfall!",
+                "en": "Three squat jumps, double kicks, front roll breakfall! Non-stop loop!",
+                "tip": "스쿼트 점프 3회 ➔ 양발 나래차기 연타 ➔ 전방 회전낙법 후 신속하게 다음 동작 연결"
             },
             {
                 "kr": "전력 버피 1회 후 몸통 2연타, 180도 점프 턴! 쉼 없이 반복!",
-                "mix": "전력 버피 1회 후 몸통 2연타! - One time! Two body kicks! Jump turn!",
-                "dual": "전력 버피 1회 후 몸통 2연타와 180도 점프 턴! - One time, two body kicks, jump turn!",
-                "en": "One time burpee, two body kicks, 180-degree jump turn! Non-stop loop!",
-                "tip": "전력 버피 1회 ➔ 전진 몸통 2연타 ➔ 공중 180도 점프 뒤돌아 착지 무한 반복"
+                "mix": "전력 버피 1회 후 몸통 2연타! - One burpee! Two body kicks! Jump turn!",
+                "dual": "전력 버피 1회 후 몸통 2연타와 180도 점프 턴! - One burpee, two body kicks, jump turn!",
+                "en": "One burpee, two body kicks, 180-degree jump turn! Non-stop loop!",
+                "tip": "전력 버피 1회 ➔ 전진 몸통 2연타 ➔ 공중 180도 점프 뒤돌아 착지 후 신속히 다음 반복"
             },
             {
                 "kr": "무릎 점프 2회 후 앞발 컷트, 상단 하이킥! 쉼 없이 반복!",
-                "mix": "무릎 점프 2회 후 앞발 컷트, 하이킥! - Two times! Cut kick! High kick!",
-                "dual": "무릎 높이 점프 2회 후 앞발 컷트와 상단 하이킥! - Two times, front cut, high kick!",
-                "en": "Two times high knee jumps, front cut to high kick! Keep repeating!",
-                "tip": "무릎 높이 점프 2회 ➔ 앞발 컷트 견제 ➔ 뒷발 머리 상단 돌려차기 무한 반복"
+                "mix": "무릎 점프 2회 후 앞발 컷트, 하이킥! - Two knee tuck jumps! Cut kick! High kick!",
+                "dual": "무릎 높이 점프 2회 후 앞발 컷트와 상단 하이킥! - Two knee tuck jumps, front cut, high kick!",
+                "en": "Two knee tuck jumps, front cut to high kick! Keep repeating!",
+                "tip": "무릎 높이 점프 2회 ➔ 앞발 컷트 견제 ➔ 뒷발 머리 상단 돌려차기 후 신속히 복귀"
             },
             {
                 "kr": "바닥 푸시업 2회 후 백스텝, 카운터 뒤차기! 쉼 없이 반복!",
                 "mix": "바닥 푸시업 2회 후 백스텝, 카운터 뒤차기! - Two pushups! Step back! Back kick!",
-                "dual": "바닥 푸시업 2세트 후 백스텝 카운터 뒤차기! - Two pushups, step back, counter back kick!",
+                "dual": "바닥 푸시업 2회 후 신속히 백스텝 카운터 뒤차기! - Two pushups, step back, counter back kick!",
                 "en": "Two pushups, explosive step back, counter back kick! Non-stop loop!",
-                "tip": "바닥 푸시업 2회 ➔ 기립 백스텝 ➔ 카운터 뒤차기 무한 반복"
+                "tip": "바닥 푸시업 2회 ➔ 신속히 일어나 백스텝 ➔ 카운터 뒤차기 무한 반복"
             },
             {
                 "kr": "제자리 턱점프 2회 후 뛰어 돌개차기! 쉼 없이 반복!",
                 "mix": "제자리 턱점프 2회 후 뛰어 돌개차기! - Two tuck jumps! Tornado kick! Go!",
                 "dual": "턱점프 2회 후 공중 360도 돌개차기! - Two tuck jumps, jumping tornado kick!",
                 "en": "Two tuck jumps, jumping tornado 360 kick! Non-stop loop!",
-                "tip": "무릎 턱점프 2회 ➔ 공중 회전 돌개차기 ➔ 착지 후 대련자세 무한 반복"
+                "tip": "무릎 턱점프 2회 ➔ 공중 회전 돌개차기 ➔ 착지 후 신속히 대련자세 복귀"
             },
             {
                 "kr": "사이드 스텝 좌우 터치 후 빠른 상단차기! 쉼 없이 반복!",
                 "mix": "사이드 스텝 좌우 터치 후 빠른 상단차기! - Two side touches! Fast high kick! Switch!",
-                "dual": "사이드 스텝 좌우 터치 후 전광석화 상단차기! - Two side touches, rapid high kick!",
+                "dual": "사이드 스텝 좌우 터치 후 신속한 상단차기! - Two side touches, rapid high kick!",
                 "en": "Two side touches, rapid lead high kick! Keep moving!",
-                "tip": "좌우 사이드 스텝 바닥 터치 ➔ 앞발 기습 상단차기 무한 반복"
+                "tip": "좌우 사이드 스텝 바닥 터치 ➔ 앞발 기습 상단차기 후 신속히 다음 반복"
             }
         ]
     },
@@ -185,7 +185,7 @@ CIRCUIT_INTERVAL_THEMES = {
                 "mix": "마운틴 클라이머 4회 후 연속 앞차기! - Four times! Four front kicks!",
                 "dual": "마운틴 클라이머 4회 후 폭풍 연속 앞차기! - Four times, alternating front kicks!",
                 "en": "Four times mountain climbers, four alternating front kicks! Non-stop loop!",
-                "tip": "엎드려 마운틴 클라이머 4회 ➔ 용수철 기립 연속 앞차기 4회 무한 반복"
+                "tip": "엎드려 마운틴 클라이머 4회 ➔ 신속히 일어나서 연속 앞차기 4회 무한 반복"
             },
             {
                 "kr": "앞뒤 셔플 스텝 3회 후 돌개차기! 쉼 없이 반복!",
@@ -208,7 +208,7 @@ CIRCUIT_INTERVAL_THEMES = {
         "name_mix": "[스파링 풋워크 그리고 카운터] 스텝 그리고 컷트 루프",
         "name_dual": "[스파링 풋워크 그리고 카운터] 스텝 그리고 컷트 루프",
         "name_en": "Sparring Footwork & Reaction Flow",
-        "desc": "15~20초 동안 [대련 스텝 풋워크 ➔ 상대 격파 발차기 ➔ 낙법 회피 기립]을 무한 반복하는 실전 스파링 서킷",
+        "desc": "15~20초 동안 [대련 스텝 풋워크 ➔ 상대 격파 발차기 ➔ 신속한 회피 동작]을 무한 반복하는 실전 스파링 서킷",
         "exercises": [
             {
                 "kr": "사이드 스텝 좌우 터치 후 카운터 뒤차기! 쉼 없이 반복!",
@@ -259,14 +259,14 @@ CIRCUIT_INTERVAL_THEMES = {
         "name_mix": "[근지구력 그리고 전신 파워] 푸시업·복근·연타킥 서킷",
         "name_dual": "[근지구력 그리고 전신 파워] 푸시업·복근·연타킥 서킷",
         "name_en": "Endurance Strength & Striking Circuit",
-        "desc": "15~20초 동안 [도장 특화 체력 단련 ➔ 전력 타격 ➔ 심폐 파워]를 한 세트로 묶어 무한 반복하는 서킷",
+        "desc": "15~20초 동안 [체력 단련 ➔ 전력 타격 ➔ 심폐 파워]를 한 세트로 묶어 무한 반복하는 서킷",
         "exercises": [
             {
-                "kr": "손바닥 푸시업 2회 후 기립 몸통 3연타! 쉼 없이 반복!",
+                "kr": "손바닥 푸시업 2회 후 빠르게 일어나 몸통 3연타! 쉼 없이 반복!",
                 "mix": "손바닥 푸시업 2회 후 몸통 3연타! - Two pushups! Pop up! Three body kicks!",
-                "dual": "바닥 푸시업 2회 후 스프링 기립 몸통 3연타! - Two pushups, spring up, three body kicks!",
+                "dual": "바닥 푸시업 2회 후 빠르게 일어나 몸통 3연타! - Two pushups, spring up, three body kicks!",
                 "en": "Two sets pushups, spring up, three body kicks! Non-stop loop!",
-                "tip": "가슴 바닥 푸시업 2회 ➔ 스프링 기립 전진 몸통 3연타 무한 반복"
+                "tip": "가슴 바닥 푸시업 2회 ➔ 신속히 일어나 전진 몸통 3연타 무한 반복"
             },
             {
                 "kr": "마운틴 클라이머 6회 후 교차 나래차기! 쉼 없이 반복!",
@@ -276,32 +276,32 @@ CIRCUIT_INTERVAL_THEMES = {
                 "tip": "엎드려 마운틴 클라이머 6회 ➔ 재빨리 일어나 공중 나래차기 무한 반복"
             },
             {
-                "kr": "V업 복근 2회 후 기립 좌우 하이킥! 쉼 없이 반복!",
-                "mix": "V업 복근 2회 후 기립 하이킥! - Two V-ups! Pop up! High kick!",
-                "dual": "V업 복근 2회 후 오뚝이 기립 좌우 하이킥! - Two V-ups, spring up, double high kicks!",
+                "kr": "V업 복근 2회 후 빠르게 일어나 좌우 하이킥! 쉼 없이 반복!",
+                "mix": "V업 복근 2회 후 빠르게 일어나 하이킥! - Two V-ups! Pop up! High kick!",
+                "dual": "V업 복근 2회 후 신속히 일어나 좌우 하이킥! - Two V-ups, spring up, double high kicks!",
                 "en": "Two sets V-ups, stand up quick, two high kicks! Non-stop loop!",
-                "tip": "손끝 발끝 V업 복근 2회 ➔ 반동으로 일어나 좌우 하이킥 무한 반복"
+                "tip": "손끝 발끝 V업 복근 2회 ➔ 반동으로 빠르게 일어나 좌우 하이킥 무한 반복"
             },
             {
-                "kr": "쪼그려 점프 3회 후 앞발 컷트, 카운터 뒤차기! 쉼 없이 반복!",
-                "mix": "쪼그려 점프 3회 후 컷트, 뒤차기! - Three squat jumps! Cut kick! Back kick!",
+                "kr": "스쿼트 점프 3회 후 앞발 컷트, 카운터 뒤차기! 쉼 없이 반복!",
+                "mix": "스쿼트 점프 3회 후 컷트, 뒤차기! - Three squat jumps! Cut kick! Back kick!",
                 "dual": "스쿼트 점프 3회 후 앞발 컷트 카운터 뒤차기! - Three squat jumps, front cut, back kick!",
                 "en": "Three times squat jumps, front cut, counter back kick! Non-stop loop!",
-                "tip": "깊게 쪼그려 점프 3회 ➔ 앞발 컷트 ➔ 번개 카운터 뒤차기 무한 반복"
+                "tip": "깊게 스쿼트 점프 3회 ➔ 앞발 컷트 ➔ 번개 카운터 뒤차기 무한 반복"
             },
             {
-                "kr": "플랭크 잭 4회 후 기립 연속 돌려차기! 쉼 없이 반복!",
+                "kr": "플랭크 잭 4회 후 빠르게 일어나 연속 돌려차기! 쉼 없이 반복!",
                 "mix": "플랭크 잭 4회 후 연속 돌려차기! - Four plank jacks! Pop up! Continuous kicks!",
-                "dual": "플랭크 잭 4회 후 스프링 기립 연속 돌려차기! - Four plank jacks, spring up, rapid kicks!",
+                "dual": "플랭크 잭 4회 후 신속히 일어나 연속 돌려차기! - Four plank jacks, spring up, rapid kicks!",
                 "en": "Four times plank jacks, spring up, rapid roundhouse kicks! Keep going!",
-                "tip": "플랭크 다리 벌렸다 모으기 4회 ➔ 스프링 기립 연속 돌려차기 무한 반복"
+                "tip": "플랭크 다리 벌렸다 모으기 4회 ➔ 신속히 일어나 연속 돌려차기 무한 반복"
             },
             {
-                "kr": "팔벌려뛰기 4회 후 전방 낙법, 기립 몸통 2연타! 쉼 없이 반복!",
-                "mix": "팔벌려뛰기 4회 후 전방 낙법, 몸통 2연타! - Four jumping jacks! Breakfall! Two body kicks!",
-                "dual": "점핑 잭 4회 후 전방 회전낙법과 몸통 2연타! - Four jumping jacks, rolling breakfall, two body kicks!",
-                "en": "Four times jumping jacks, forward roll breakfall, two body kicks! Push it!",
-                "tip": "팔벌려뛰기 4회 ➔ 전방 회전낙법 기립 ➔ 몸통 2연타 무한 반복"
+                "kr": "팔벌려뛰기 4회 후 전방낙법, 신속히 일어나 몸통 2연타! 쉼 없이 반복!",
+                "mix": "팔벌려뛰기 4회 후 전방낙법, 몸통 2연타! - Four jumping jacks! Front roll breakfall! Two body kicks!",
+                "dual": "점핑 잭 4회 후 전방 회전낙법과 몸통 2연타! - Four jumping jacks, front roll breakfall, two body kicks!",
+                "en": "Four times jumping jacks, front roll breakfall, two body kicks! Push it!",
+                "tip": "팔벌려뛰기 4회 ➔ 전방 회전낙법 후 신속히 일어나 몸통 2연타 무한 반복"
             }
         ]
     },
@@ -611,11 +611,22 @@ class SparringTrainingEngine:
         if intro_enabled:
             intro_text = params.get("intro_text", "").strip()
             if not intro_text:
-                clean_theme = theme_title if theme_title else "기능성 서킷 인터벌"
                 if lang in ("en", "en_advanced"):
-                    intro_text = f"Circuit interval training starts now! Today's theme is {clean_theme}. Push your limits every set! Get ready!"
+                    intro_text = "Circuit interval training starts now! Connect your jumps, kicks, and techniques with maximum intensity. Push your limits every set! Get ready!"
                 else:
-                    intro_text = f"지금부터 도장 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {clean_theme}입니다. 지시하는 동작에 맞춰 매 세트 전력으로 반복하세요! 모두 준비해 주세요!"
+                    if "낙법" in theme_title:
+                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 점프와 발차기, 그리고 낙법 콤보를 연결하여 실전 감각과 신체 협응력을 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+                    elif "순발력" in theme_title:
+                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 폭발적인 버피와 점프, 연속 발차기를 통해 순발력과 민첩성을 극대화하는 시간입니다. 지시하는 구령에 맞춰 끝까지 빠른 템포로 집중하세요! 모두 준비해 주세요!"
+                    elif "풋워크" in theme_title or "카운터" in theme_title:
+                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 빠른 스텝 풋워크와 번개 같은 카운터 발차기 공방을 익히는 시간입니다. 상대의 빈틈을 노려 빠르고 정확하게 타격하세요! 모두 준비해 주세요!"
+                    elif "근지구력" in theme_title or "파워" in theme_title:
+                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 푸시업과 복근, 그리고 연타 발차기를 묶어 전신 파워와 근지구력을 기르는 시간입니다. 지친 순간에도 바른 자세를 유지하며 한계에 도전하세요! 모두 준비해 주세요!"
+                    elif "전술" in theme_title or "겨루기" in theme_title:
+                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 앞발 견제와 기습 회전차기 등 실전 겨루기 득점 콤보를 무한 반복하는 시간입니다. 실전 시합의 긴장감을 유지하며 전력으로 꽂아 넣으세요! 모두 준비해 주세요!"
+                    else:
+                        clean_theme = theme_title if theme_title else "기능성 서킷 인터벌"
+                        intro_text = f"지금부터 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {clean_theme}입니다. 지시하는 동작에 맞춰 신속하게 다음 동작을 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
             else:
                 # 커스텀 텍스트에서도 언어 관련 메타 설명(한국어, 원어민, 바이링구얼 등) 완전 정제
                 intro_text = re.sub(r'바이링구얼\s*', '', intro_text)
@@ -738,48 +749,39 @@ class SparringTrainingEngine:
                 if rest_style == "none":
                     rest_ment = ""
                 elif lang in ("mix_kids", "dual_step"):
-                    # Catch your breath! 와 Take a break! 본토 실전 멘트 세트별 유연 순환
+                    # Catch your breath! 와 Take a break! 본토 실전 멘트 세트별 유연 순환 (물 마시기 배제, 지도자 정중 구령)
                     if rest_style == "catch_breath":
                         catch_list = [
-                            "휴식! 호흡 가다듬고 다음 세트 준비! - Catch your breath! Deep breath!",
-                            "휴식! 심호흡 크게 들이쉬고 내쉬세요! - Breathe in, breathe out! Catch your breath!",
-                            "휴식! 숨 고르고 다음 동작 집중! - Catch your breath! Focus on the next set!",
-                            "휴식! 호흡 정돈하고 다리 가볍게 털어! - Catch your breath! Shake your legs!"
+                            "휴식! 호흡을 가다듬고 다음 세트를 준비하세요. - Catch your breath! Deep breath!",
+                            "휴식! 숨을 깊게 들이쉬고 내쉬세요. - Breathe in, breathe out! Catch your breath!",
+                            "휴식! 숨을 고르고 다음 동작에 집중해 주세요. - Catch your breath! Focus on the next set!",
+                            "휴식! 호흡을 정돈하며 다리를 가볍게 털어주세요. - Catch your breath! Shake your legs!"
                         ]
                         rest_ment = catch_list[(s - 1) % len(catch_list)]
                     elif rest_style == "take_break":
                         break_list = [
-                            "휴식! 잠깐 쉬고 다리 가볍게 털어주세요! - Take a break! Shake it off!",
-                            "휴식! 물 한 모금 마시고 집중 유지하자! - Take a break! Quick water break!",
-                            "휴식! 잠깐 쉬고 템포 유지하자! - Take a break! Stay focused, get ready!",
-                            "휴식! 잠시 휴식하고 다음 콤보 준비! - Take a break! Great pace, keep it up!"
+                            "휴식! 잠시 숨 고르고 다리를 가볍게 털어주세요. - Take a break! Shake your legs!",
+                            "휴식! 잠시 긴장을 풀고 다음 콤보를 준비하세요. - Take a break! Stay focused, get ready!",
+                            "휴식! 잠시 휴식하며 호흡을 가다듬으세요. - Take a break! Great pace, keep it up!",
+                            "휴식! 제자리에서 호흡을 정돈하고 다음을 준비하세요. - Take a break! Shake it off!"
                         ]
                         rest_ment = break_list[(s - 1) % len(break_list)]
-                    elif rest_style == "water_break":
-                        water_list = [
-                            "휴식! 물 한 모금 마시고 호흡 가다듬어! - Water break! Catch your breath!",
-                            "휴식! 잠깐 쉬고 수분 보충하세요! - Take a break! Quick water break!",
-                            "휴식! 수분 섭취하고 다음 세트 준비! - Hydrate up! Catch your breath!"
-                        ]
-                        rest_ment = water_list[(s - 1) % len(water_list)]
                     elif rest_style == "kr_only":
                         kr_list = [
-                            "휴식! 호흡 가다듬고 다음 세트 준비하세요.",
-                            "휴식! 심호흡하고 다리 가볍게 털어주세요.",
-                            "휴식! 물 한 모금 마시고 집중 유지하세요.",
-                            "휴식! 깊게 숨 들이쉬고 다음 동작 준비하세요."
+                            "휴식! 호흡을 가다듬고 다음 세트를 준비하세요.",
+                            "휴식! 심호흡하며 다리를 가볍게 털어주세요.",
+                            "휴식! 깊게 숨을 들이쉬고 다음 동작을 준비하세요.",
+                            "휴식! 호흡을 정돈하고 다음 구령에 집중해 주세요."
                         ]
                         rest_ment = kr_list[(s - 1) % len(kr_list)]
-                    else:  # auto_mix (기본값: Catch your breath!와 Take a break!가 매 세트 번갈아 완벽 순환)
+                    else:  # auto_mix (기본값: Catch your breath!와 Take a break! 번갈아 순환)
                         mix_cues = [
-                            "휴식! 호흡 가다듬고 다음 세트 준비! - Catch your breath! Deep breath!",
-                            "휴식! 잠깐 쉬고 다리 가볍게 털어주세요! - Take a break! Shake it off!",
-                            "휴식! 심호흡 크게 들이쉬고 내쉬세요! - Breathe in, breathe out! Catch your breath!",
-                            "휴식! 물 한 모금 마시고 집중 유지하자! - Take a break! Quick water break!",
-                            "휴식! 숨 고르고 가볍게 스텝 밟아! - Catch your breath! Walk it off!",
-                            "휴식! 잠깐 쉬고 템포 유지하자! - Take a break! Stay focused, get ready!",
-                            "휴식! 호흡 정돈하고 다리 가볍게 털어! - Catch your breath! Shake your legs!",
-                            "휴식! 잠시 휴식하고 다음 콤보 준비! - Take a break! Great pace, keep it up!"
+                            "휴식! 호흡을 가다듬고 다음 세트를 준비하세요. - Catch your breath! Deep breath!",
+                            "휴식! 잠시 숨 고르고 다리를 가볍게 털어주세요. - Take a break! Shake your legs!",
+                            "휴식! 숨을 깊게 들이쉬고 내쉬세요. - Breathe in, breathe out! Catch your breath!",
+                            "휴식! 잠시 긴장을 풀고 다음 콤보를 준비하세요. - Take a break! Stay focused, get ready!",
+                            "휴식! 제자리에서 호흡을 가다듬고 다음 동작을 준비하세요. - Catch your breath! Deep breath!",
+                            "휴식! 잠시 휴식하며 템포를 유지하세요. - Take a break! Shake your legs!"
                         ]
                         rest_ment = mix_cues[(s - 1) % len(mix_cues)]
                 elif lang in ("en", "en_advanced"):
@@ -787,7 +789,7 @@ class SparringTrainingEngine:
                         en_catch = [
                             "Catch your breath! Deep breath, get ready!",
                             "Breathe in, breathe out! Catch your breath!",
-                            "Catch your breath! Walk it off, stay loose!",
+                            "Catch your breath! Stay loose and recover!",
                             "Catch your breath! Focus on the next set!"
                         ]
                         rest_ment = en_catch[(s - 1) % len(en_catch)]
@@ -799,29 +801,22 @@ class SparringTrainingEngine:
                             "Take a break! Great pace, keep it up!"
                         ]
                         rest_ment = en_break[(s - 1) % len(en_break)]
-                    elif rest_style == "water_break":
-                        en_water = [
-                            "Water break! Catch your breath and reset!",
-                            "Take a break! Quick water break, stay ready!",
-                            "Hydrate up! Catch your breath for the next round!"
-                        ]
-                        rest_ment = en_water[(s - 1) % len(en_water)]
                     else:  # auto_mix
                         en_mix = [
                             "Catch your breath! Deep breath, recover for the next set!",
                             "Take a break! Shake out the legs and reset!",
                             "Breathe in, breathe out! Catch your breath!",
-                            "Take a break! Quick water break, stay focused!",
-                            "Catch your breath! Walk it off, stay loose!",
+                            "Take a break! Keep your tempo, stay focused!",
+                            "Catch your breath! Stay loose and recover!",
                             "Take a break! Great pace, keep pushing!"
                         ]
                         rest_ment = en_mix[(s - 1) % len(en_mix)]
                 else:  # kr
                     kr_cues = [
-                        "휴식! 호흡 가다듬고 다음 세트 준비하세요.",
-                        "휴식! 심호흡하고 다리 가볍게 털어주세요.",
-                        "휴식! 물 한 모금 마시고 집중 유지하세요.",
-                        "휴식! 깊게 숨 들이쉬고 다음 동작 준비하세요."
+                        "휴식! 호흡을 가다듬고 다음 세트를 준비하세요.",
+                        "휴식! 심호흡하며 다리를 가볍게 털어주세요.",
+                        "휴식! 깊게 숨을 들이쉬고 다음 동작을 준비하세요.",
+                        "휴식! 호흡을 정돈하고 다음 구령에 집중해 주세요."
                     ]
                     rest_ment = kr_cues[(s - 1) % len(kr_cues)]
 
@@ -841,13 +836,13 @@ class SparringTrainingEngine:
 
         # 4. 전체 훈련 완료 멘트
         if lang == "mix_kids":
-            final_outro = "서킷 훈련 완료! 모두 끝까지 잘 해냈습니다! - Outstanding effort! Great job everyone!"
+            final_outro = "서킷 인터벌 훈련 완료! 모두 끝까지 훌륭하게 해냈습니다! - Outstanding effort! Great job everyone!"
         elif lang == "dual_step":
-            final_outro = "도장 실전 인터벌 훈련 완료! 모두 정말 훌륭했습니다! - Awesome job everyone! Great workout today!"
+            final_outro = "실전 인터벌 훈련 완료! 모두 정말 훌륭했습니다! - Awesome job everyone! Great workout today!"
         elif lang in ("en", "en_advanced"):
-            final_outro = "Interval training complete! Outstanding effort team! Drink water, catch your breath, and wait for next instruction!"
+            final_outro = "Interval training complete! Outstanding effort team! Hydrate up, catch your breath, and wait for the next instruction!"
         else:
-            final_outro = "고강도 인터벌 훈련 종료! 모두 수고하셨습니다! 물 한잔 마시고 호흡을 가다듬으며 다음 지시를 위해 잠시 대기하세요."
+            final_outro = "고강도 기능성 서킷 인터벌 훈련 종료! 모두 수고하셨습니다. 물 한 잔 마시며 호흡을 정돈하고 다음 지시를 기다려 주세요."
 
         outro_dur = max(3.5, round(len(final_outro) * 0.22, 2))
         events.append({

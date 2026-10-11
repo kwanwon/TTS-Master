@@ -766,10 +766,10 @@ class SparringDialog(QDialog):
         g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택 및 명칭 커스텀")
         l_ct = QVBoxLayout(g_c_theme)
         self.combo_circuit_theme = NoScrollComboBox()
-        self.combo_circuit_theme.addItem("🥋 [대련 실전 그리고 낙법 협응] 점프·발차기·회전낙법 루프", "power_agility")
-        self.combo_circuit_theme.addItem("⚡ [순발력 그리고 민첩성 폭발] 버피·점프턴·나래차기 루프", "agility_power_combo")
-        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크 그리고 카운터] 스텝·컷트·뒤차기 루프", "footwork_reaction_combo")
-        self.combo_circuit_theme.addItem("💪 [근지구력 그리고 전신 파워] 푸시업·복근·연타킥 서킷", "strength_endurance_combo")
+        self.combo_circuit_theme.addItem("🥋 [실전 대련과 낙법 협응] 점프·발차기·전방낙법 루프", "power_agility")
+        self.combo_circuit_theme.addItem("⚡ [순발력과 민첩성 폭발] 버피·점프턴·나래차기 루프", "agility_power_combo")
+        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크와 카운터] 스텝·컷트·뒤차기 루프", "footwork_reaction_combo")
+        self.combo_circuit_theme.addItem("💪 [근지구력과 전신 파워] 푸시업·복근·연타킥 서킷", "strength_endurance_combo")
         self.combo_circuit_theme.addItem("🔥 [겨루기 실전 전술 콤보] 나래차기·뒤후리기·돌개차기 루프", "taekwondo_sparring_tactics")
         self.combo_circuit_theme.addItem("✏️ [직접 입력] 도장 맞춤형 커스텀 테마 (자유 입력)", "custom")
         self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
@@ -777,7 +777,7 @@ class SparringDialog(QDialog):
 
         h_theme_edit = QHBoxLayout()
         h_theme_edit.addWidget(QLabel("✏️ 테마 명칭 (자유 수정):"))
-        self.txt_circuit_theme_title = QLineEdit("대련 실전 그리고 낙법 협응 콤보")
+        self.txt_circuit_theme_title = QLineEdit("실전 대련과 낙법 협응 콤보")
         self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 🔥 도장 특화 하체 폭발 인터벌)")
         h_theme_edit.addWidget(self.txt_circuit_theme_title, stretch=1)
         l_ct.addLayout(h_theme_edit)
@@ -849,9 +849,8 @@ class SparringDialog(QDialog):
         self.combo_circuit_rest_style = NoScrollComboBox()
         self.combo_circuit_rest_style.addItem("🔄 [본토 실전 순환] Catch your breath! & Take a break! 번갈아 구령 (강력 추천)", "auto_mix")
         self.combo_circuit_rest_style.addItem("💨 [호흡 집중형] 'Catch your breath! Deep breath!' (호흡 가다듬기 위주)", "catch_breath")
-        self.combo_circuit_rest_style.addItem("☕ [휴식/재정비형] 'Take a break! Shake it off!' (휴식 및 재충전 위주)", "take_break")
-        self.combo_circuit_rest_style.addItem("💧 [수분 섭취/회복형] 'Take a break! Quick water break! Catch your breath!'", "water_break")
-        self.combo_circuit_rest_style.addItem("🇰🇷 [한국어 전용] '휴식! 호흡 가다듬고 다음 세트 준비하세요'", "kr_only")
+        self.combo_circuit_rest_style.addItem("☕ [휴식/재정비형] 'Take a break! Shake your legs!' (휴식 및 재충전 위주)", "take_break")
+        self.combo_circuit_rest_style.addItem("🇰🇷 [한국어 전용] '휴식! 호흡을 가다듬고 다음 세트를 준비하세요'", "kr_only")
         self.combo_circuit_rest_style.addItem("🔇 [무음 휴식] 신호음만 울림 (멘트 생략)", "none")
         h_c_rest.addWidget(self.combo_circuit_rest_style, stretch=1)
         l_ctime.addLayout(h_c_rest)
@@ -1644,7 +1643,7 @@ class SparringDialog(QDialog):
         if selected_theme == "custom":
             if hasattr(self, 'txt_circuit_theme_title'):
                 cur_title = self.txt_circuit_theme_title.text().strip()
-                if not cur_title or any(p in cur_title for p in ["대련 실전", "순발력", "스파링 풋워크", "근지구력"]):
+                if not cur_title or any(p in cur_title for p in ["실전 대련", "대련 실전", "순발력", "스파링 풋워크", "근지구력"]):
                     self.txt_circuit_theme_title.setText("🔥 [도장 맞춤형 서킷 인터벌] 실전 콤보 루프")
                 self.txt_circuit_theme_title.setFocus()
             return
