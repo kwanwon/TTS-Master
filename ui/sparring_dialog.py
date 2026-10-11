@@ -358,6 +358,12 @@ class SparringWorker(QThread):
                 clean_text = re.sub(r'무한\s*(?:리핏|리피트)\b', '무한 반복', clean_text)
                 clean_text = re.sub(r'\b(?:리핏|리피트)\b', '반복', clean_text)
                 clean_text = re.sub(r'레스트\s*타임\b', '휴식 시간', clean_text)
+                # 한국어 문맥에서 '3회'가 '셋'이나 '셋 회'로 어색하게 읽히는 현상 원천 방지 (한자어 수사 '삼 회' 표준화)
+                ko_count_map = {
+                    '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
+                    '6': '육', '7': '칠', '8': '팔', '9': '구', '10': '십'
+                }
+                clean_text = re.sub(r'\b([1-9]|10)\s*회\b', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", clean_text)
                 clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
                 self.progress.emit(pct, f"훈련 구령 음성 합성 중 ({idx+1}/{len(voice_events)}): {clean_text[:12]}...")
@@ -369,7 +375,7 @@ class SparringWorker(QThread):
                     # ⭐ 심판 공식 구령 처리: '갈려', '갈려! 타임!', '중지', '그만'
                     # 말끝('려')이 끊기지 않고 경기 심판처럼 당당하고 자연스러운 억양으로 발음되도록 전용 음원 최우선 사용
                     is_referee_cue = False
-                    if clean_text in ("갈려! 타임!", "갈려 타임!", "갈려! 타임"):
+                    if clean_text in ("갈려! 타임!", "갈려 타임!", "갈려! 타임", "갈려~ 타임!", "갈려~! 타임!", "갈~려-! 타임!"):
                         ref_audio = os.path.join("effects", "kalyeo_time_injoon.wav" if "InJoon" in voice_id else "kalyeo_time_sunhi.wav")
                         if not os.path.exists(ref_audio):
                             ref_audio = os.path.join("effects", "kalyeo_injoon.wav" if "InJoon" in voice_id else "kalyeo_sunhi.wav")
@@ -379,7 +385,7 @@ class SparringWorker(QThread):
                             ev["sound_file"] = ref_audio
                             ev["duration"] = v_dur
                             is_referee_cue = True
-                    elif clean_text in ("갈려!", "갈려") or clean_text.endswith("갈려!"):
+                    elif clean_text in ("갈려~!", "갈려~", "갈려!", "갈려", "갈~려!", "갈~려-!") or clean_text.endswith("갈려!") or clean_text.endswith("갈려~!"):
                         referee_audio = os.path.join("effects", "kalyeo_injoon.wav" if "InJoon" in voice_id else "kalyeo_sunhi.wav")
                         if not os.path.exists(referee_audio):
                             referee_audio = os.path.join("effects", "kalyeo.wav")
@@ -437,9 +443,9 @@ class SparringWorker(QThread):
                     if not is_guidance and not re.search(r'[!~]$', synth_text):
                         synth_text += "!"
 
-                    # v8 캐시 키 (초등부 순차 이중언어 본토 발음 분리 및 유치부 대화형 코칭 엔진)
+                    # v9 캐시 키 (숫자 한자어 발음 표준화 및 영문 횟수 통일 반영)
                     cue_type_tag = "g" if is_guidance else "c"
-                    safe_cue_name = f"sp_v8_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
+                    safe_cue_name = f"sp_v9_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -782,9 +788,9 @@ class SparringDialog(QDialog):
         l_cl = QVBoxLayout(g_c_lang)
         self.combo_circuit_lang = NoScrollComboBox()
         self.combo_circuit_lang.addItem("🇰🇷 일반부·정규 도장 [표준 한국어 구령 - 강력 추천]", "kr")
-        self.combo_circuit_lang.addItem("🌱 입문형 바이링구얼 [한국어 설명 + 핵심 실전 영어 지시어] (초·중·고 추천)", "mix_kids")
-        self.combo_circuit_lang.addItem("⚡ 도장 실전 바이링구얼 [한국어 구령 + 원어민 콤보 콜] (이중언어 듀얼)", "dual_step")
-        self.combo_circuit_lang.addItem("🇺🇸 상급반·국제 지도 [원어민 영어 전용 Full English]", "en_advanced")
+        self.combo_circuit_lang.addItem("🌱 초·중·고 추천 [동작 구령 + 핵심 실전 영어 지시어]", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ 실전 대련 심화 [동작 구령 + 본토 콤보 콜]", "dual_step")
+        self.combo_circuit_lang.addItem("🇺🇸 국제반·영어 전용 [Full English Command]", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
         l_cl.addWidget(self.combo_circuit_lang)
         l_circuit.addWidget(g_c_lang)

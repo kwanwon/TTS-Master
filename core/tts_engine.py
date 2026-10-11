@@ -237,6 +237,12 @@ class EdgeTTSEngine:
         text = re.sub(r'무한\s*(?:리핏|리피트)\b', '무한 반복', text)
         text = re.sub(r'\b(?:리핏|리피트)\b', '반복', text)
         text = re.sub(r'레스트\s*타임\b', '휴식 시간', text)
+        # 한국어 문맥에서 '3회'가 '셋'이나 '셋 회'로 어색하게 읽히는 현상 방지 (한자어 수사 '삼 회' 표준화)
+        ko_count_map = {
+            '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
+            '6': '육', '7': '칠', '8': '팔', '9': '구', '10': '십'
+        }
+        text = re.sub(r'\b([1-9]|10)\s*회\b', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", text)
         text = re.sub(r'\s+', ' ', text).strip()
 
         # 1. $영어$ 태그를 최우선으로 확실하게 분리 (예: "안녕하세요$ hi$" -> ["안녕하세요", "$ hi$"])
