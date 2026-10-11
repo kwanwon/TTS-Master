@@ -353,6 +353,26 @@ class MainWindow(QMainWindow):
                 self.is_api = is_api
                 from PyQt6.QtCore import Qt
                 self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
+                self.textChanged.connect(self._on_text_changed)
+
+            def _on_text_changed(self):
+                text = self.toPlainText()
+                # 낱개 자모(호환 자모 또는 NFD)가 포함되어 있을 때만 실시간 자동 결합 수행
+                has_jamo = any('\u3131' <= ch <= '\u318e' or '\u1100' <= ch <= '\u11ff' for ch in text)
+                if not has_jamo:
+                    return
+
+                composed = compose_hangul_jamo(text)
+                if composed != text:
+                    cursor = self.textCursor()
+                    pos = cursor.position()
+                    diff = len(text) - len(composed)
+                    self.blockSignals(True)
+                    self.setPlainText(composed)
+                    new_pos = max(0, pos - diff)
+                    cursor.setPosition(min(new_pos, len(composed)))
+                    self.setTextCursor(cursor)
+                    self.blockSignals(False)
 
             def insertFromMimeData(self, source):
                 """클립보드 등 외부 텍스트 붙여넣기 시 분리된 한글 자모(NFD)를 온전한 한글로 즉시 조합 삽입"""

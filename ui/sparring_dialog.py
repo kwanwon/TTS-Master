@@ -876,8 +876,12 @@ class SparringDialog(QDialog):
         self.txt_circuit_moves.textChanged.connect(self._on_circuit_moves_text_changed)
         l_cm.addWidget(self.txt_circuit_moves)
 
-        lbl_moves_hint = QLabel("※ 위 콤보 동작과 [지도 팁]을 직접 수정/추가/삭제할 수 있으며, 실제 음원(사전 안내 및 세트별 설명)에 100% 반영됩니다. '종목 순환'은 각 콤보 첫 세트에서 지도 팁을 함께 설명하고, '단일 집중 반복'은 1세트에서만 콤보와 지도 팁을 설명한 뒤 2세트부터는 설명 없이 준비 3,2,1로 빠르게 진행됩니다.")
-        lbl_moves_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        lbl_moves_hint = QLabel(
+            "💡 [음성 vs 지도 가이드 구분 안내]\n"
+            "  • 📢 [실제 음성 송출]: '1번 콤보:' 줄만 스피커로 힘차게 방송됩니다. (자유 수정/편집 가능)\n"
+            "  • 👀 [지도자 눈 참고]: '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 전용 자세 교정 가이드입니다."
+        )
+        lbl_moves_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 6px; font-size: 11px; font-weight: bold;")
         l_cm.addWidget(lbl_moves_hint)
         l_circuit.addWidget(g_c_moves)
         l_circuit.addStretch()
