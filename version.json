@@ -1,6 +1,6 @@
 {
-  "version": "1.8.7",
+  "version": "1.8.8",
   "release_date": "2026-10-11",
   "app_name": "AIMaster_TTS",
-  "description": "사전 안내 메타 언어 설명 완전 배제(운동/기술 집중), 심판 '갈려~!' 웅장한 여운 리마스터 및 영어 횟수(Three times, Two sets 등) 표준화"
+  "description": "실시간 즉시 말하기 모듈 NameError 원천 해결, 전역 예외 처리기(sys.excepthook) 크래시 방어벽 구축"
 }

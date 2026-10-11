@@ -122,6 +122,20 @@ def cleanup_lock():
     except Exception:
         pass
 
+def global_exception_handler(exctype, value, tb):
+    """PyQt6 슬롯 예외 발생 시 macOS 강제 종료(SIGABRT) 방지 및 안전 로깅"""
+    import traceback
+    err_str = "".join(traceback.format_exception(exctype, value, tb))
+    print("[Unhandled Exception]", err_str)
+    try:
+        log_path = os.path.join(APP_DATA_DIR, "crash_prevented.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n--- {exctype.__name__}: {value} ---\n{err_str}\n")
+    except Exception:
+        pass
+
+sys.excepthook = global_exception_handler
+
 def main():
     # 0. PyInstaller 서브프로세스 재실행 방지 (가장 중요)
     multiprocessing.freeze_support()

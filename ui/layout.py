@@ -16,6 +16,7 @@ from PyQt6.QtGui import QIcon
 from core.tts_engine import TTSEngine
 from utils.project_manager import ProjectManager
 from utils.model_installer import ModelInstallerThread
+from utils.hangul_composer import compose_hangul_jamo
 import pygame
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -971,45 +972,53 @@ class MainWindow(QMainWindow):
             self.dl_status.setText(f"❌ {err_msg}")
 
     def api_stream_audio_logic(self):
-        text = compose_hangul_jamo(self.api_input_text.toPlainText().strip())
-        if not text:
-            return
+        try:
+            text = compose_hangul_jamo(self.api_input_text.toPlainText().strip())
+            if not text:
+                return
 
-        current_api_text = self.api_voice_combo.currentText()
-        speed_val = self.speed_slider.value() / 10.0
+            current_api_text = self.api_voice_combo.currentText()
+            speed_val = self.speed_slider.value() / 10.0
 
-        # [무료 모드] Edge-TTS 화자인 경우 API 키 없이 즉시 무료 말하기
-        if "[무료]" in current_api_text or "Edge-TTS" in current_api_text:
-            self.tts_engine.switch_engine("Edge-TTS (초고음질 온라인)")
-            self.tts_engine.set_voice(current_api_text)
-            self.tts_engine.use_api = False
-            self.dl_status.setText("⚡ [무료] 실시간 음성 생성 중...")
-        else:
-            # [유료 모드] 알리바바 DashScope API
-            if not self.api_key:
-                QMessageBox.warning(self, "API Key 필요", "유료 음성을 사용하려면 DashScope API Key를 먼저 설정해주세요.\n무료 사용을 원하시면 '[무료]' 화자를 선택해 주세요.")
-                self.setup_api_key()
-                if not self.api_key:
-                    return
-
-            self.tts_engine.switch_engine("Qwen3-TTS (0.6B)")
-            self.tts_engine.use_api = True
-            self.tts_engine.api_key = self.api_key
-            if hasattr(self, 'custom_api_voices') and current_api_text in self.custom_api_voices:
-                self.tts_engine.api_voice_selection = "커스텀 보이스"
-                self.tts_engine.custom_api_voice_id = self.custom_api_voices[current_api_text]
+            # [무료 모드] Edge-TTS 화자인 경우 API 키 없이 즉시 무료 말하기
+            if "[무료]" in current_api_text or "Edge-TTS" in current_api_text:
+                self.tts_engine.switch_engine("Edge-TTS (초고음질 온라인)")
+                self.tts_engine.set_voice(current_api_text)
+                self.tts_engine.use_api = False
+                self.dl_status.setText("⚡ [무료] 실시간 음성 생성 중...")
             else:
-                self.tts_engine.api_voice_selection = current_api_text
-                self.tts_engine.custom_api_voice_id = None
-            self.dl_status.setText("⚡ [유료 API] 실시간 생성 중...")
+                # [유료 모드] 알리바바 DashScope API
+                if not self.api_key:
+                    QMessageBox.warning(self, "API Key 필요", "유료 음성을 사용하려면 DashScope API Key를 먼저 설정해주세요.\n무료 사용을 원하시면 '[무료]' 화자를 선택해 주세요.")
+                    self.setup_api_key()
+                    if not self.api_key:
+                        return
 
-        self.api_stream_btn.setDisabled(True)
-        self.api_stop_btn.setDisabled(False)
-        QApplication.processEvents()
-        
-        self.stream_thread = GenerateAudioThread(self.tts_engine, text, speed_val)
-        self.stream_thread.finished_signal.connect(self._on_api_stream_finished)
-        self.stream_thread.start()
+                self.tts_engine.switch_engine("Qwen3-TTS (0.6B)")
+                self.tts_engine.use_api = True
+                self.tts_engine.api_key = self.api_key
+                if hasattr(self, 'custom_api_voices') and current_api_text in self.custom_api_voices:
+                    self.tts_engine.api_voice_selection = "커스텀 보이스"
+                    self.tts_engine.custom_api_voice_id = self.custom_api_voices[current_api_text]
+                else:
+                    self.tts_engine.api_voice_selection = current_api_text
+                    self.tts_engine.custom_api_voice_id = None
+                self.dl_status.setText("⚡ [유료 API] 실시간 생성 중...")
+
+            self.api_stream_btn.setDisabled(True)
+            self.api_stop_btn.setDisabled(False)
+            QApplication.processEvents()
+            
+            self.stream_thread = GenerateAudioThread(self.tts_engine, text, speed_val)
+            self.stream_thread.finished_signal.connect(self._on_api_stream_finished)
+            self.stream_thread.start()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.api_stream_btn.setDisabled(False)
+            self.api_stop_btn.setDisabled(True)
+            self.dl_status.setText(f"❌ 음성 생성 오류: {e}")
+            QMessageBox.critical(self, "음성 생성 오류", f"음성 생성 중 오류가 발생했습니다:\n{str(e)}")
 
     def _on_api_stream_finished(self, file_path):
         self.api_stream_btn.setDisabled(False)
