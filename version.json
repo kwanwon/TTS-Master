@@ -1,6 +1,6 @@
 {
-  "version": "1.9.1",
-  "release_date": "2026-10-11",
+  "version": "1.9.2",
+  "release_date": "2026-10-13",
   "app_name": "AIMaster_TTS",
-  "description": "서킷 훈련 인트로 사범 코칭화, 기립 표현 개선, 스쿼트 점프 및 전방 회전낙법(Front roll breakfall) 영어 직결, 세트 중간 수분섭취 배제 및 사범 정중 지도톤 통일"
+  "description": "Gemini 3.1 Flash-Lite 기반 원클릭 서킷 설명·대본 자동생성기 및 수련계획표 파일(.txt/.docx/.md) 자동 대본화 탑재"
 }

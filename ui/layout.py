@@ -7,18 +7,44 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTextEdit, QPlainTextEdit, QPushButton, QComboBox, QListWidget,
     QGroupBox, QFileDialog, QMessageBox, QTabWidget, QScrollArea,
-    QProgressBar, QSlider, QInputDialog, QSizePolicy, QRadioButton
+    QProgressBar, QSlider, QInputDialog, QSizePolicy, QRadioButton, QLineEdit
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 
 # 코어 모듈 임포트
 from core.tts_engine import TTSEngine
+from core.ai_generator import AIGenerator, extract_text_from_file
 from utils.project_manager import ProjectManager
 from utils.model_installer import ModelInstallerThread
 from utils.hangul_composer import compose_hangul_jamo
 import pygame
 from PyQt6.QtCore import QThread, pyqtSignal
+
+
+class AIScriptWorker(QThread):
+    finished_ok = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, prompt: str, doc_text: str = "", parent=None):
+        super().__init__(parent)
+        self.prompt = prompt
+        self.doc_text = doc_text
+
+    def run(self):
+        try:
+            gen = AIGenerator()
+            script = gen.generate_draft(
+                user_text=self.prompt,
+                difficulty_level="3단계",
+                document_text=self.doc_text,
+            )
+            if script.startswith("오류:"):
+                self.failed.emit(script)
+            else:
+                self.finished_ok.emit(script)
+        except Exception as e:
+            self.failed.emit(str(e))
 
 class ClickableSlider(QSlider):
     """
@@ -452,6 +478,27 @@ class MainWindow(QMainWindow):
             "  ✅ 숫자는 한글로: 1, 2 → '하나, 둘' / 10 → '열'"
         )
         local_layout.addWidget(guide_box)
+
+        # 🤖 초간편 AI 수업 대본 자동 작성 바 (한 줄 입력 또는 파일 불러오기)
+        h_ai_script = QHBoxLayout()
+        self.txt_ai_script_prompt = QLineEdit()
+        self.txt_ai_script_prompt.setPlaceholderText("🤖 AI 대본 자동작성: 할 운동 입력 (예: 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회) [Enter 즉시 생성]")
+        self.txt_ai_script_prompt.setStyleSheet("border: 2px solid #8b5cf6; border-radius: 5px; padding: 5px 8px; font-weight: bold;")
+        self.txt_ai_script_prompt.returnPressed.connect(self._on_ai_generate_script)
+        h_ai_script.addWidget(self.txt_ai_script_prompt, stretch=1)
+
+        self.btn_ai_script_file = QPushButton("📂 파일 불러오기")
+        self.btn_ai_script_file.setToolTip("수련계획표나 메모 파일(.txt, .docx, .md, .csv)을 불러와 TTS 수업 대본을 자동 작성합니다.")
+        self.btn_ai_script_file.setStyleSheet("background-color: #0284c7; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px;")
+        self.btn_ai_script_file.clicked.connect(self._on_ai_load_script_file)
+        h_ai_script.addWidget(self.btn_ai_script_file)
+
+        self.btn_ai_script_gen = QPushButton("✨ AI 대본 생성")
+        self.btn_ai_script_gen.setToolTip("입력한 운동이나 파일 내용을 바탕으로 [딜레이]와 한/영 구령이 포함된 TTS 대본을 0.5초 만에 자동 생성합니다.")
+        self.btn_ai_script_gen.setStyleSheet("background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 12px; border-radius: 5px;")
+        self.btn_ai_script_gen.clicked.connect(self._on_ai_generate_script)
+        h_ai_script.addWidget(self.btn_ai_script_gen)
+        local_layout.addLayout(h_ai_script)
 
         self.local_input_text = CustomTextEdit(layout_ref=self, is_api=False)
         self.local_input_text.setPlaceholderText("로컬 텍스트 입력 (예: 다 같이 앞차기 준비, 하앗!) [Enter: 재생 / Shift+Enter: 줄바꿈]")
@@ -1192,6 +1239,68 @@ class MainWindow(QMainWindow):
                 
             QMessageBox.information(self, "성공", f"{title} 목소리가 등록되었습니다!\nQwen3 엔진이 이 파일의 특징을 캐싱(추출)하여 복제합니다.")
             self.refresh_voice_status()
+
+    def _on_ai_load_script_file(self):
+        """수련계획표나 운동 메모 파일을 불러와 즉시 TTS 대본으로 자동 생성"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "수련계획표 / 운동 메모 파일 불러오기",
+            "",
+            "문서 파일 (*.txt *.md *.docx *.csv *.json);;모든 파일 (*)"
+        )
+        if not file_path:
+            return
+
+        doc_text = extract_text_from_file(file_path)
+        if not doc_text or doc_text.startswith("[파일 읽기 오류"):
+            QMessageBox.warning(self, "파일 읽기 실패", f"파일 내용을 읽을 수 없습니다.\n{doc_text}")
+            return
+
+        self._ai_main_doc_text = doc_text
+        base_name = os.path.basename(file_path)
+        if hasattr(self, 'txt_ai_script_prompt') and not self.txt_ai_script_prompt.text().strip():
+            self.txt_ai_script_prompt.setText(f"[{base_name}] 파일 기반 수업 대본")
+
+        self._on_ai_generate_script()
+
+    def _on_ai_generate_script(self):
+        user_prompt = self.txt_ai_script_prompt.text().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
+        doc_text = getattr(self, '_ai_main_doc_text', '')
+
+        if not user_prompt and not doc_text:
+            QMessageBox.information(
+                self,
+                "운동 지시어 입력 안내",
+                "원하는 수업 내용이나 동작을 한 줄로 입력하거나 [📂 파일 불러오기]를 선택해 주세요.\n\n"
+                "💡 입력 예시:\n"
+                "• 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 수업 대본\n"
+                "• 초등부 앞차기, 돌려차기 10회씩 한영 구령 포함"
+            )
+            if hasattr(self, 'txt_ai_script_prompt'):
+                self.txt_ai_script_prompt.setFocus()
+            return
+
+        if hasattr(self, 'btn_ai_script_gen'):
+            self.btn_ai_script_gen.setEnabled(False)
+            self.btn_ai_script_gen.setText("⏳ 생성 중...")
+
+        self._ai_script_worker = AIScriptWorker(prompt=user_prompt, doc_text=doc_text, parent=self)
+        self._ai_script_worker.finished_ok.connect(self._on_ai_script_finished)
+        self._ai_script_worker.failed.connect(self._on_ai_script_failed)
+        self._ai_script_worker.start()
+
+    def _on_ai_script_finished(self, script_text: str):
+        if hasattr(self, 'btn_ai_script_gen'):
+            self.btn_ai_script_gen.setEnabled(True)
+            self.btn_ai_script_gen.setText("✨ AI 대본 생성")
+        if hasattr(self, 'local_input_text'):
+            self.local_input_text.setPlainText(script_text.strip())
+
+    def _on_ai_script_failed(self, err_msg: str):
+        if hasattr(self, 'btn_ai_script_gen'):
+            self.btn_ai_script_gen.setEnabled(True)
+            self.btn_ai_script_gen.setText("✨ AI 대본 생성")
+        QMessageBox.warning(self, "AI 대본 생성 오류", f"대본 생성 중 오류가 발생했습니다:\n{err_msg}")
 
     def manual_check_update(self):
         from utils.auto_updater import AutoUpdater

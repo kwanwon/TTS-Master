@@ -254,7 +254,7 @@ class EdgeTTSEngine:
             '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
             '6': '육', '7': '칠', '8': '팔', '9': '구', '10': '십'
         }
-        text = re.sub(r'\b([1-9]|10)\s*회\b', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", text)
+        text = re.sub(r'(?<!\d)([1-9]|10)\s*회(?=(?:와|과|씩|로|를|는|만|도|에|의|후|\s|$|[.,!?;:\-\)]))', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", text)
         text = re.sub(r'\s+', ' ', text).strip()
 
         # 1. $영어$ 태그를 최우선으로 확실하게 분리 (예: "안녕하세요$ hi$" -> ["안녕하세요", "$ hi$"])

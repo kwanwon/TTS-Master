@@ -47,6 +47,8 @@ effects/
 *.aiff
 
 # Config & Sensitive files
+.env
+.env.*
 settings.json
 serial.txt
 serial_config.json

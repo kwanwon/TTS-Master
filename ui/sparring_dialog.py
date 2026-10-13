@@ -23,9 +23,36 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from core.sparring_training_engine import SparringTrainingEngine, CIRCUIT_INTERVAL_THEMES, clean_speech_text
 from core.shuttle_run_engine import ShuttleRunEngine
+from core.ai_generator import AIGenerator, extract_text_from_file
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
 from pydub.effects import normalize
+
+
+class AICircuitWorker(QThread):
+    """비동기 AI 서킷 대본 및 사전 설명 자동 생성 워커 (0.5초 초고속 응답, UI 블로킹 방지)"""
+    finished_ok = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, prompt: str, lang_mode: str, mode_type: str, doc_text: str = "", parent=None):
+        super().__init__(parent)
+        self.prompt = prompt
+        self.lang_mode = lang_mode
+        self.mode_type = mode_type
+        self.doc_text = doc_text
+
+    def run(self):
+        try:
+            gen = AIGenerator()
+            res = gen.generate_circuit_routine(
+                user_prompt=self.prompt,
+                lang_mode=self.lang_mode,
+                mode_type=self.mode_type,
+                document_text=self.doc_text,
+            )
+            self.finished_ok.emit(res)
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 class NoScrollComboBox(QComboBox):
@@ -363,7 +390,7 @@ class SparringWorker(QThread):
                     '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
                     '6': '육', '7': '칠', '8': '팔', '9': '구', '10': '십'
                 }
-                clean_text = re.sub(r'\b([1-9]|10)\s*회\b', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", clean_text)
+                clean_text = re.sub(r'(?<!\d)([1-9]|10)\s*회(?=(?:와|과|씩|로|를|는|만|도|에|의|후|\s|$|[.,!?;:\-\)]))', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", clean_text)
                 clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
                 self.progress.emit(pct, f"훈련 구령 음성 합성 중 ({idx+1}/{len(voice_events)}): {clean_text[:12]}...")
@@ -778,9 +805,16 @@ class SparringDialog(QDialog):
         h_theme_edit = QHBoxLayout()
         h_theme_edit.addWidget(QLabel("✏️ 테마 명칭 (자유 수정):"))
         self.txt_circuit_theme_title = QLineEdit("실전 대련과 낙법 협응 콤보")
-        self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 🔥 도장 특화 하체 폭발 인터벌)")
+        self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 상하체 폭발 서킷 인터벌)")
         h_theme_edit.addWidget(self.txt_circuit_theme_title, stretch=1)
         l_ct.addLayout(h_theme_edit)
+
+        h_intro_edit = QHBoxLayout()
+        h_intro_edit.addWidget(QLabel("📢 사전 설명 방송:"))
+        self.txt_circuit_intro = QLineEdit()
+        self.txt_circuit_intro.setPlaceholderText("훈련 시작 전 사범님이 설명하는 안내 멘트 (AI 자동 생성 또는 직접 수정 가능)")
+        h_intro_edit.addWidget(self.txt_circuit_intro, stretch=1)
+        l_ct.addLayout(h_intro_edit)
         l_circuit.addWidget(g_c_theme)
 
         # 2. 연령/수준별 맞춤 구령 언어 선택 (도장 현장 실전 용어 기반)
@@ -871,8 +905,39 @@ class SparringDialog(QDialog):
         l_circuit.addWidget(g_c_time)
 
         # 4. 세부 훈련 동작 구성 및 사범 지도 팁
-        g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (직접 편집 가능)")
+        g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (AI 원클릭 자동완성 / 직접 편집)")
         l_cm = QVBoxLayout(g_c_moves)
+
+        # 🤖 초간편 AI 한 줄 지시 / 계획표 파일 ➔ 서킷 설명·대본 원클릭 자동 완성 바
+        h_ai_bar = QHBoxLayout()
+        lbl_ai = QLabel("🤖 AI 자동완성:")
+        lbl_ai.setStyleSheet("font-weight: bold; color: #6d28d9;")
+        h_ai_bar.addWidget(lbl_ai)
+
+        self.txt_ai_circuit_prompt = QLineEdit()
+        self.txt_ai_circuit_prompt.setPlaceholderText("할 운동만 편하게 적으세요! 예: 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야 (Enter 즉시 생성)")
+        self.txt_ai_circuit_prompt.setStyleSheet(
+            "border: 2px solid #8b5cf6; border-radius: 5px; padding: 5px 8px; background-color: #faf5ff; font-weight: bold;"
+        )
+        self.txt_ai_circuit_prompt.returnPressed.connect(self._on_ai_generate_circuit)
+        h_ai_bar.addWidget(self.txt_ai_circuit_prompt, stretch=1)
+
+        self.btn_ai_circuit_file = QPushButton("📂 계획표 파일")
+        self.btn_ai_circuit_file.setToolTip("수련계획표 문서(.txt, .docx, .md, .csv)를 불러와 서킷 설명과 대본을 자동 작성합니다.")
+        self.btn_ai_circuit_file.setStyleSheet(
+            "background-color: #0284c7; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_ai_circuit_file.clicked.connect(self._on_ai_load_circuit_file)
+        h_ai_bar.addWidget(self.btn_ai_circuit_file)
+
+        self.btn_ai_circuit_gen = QPushButton("✨ AI 설명·대본 자동완성")
+        self.btn_ai_circuit_gen.setToolTip("입력한 동작(또는 첨부 파일)을 바탕으로 사전 설명 방송과 한/영 콤보 대본, 지도 팁을 0.5초 만에 자동 완성합니다.")
+        self.btn_ai_circuit_gen.setStyleSheet(
+            "background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 12px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_ai_circuit_gen.clicked.connect(self._on_ai_generate_circuit)
+        h_ai_bar.addWidget(self.btn_ai_circuit_gen)
+        l_cm.addLayout(h_ai_bar)
 
         # 진행 방식 선택 (종목 순환 vs 단일 종목 집중 반복) 및 콤보 랜덤 생성 버튼
         h_cm_mode = QHBoxLayout()
@@ -884,7 +949,7 @@ class SparringDialog(QDialog):
         h_cm_mode.addWidget(self.rb_circuit_single)
         h_cm_mode.addStretch()
 
-        self.btn_shuffle_circuit = QPushButton("🎲 오늘의 새로운 콤보 무작위 생성 (새 루틴)")
+        self.btn_shuffle_circuit = QPushButton("🎲 기본 테마 무작위 추출")
         self.btn_shuffle_circuit.setToolTip("현재 테마의 풍부한 동작 라이브러리에서 매일 다른 신선한 콤보 루틴을 무작위로 자동 조합합니다.")
         self.btn_shuffle_circuit.setStyleSheet(
             "background-color: #4f46e5; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; font-size: 12px;"
@@ -899,9 +964,9 @@ class SparringDialog(QDialog):
         l_cm.addWidget(self.txt_circuit_moves)
 
         lbl_moves_hint = QLabel(
-            "💡 [음성 vs 지도 가이드 구분 안내]\n"
-            "  • 📢 [실제 음성 송출]: '1번 콤보:' 줄만 스피커로 힘차게 방송됩니다. (자유 수정/편집 가능)\n"
-            "  • 👀 [지도자 눈 참고]: '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 전용 자세 교정 가이드입니다."
+            "💡 [초간편 사용 팁 & 음성 구분]\n"
+            "  • 🤖 [AI 자동완성]: 위 보라색 칸에 '팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회'처럼 적고 Enter만 치면 설명과 한/영 대본이 자동 완성됩니다!\n"
+            "  • 📢 [실제 음성 송출]: '1번 콤보:' 줄만 스피커로 힘차게 방송되며, '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 눈 참고용입니다."
         )
         lbl_moves_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 6px; font-size: 11px; font-weight: bold;")
         l_cm.addWidget(lbl_moves_hint)
@@ -1629,6 +1694,7 @@ class SparringDialog(QDialog):
     def _on_circuit_moves_text_changed(self):
         if not getattr(self, '_programmatic_circuit_text_update', False):
             self._circuit_moves_user_modified = True
+            self._ai_generated_active = False
             # 사용자가 루틴을 직접 편집하면 테마 콤보박스를 'custom'으로 자연스럽게 동기화
             if hasattr(self, 'combo_circuit_theme') and self.combo_circuit_theme.currentData() != "custom":
                 self.combo_circuit_theme.blockSignals(True)
@@ -1644,7 +1710,7 @@ class SparringDialog(QDialog):
             if hasattr(self, 'txt_circuit_theme_title'):
                 cur_title = self.txt_circuit_theme_title.text().strip()
                 if not cur_title or any(p in cur_title for p in ["실전 대련", "대련 실전", "순발력", "스파링 풋워크", "근지구력"]):
-                    self.txt_circuit_theme_title.setText("🔥 [도장 맞춤형 서킷 인터벌] 실전 콤보 루프")
+                    self.txt_circuit_theme_title.setText("실전 맞춤형 서킷 인터벌 콤보")
                 self.txt_circuit_theme_title.setFocus()
             return
 
@@ -1659,9 +1725,18 @@ class SparringDialog(QDialog):
             if reply != QMessageBox.Yes:
                 return
         self._circuit_moves_user_modified = False
+        self._ai_generated_active = False
         self._update_circuit_moves_text()
 
     def _on_circuit_lang_changed(self, idx):
+        # 만약 방금 AI로 자동 생성한 상태라면, 변경된 언어 모드로 즉시 AI 재변환
+        if getattr(self, '_ai_generated_active', False) and (
+            (hasattr(self, 'txt_ai_circuit_prompt') and self.txt_ai_circuit_prompt.text().strip())
+            or getattr(self, '_ai_loaded_doc_text', '')
+        ):
+            self._on_ai_generate_circuit()
+            return
+
         if getattr(self, '_circuit_moves_user_modified', False):
             reply = QMessageBox.question(
                 self,
@@ -1675,11 +1750,120 @@ class SparringDialog(QDialog):
         self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
 
+    def _on_ai_load_circuit_file(self):
+        """수련계획표나 운동 메모 파일(.txt, .docx, .md, .csv)을 불러와 즉시 AI 서킷 대본으로 자동 생성"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "수련계획표 / 운동 메모 파일 불러오기",
+            "",
+            "문서 파일 (*.txt *.md *.docx *.csv *.json);;모든 파일 (*)"
+        )
+        if not file_path:
+            return
+
+        doc_text = extract_text_from_file(file_path)
+        if not doc_text or doc_text.startswith("[파일 읽기 오류"):
+            QMessageBox.warning(self, "파일 읽기 실패", f"파일 내용을 읽을 수 없습니다.\n{doc_text}")
+            return
+
+        self._ai_loaded_doc_text = doc_text
+        base_name = os.path.basename(file_path)
+        if hasattr(self, 'txt_ai_circuit_prompt') and not self.txt_ai_circuit_prompt.text().strip():
+            self.txt_ai_circuit_prompt.setText(f"[{base_name}] 파일 기반 서킷 루틴")
+
+        self._on_ai_generate_circuit()
+
+    def _on_ai_generate_circuit(self):
+        """한 줄 운동 지시어 또는 첨부된 계획표 파일을 기반으로 테마명·사전설명·콤보대본 원클릭 자동 완성"""
+        user_prompt = self.txt_ai_circuit_prompt.text().strip() if hasattr(self, 'txt_ai_circuit_prompt') else ""
+        doc_text = getattr(self, '_ai_loaded_doc_text', '')
+
+        if not user_prompt and not doc_text:
+            QMessageBox.information(
+                self,
+                "운동 지시어 입력 안내",
+                "원하는 서킷 동작을 한 줄로 편하게 입력하거나 [📂 계획표 파일]을 선택해 주세요.\n\n"
+                "💡 입력 예시:\n"
+                "• 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야\n"
+                "• 스쿼트 점프 3회 후 나래차기와 전방회전낙법\n"
+                "• 초등부 순발력 강화 점프 발차기 서킷"
+            )
+            if hasattr(self, 'txt_ai_circuit_prompt'):
+                self.txt_ai_circuit_prompt.setFocus()
+            return
+
+        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+        mode_type = "single" if (hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked()) else "cycle"
+
+        if hasattr(self, 'btn_ai_circuit_gen'):
+            self.btn_ai_circuit_gen.setEnabled(False)
+            self.btn_ai_circuit_gen.setText("⏳ AI 대본 작성 중...")
+        if hasattr(self, 'status_lbl'):
+            self.status_lbl.setText("🤖 AI가 사범님 맞춤 사전 설명과 세트별 한/영 서킷 대본을 자동 작성하고 있습니다...")
+
+        self._ai_circuit_worker = AICircuitWorker(
+            prompt=user_prompt,
+            lang_mode=lang_mode,
+            mode_type=mode_type,
+            doc_text=doc_text,
+            parent=self
+        )
+        self._ai_circuit_worker.finished_ok.connect(self._on_ai_circuit_finished)
+        self._ai_circuit_worker.failed.connect(self._on_ai_circuit_failed)
+        self._ai_circuit_worker.start()
+
+    def _on_ai_circuit_finished(self, res: dict):
+        if hasattr(self, 'btn_ai_circuit_gen'):
+            self.btn_ai_circuit_gen.setEnabled(True)
+            self.btn_ai_circuit_gen.setText("✨ AI 설명·대본 자동완성")
+
+        self._programmatic_circuit_text_update = True
+        try:
+            theme_title = res.get("theme_title", "").strip()
+            intro_text = res.get("intro_text", "").strip()
+            formatted_moves = res.get("formatted_moves", "").strip()
+
+            if hasattr(self, 'combo_circuit_theme'):
+                self.combo_circuit_theme.blockSignals(True)
+                for i in range(self.combo_circuit_theme.count()):
+                    if self.combo_circuit_theme.itemData(i) == "custom":
+                        self.combo_circuit_theme.setCurrentIndex(i)
+                        break
+                self.combo_circuit_theme.blockSignals(False)
+
+            if theme_title and hasattr(self, 'txt_circuit_theme_title'):
+                self.txt_circuit_theme_title.setText(theme_title)
+            if intro_text and hasattr(self, 'txt_circuit_intro'):
+                self.txt_circuit_intro.setText(intro_text)
+            if formatted_moves and hasattr(self, 'txt_circuit_moves'):
+                self.txt_circuit_moves.setPlainText(formatted_moves)
+
+            self._circuit_moves_user_modified = True
+            self._ai_generated_active = True
+
+            if hasattr(self, 'status_lbl'):
+                self.status_lbl.setText(
+                    "✨ AI가 사전 설명 방송과 세트별 한/영 서킷 대본을 자동 완성했습니다! 바로 아래 [🚀 맞춤 훈련 음원 생성하기]를 누르세요."
+                )
+        finally:
+            self._programmatic_circuit_text_update = False
+
+    def _on_ai_circuit_failed(self, err_msg: str):
+        if hasattr(self, 'btn_ai_circuit_gen'):
+            self.btn_ai_circuit_gen.setEnabled(True)
+            self.btn_ai_circuit_gen.setText("✨ AI 설명·대본 자동완성")
+        if hasattr(self, 'status_lbl'):
+            self.status_lbl.setText(f"⚠️ AI 대본 생성 오류: {err_msg}")
+        QMessageBox.warning(self, "AI 자동완성 오류", f"AI 대본 생성 중 오류가 발생했습니다:\n{err_msg}")
+
     def _shuffle_circuit_moves(self):
         """현재 테마의 풍부한 동작 라이브러리에서 무작위로 4개의 신선한 콤보를 자동 추출"""
         theme_key = self.combo_circuit_theme.currentData() or "power_agility"
         if theme_key == "custom":
-            QMessageBox.information(self, "커스텀 모드", "직접 입력 모드에서는 원하는 콤보와 지도 팁을 자유롭게 작성하실 수 있습니다.")
+            if hasattr(self, 'txt_ai_circuit_prompt') and self.txt_ai_circuit_prompt.text().strip():
+                self._on_ai_generate_circuit()
+                return
+            QMessageBox.information(self, "커스텀 모드", "직접 입력 모드에서는 AI 자동완성 칸에 원하는 동작을 입력하거나 직접 편집하실 수 있습니다.")
             return
 
         lang_mode = self.combo_circuit_lang.currentData() or "kr"
@@ -1699,6 +1883,7 @@ class SparringDialog(QDialog):
 
             self.txt_circuit_moves.setPlainText("\n".join(lines).strip())
             self._circuit_moves_user_modified = False
+            self._ai_generated_active = False
         finally:
             self._programmatic_circuit_text_update = False
 
@@ -1719,6 +1904,24 @@ class SparringDialog(QDialog):
             if hasattr(self, 'txt_circuit_theme_title'):
                 preset_title = theme_data.get(f"name_{lang_field}", theme_data.get("name_kr", "기능성 서킷 인터벌"))
                 self.txt_circuit_theme_title.setText(clean_speech_text(preset_title))
+
+            # 사전 설명 방송 기본값 자동 동기화 (화면에 즉시 표시되어 확인 및 수정 가능)
+            if hasattr(self, 'txt_circuit_intro'):
+                if lang_mode in ("en", "en_advanced"):
+                    default_intro = "Circuit interval training starts now! Connect your jumps, kicks, and techniques with maximum intensity. Push your limits every set! Get ready!"
+                elif theme_key == "power_agility":
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 점프와 발차기, 그리고 낙법 콤보를 연결하여 실전 감각과 신체 협응력을 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+                elif theme_key == "agility_power_combo":
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 폭발적인 버피와 점프, 연속 발차기를 통해 순발력과 민첩성을 극대화하는 시간입니다. 지시하는 구령에 맞춰 끝까지 빠른 템포로 집중하세요! 모두 준비해 주세요!"
+                elif theme_key == "footwork_reaction_combo":
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 빠른 스텝 풋워크와 번개 같은 카운터 발차기 공방을 익히는 시간입니다. 상대의 빈틈을 노려 빠르고 정확하게 타격하세요! 모두 준비해 주세요!"
+                elif theme_key == "strength_endurance_combo":
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 푸시업과 복근, 그리고 연타 발차기를 묶어 전신 파워와 근지구력을 기르는 시간입니다. 지친 순간에도 바른 자세를 유지하며 한계에 도전하세요! 모두 준비해 주세요!"
+                elif theme_key == "taekwondo_sparring_tactics":
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 앞발 견제와 기습 회전차기 등 실전 겨루기 득점 콤보를 무한 반복하는 시간입니다. 실전 시합의 긴장감을 유지하며 전력으로 꽂아 넣으세요! 모두 준비해 주세요!"
+                else:
+                    default_intro = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 지시하는 동작에 맞춰 신속하게 다음 동작을 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+                self.txt_circuit_intro.setText(default_intro)
 
             lines = []
             # 기본 4개 콤보 표시
@@ -1916,6 +2119,7 @@ class SparringDialog(QDialog):
             params["sets_count"] = self.sp_circuit_sets.value()
             params["theme_key"] = self.combo_circuit_theme.currentData() or "power_agility"
             params["theme_title"] = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
+            params["intro_text"] = self.txt_circuit_intro.text().strip() if hasattr(self, 'txt_circuit_intro') else ""
             params["language_mode"] = self.combo_circuit_lang.currentData() or "kr"
             params["circuit_mode_type"] = "single" if hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked() else "cycle"
             params["custom_routine_text"] = self.txt_circuit_moves.toPlainText().strip()

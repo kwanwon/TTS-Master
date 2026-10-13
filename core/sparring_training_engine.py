@@ -47,7 +47,7 @@ def clean_speech_text(text: str) -> str:
         '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오',
         '6': '육', '7': '칠', '8': '팔', '9': '구', '10': '십'
     }
-    t = re.sub(r'\b([1-9]|10)\s*회\b', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", t)
+    t = re.sub(r'(?<!\d)([1-9]|10)\s*회(?=(?:와|과|씩|로|를|는|만|도|에|의|후|\s|$|[.,!?;:\-\)]))', lambda m: f"{ko_count_map.get(m.group(1), m.group(1))} 회", t)
     # 대괄호 문자 정리
     t = t.replace('[', ' ').replace(']', ' ')
     # 앞뒤 불필요한 기호 및 중복 공백 정제
