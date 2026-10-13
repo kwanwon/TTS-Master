@@ -2,9 +2,19 @@ import os
 import re
 import json
 import zipfile
+import urllib.request
+import urllib.parse
+import ssl
+import tempfile
 import xml.etree.ElementTree as ET
 import traceback
 from openai import OpenAI
+
+
+def _get_user_config_dir() -> str:
+    user_dir = os.path.join(os.path.expanduser("~"), ".aimaster_tts")
+    os.makedirs(user_dir, exist_ok=True)
+    return user_dir
 
 
 def load_gemini_env() -> dict:
@@ -21,12 +31,11 @@ def load_gemini_env() -> dict:
         ),
     }
 
-    # Candidate .env locations (CWD, project root, ~/.aimaster_tts/.env)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = [
+        os.path.join(_get_user_config_dir(), ".env"),
         os.path.join(os.getcwd(), ".env"),
         os.path.join(base_dir, ".env"),
-        os.path.join(os.path.expanduser("~"), ".aimaster_tts", ".env"),
         "/Users/gm2hapkido/Desktop/TTS컨트롤/.env",
     ]
 
@@ -41,11 +50,9 @@ def load_gemini_env() -> dict:
                         k, v = line.split("=", 1)
                         k = k.strip()
                         v = v.strip().strip('"').strip("'")
-                        if k in config and v and not config[k]:
-                            config[k] = v
+                        if k == "GEMINI_API_KEY" and v and not config["GEMINI_API_KEY"]:
+                            config["GEMINI_API_KEY"] = v
                         elif k in ("GEMINI_MODEL", "GEMINI_BASE_URL") and v:
-                            config[k] = v
-                        elif k == "GEMINI_API_KEY" and v:
                             config[k] = v
                 if config["GEMINI_API_KEY"]:
                     break
@@ -70,8 +77,7 @@ def save_gemini_api_key(api_key: str, model: str = "gemini-3.1-flash-lite"):
         f"GEMINI_MODEL={model}\n"
         f"GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/\n"
     )
-    user_dir = os.path.join(os.path.expanduser("~"), ".aimaster_tts")
-    os.makedirs(user_dir, exist_ok=True)
+    user_dir = _get_user_config_dir()
     try:
         with open(os.path.join(user_dir, ".env"), "w", encoding="utf-8") as f:
             f.write(env_content)
@@ -84,6 +90,41 @@ def save_gemini_api_key(api_key: str, model: str = "gemini-3.1-flash-lite"):
         if os.access(base_dir, os.W_OK):
             with open(local_env, "w", encoding="utf-8") as f:
                 f.write(env_content)
+    except Exception:
+        pass
+
+
+def load_common_settings() -> dict:
+    """
+    Loads shared program-wide settings (API key status, Google Drive link,
+    reference file path, common dojo/training notes).
+    """
+    default_data = {
+        "gdrive_url": "",
+        "plan_file_path": "",
+        "common_info": "",
+        "dashscope_api_key": "",
+    }
+    settings_path = os.path.join(_get_user_config_dir(), "common_ai_settings.json")
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    default_data.update(loaded)
+        except Exception:
+            pass
+    return default_data
+
+
+def save_common_settings(data: dict):
+    """Saves shared program-wide settings to ~/.aimaster_tts/common_ai_settings.json."""
+    settings_path = os.path.join(_get_user_config_dir(), "common_ai_settings.json")
+    try:
+        current = load_common_settings()
+        current.update(data or {})
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(current, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
@@ -122,6 +163,92 @@ def extract_text_from_file(file_path: str) -> str:
         return f"[파일 읽기 오류: {str(e)}]"
 
 
+def fetch_text_from_url(url: str) -> str:
+    """
+    Fetches text content from a Google Docs link, Google Sheets link,
+    Google Drive shared file link, or general web URL.
+    """
+    url = (url or "").strip()
+    if not url:
+        return ""
+
+    download_url = url
+    is_binary_doc = False
+
+    # 1. Google Docs: https://docs.google.com/document/d/{ID}/...
+    doc_match = re.search(r"docs\.google\.com/document/d/([a-zA-Z0-9_-]+)", url)
+    if doc_match:
+        doc_id = doc_match.group(1)
+        download_url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+
+    # 2. Google Sheets: https://docs.google.com/spreadsheets/d/{ID}/...
+    sheet_match = re.search(r"docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)", url)
+    if sheet_match:
+        sheet_id = sheet_match.group(1)
+        download_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+
+    # 3. Google Drive file: https://drive.google.com/file/d/{ID}/... or ?id={ID}
+    drive_match = re.search(r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", url)
+    if not drive_match:
+        drive_match = re.search(r"drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)", url)
+    if drive_match:
+        file_id = drive_match.group(1)
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        is_binary_doc = True
+
+    try:
+        ctx = ssl.create_default_context()
+        try:
+            import certifi
+            ctx.load_verify_locations(certifi.where())
+        except Exception:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(
+            download_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            raw_bytes = resp.read()
+            content_type = resp.headers.get("Content-Type", "").lower()
+
+        # Check if downloaded bytes are a ZIP (.docx)
+        if raw_bytes[:4] == b"PK\x03\x04":
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+                tmp.write(raw_bytes)
+                tmp_path = tmp.name
+            try:
+                return extract_text_from_file(tmp_path)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+
+        # Decode text
+        decoded = ""
+        for enc in ("utf-8", "utf-8-sig", "cp949", "euc-kr"):
+            try:
+                decoded = raw_bytes.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if not decoded:
+            decoded = raw_bytes.decode("utf-8", errors="ignore")
+
+        # If HTML page, strip tags cleanly
+        if "<html" in decoded.lower() or "<!doctype html" in decoded.lower() or "text/html" in content_type:
+            decoded = re.sub(r"<script[\s\S]*?</script>", " ", decoded, flags=re.IGNORECASE)
+            decoded = re.sub(r"<style[\s\S]*?</style>", " ", decoded, flags=re.IGNORECASE)
+            decoded = re.sub(r"<[^>]+>", "\n", decoded)
+            decoded = re.sub(r"\n\s*\n+", "\n", decoded)
+
+        return decoded.strip()
+    except Exception as e:
+        return f"[링크 불러오기 오류: {str(e)} (구글 드라이브/문서의 공유 설정이 '링크가 있는 모든 사용자에게 공개'인지 확인해 주세요)]"
+
+
 class AIGenerator:
     def __init__(self, api_key: str = ""):
         self.env_config = load_gemini_env()
@@ -152,9 +279,17 @@ class AIGenerator:
             save_gemini_api_key(api_key, self.model)
             self.client = OpenAI(api_key=api_key, base_url=self.base_url)
 
-    def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 1500, temperature: float = 0.6) -> str:
+    def test_connection(self) -> tuple:
+        """Tests if the configured Gemini API key and model respond properly."""
+        try:
+            res = self._call_llm("Say OK", "OK", max_tokens=10, temperature=0.1)
+            return True, f"연결 성공! (모델: {self.model}, 응답: {res[:20]})"
+        except Exception as e:
+            return False, f"연결 실패: {str(e)}"
+
+    def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 1600, temperature: float = 0.55) -> str:
         if not self._ensure_client():
-            raise RuntimeError("Gemini API 키가 설정되지 않았습니다. (.env 파일을 확인해 주세요)")
+            raise RuntimeError("Gemini API 키가 설정되지 않았습니다. 상단 [⚙️ AI·수련자료 통합 설정]에서 API 키를 입력해 주세요.")
 
         models_to_try = [
             self.model,
@@ -186,6 +321,51 @@ class AIGenerator:
 
         raise RuntimeError(f"AI 호출 오류: {str(last_err)}")
 
+    @staticmethod
+    def _get_easy_conversational_english_guide(lang_mode: str) -> str:
+        """
+        Returns instructions for natural, easy, everyday conversational coaching English
+        used in real gym/dojo workouts (avoiding textbook/stiff vocabulary).
+        """
+        common_vocab_guide = """[생생하고 쉬운 현장 생활/운동 영어 지침 - 매우 중요!]
+- 딱딱한 교과서식 영어나 어려운 단어(Execute, Perform, Subsequent, Maintain, Recuperate 등)는 절대 쓰지 마세요!
+- 실제 체육관 현장에서 원어민 코치가 아이들·수련생들과 호흡하며 일상적으로 자주 쓰는 **쉽고 직관적인 생활형·대화형 코칭 영어**를 사용하세요.
+- 동작과 횟수를 수련생이 귀로 듣자마자 바로 몸이 반응할 수 있게 짧고 리듬감 있게 말하세요:
+  • 팔굽혀펴기 2회 ➔ "Two pushups! Down and up!" 또는 "Two pushups, get right back up!"
+  • 빠른 발차기 5회 ➔ "Five fast kicks! Kick, kick, kick!" 또는 "Five quick kicks, let's go!"
+  • 버피 2회 ➔ "Two burpees! Jump up high!"
+  • 스쿼트 점프 3회(쪼그려 점프) ➔ "Three squat jumps! Jump high!"
+  • 무릎 점프 2회 ➔ "Two high knee jumps! Knees up!"
+  • 나래차기 ➔ "Double kicks! Fast feet!"
+  • 전방 회전낙법 후 신속히 일어나기 ➔ "Front roll breakfall, stand up quick!" 또는 "Roll forward and get right up!"
+  • 후방 회전낙법 후 일어나기 ➔ "Back roll breakfall, stand up fast!"
+  • 앞발 컷트 후 상단 발차기 ➔ "Front foot cut, then high kick! Nice!"
+  • 백스텝 후 뒤차기 ➔ "Step back and back kick! Let's go!"
+  • 자연스러운 연결/격려 추임새: "Let's go!", "Keep moving!", "Nice and fast!", "Don't stop!", "You got this!\""""
+
+        mode_specific = {
+            "kr": (
+                "한국어 전용 모드입니다. 영어 없이 힘차고 명확한 한국어 사범 구령으로만 작성하세요.\n"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회, 버피 2회! 신속하게 다음 동작으로 연결! 쉼 없이 반복!'"
+            ),
+            "mix_kids": (
+                "한국어 동작 설명 + 쉽고 신나는 현장 생활 영어 구령(1:1 매칭) 모드입니다.\n"
+                "반드시 '한국어 동작 설명! - 쉬운 현장 영어 구령!' 형식으로 작성하세요.\n"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회와 버피 2회! - Two pushups! Five fast kicks! Two burpees! Let's go!'"
+            ),
+            "dual_step": (
+                "한국어 동작 요약 + 자연스러운 대화형 코칭 영어 연결 모드입니다.\n"
+                "반드시 '한국어 동작 요약! - 대화형 코칭 영어!' 형식으로 작성하세요.\n"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5연타, 버피 2회 연결! - Down for two pushups, up fast for five quick kicks, then two burpees! Keep moving!'"
+            ),
+            "en_advanced": (
+                "100% 원어민 코치의 자연스러운 대화형 실전 영어(Full English) 모드입니다. 한글 없이 영어로만 작성하세요.\n"
+                "예시: 'Give me two pushups, jump up fast for five quick kicks, and finish with two burpees! Keep moving, let's go!'"
+            ),
+        }.get(lang_mode, "")
+
+        return f"{common_vocab_guide}\n\n[선택된 구령 언어 모드 ({lang_mode})]:\n{mode_specific}"
+
     def generate_circuit_routine(
         self,
         user_prompt: str,
@@ -194,68 +374,31 @@ class AIGenerator:
         document_text: str = ""
     ) -> dict:
         """
-        Generates a complete circuit interval routine (theme_title, intro_text, formatted_moves)
-        from a simple one-line user request or an uploaded training plan file.
+        Generates an instant customizable circuit template (theme_title, intro_text, formatted_moves)
+        from user requirements, uploaded file, Google Drive link, or shared common settings.
         """
-        lang_instruction = {
-            "kr": (
-                "한국어 전용 모드입니다. 영어 없이 힘차고 명확한 한국어 사범 구령으로만 작성하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회, 버피 2회! 신속하게 다음 동작으로 연결! 쉼 없이 반복!'"
-            ),
-            "mix_kids": (
-                "한국어 동작 설명 + 본토 실전 영어 액션콜(1:1 직결) 모드입니다.\n"
-                "반드시 '한국어 동작 요약! - 영어 1:1 구령!' 형식으로 작성하세요.\n"
-                "절대로 영어를 'Three times!'처럼 횟수만 뭉개지 말고, 반드시 횟수+동작명(예: Two pushups! Five fast kicks! Two burpees! Three squat jumps! Front roll breakfall!)으로 1:1 정확히 매칭하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회와 버피 2회! - Two pushups! Five fast kicks! Two burpees!'"
-            ),
-            "dual_step": (
-                "한국어 전술 동작 요약 + 본토 대련 테크닉 영어 구령 모드입니다.\n"
-                "반드시 '한국어 동작 요약! - 영어 연결 구령!' 형식으로 작성하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5연타, 버피 2회 연결! - Two pushups, five fast kicks, two burpees, non-stop!'"
-            ),
-            "en_advanced": (
-                "100% 미국 본토 실전 도장 코치 영어(Full English) 모드입니다. 한글 없이 영어로만 구령을 작성하세요.\n"
-                "예시: 'Two pushups into five fast kicks and two burpees! Quick recovery, keep repeating non-stop!'"
-            ),
-        }.get(lang_mode, "")
+        common_cfg = load_common_settings()
+        common_info = common_cfg.get("common_info", "").strip()
+        english_guide = self._get_easy_conversational_english_guide(lang_mode)
 
-        combo_count_guide = (
-            "사용자가 단일 집중 반복을 원하거나 1가지 복합 루틴만 지정했더라도, "
-            "1번 콤보에는 사용자가 요청한 동작을 100% 정확히 그대로 배치하고, "
-            "2~4번 콤보에는 해당 동작들을 응용하거나 순서를 변형한 실전 콤보를 추가로 구성해 총 4개의 콤보를 작성하세요. "
-            "(단, 사용자가 명확히 1번, 2번, 3번 등 세트별 동작을 각각 지정했다면 그 순서대로 작성하세요.)"
-        )
+        system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 현장 코칭 대본 전문가입니다.
+사범님이 입력한 운동 요구사항이나 계획표 내용을 바탕으로, 사범님이 바로 확인하고 입맛대로 수정할 수 있는 [즉석 서킷 인터벌 대본 템플릿]을 JSON으로 생성하세요.
 
-        system_prompt = f"""당신은 태권도 및 무도 체육관의 수석 사범이자 실전 서킷 인터벌 훈련 설계 전문가입니다.
-사범님이 간단히 입력한 운동 메모나 수련계획표 문서를 바탕으로, 즉시 방송 가능한 [서킷 인터벌 훈련 대본]을 JSON 형식으로 생성하세요.
-
-[필수 준수 현장 코칭 규칙 - 매우 중요!]
+[필수 준수 현장 코칭 규칙]
 1. '도장'이라는 단어는 제목, 사전 설명(intro_text), 구령 어디에도 절대 사용하지 마세요.
-2. '기립'이라는 딱딱한 한자어는 절대 쓰지 마세요. 대신 '신속히 일어나서', '빠르게 일어나', '신속하게 다음 동작 연결'로 표현하세요.
-3. 반말("스텝 밟아", "마시자" 등)은 절대 금지하며, 정중하고 절도 있는 사범님의 지도 존댓말("~하세요", "~해 주세요")을 사용하세요.
-4. 낙법 용어 한/영 정립:
-   - 앞으로 구르는 회전낙법 = '전방 회전낙법' (영어: Front roll breakfall)
-   - 뒤로 구르는 회전낙법 = '후방 회전낙법' (영어: Back roll breakfall)
-   - 옆으로 구르는 낙법 = '측방 회전낙법' (영어: Side roll breakfall)
-   - 쪼그려 점프 = '스쿼트 점프' (영어: Squat jumps)
-   - 팔굽혀펴기 = '팔굽혀펴기' 또는 '푸시업' (영어: Pushups)
-   - 빠른 발차기 = '빠른 발차기' (영어: Fast kicks)
-   - 버피 = '버피' (영어: Burpees)
-5. 사전 안내 방송(intro_text) 작성 규칙:
-   - 단순 단어 나열식 설명은 절대 금지합니다!
-   - 실제 사범님이 수련생들 앞에서 오늘 할 운동의 구성과 훈련 목적(왜 이 동작들을 연결하는지)을 귀에 쏙 들어오게 설명하듯 작성하세요.
-   - 반드시 다음 흐름을 따르세요:
-     "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [사용자가 입력한 핵심 동작들]을 연결하여 [훈련 효과: 예-상하체 근지구력과 폭발적인 순발력 / 실전 대련 감각과 신체 협응력 등]을 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
-   - 사전 안내 방송에 '한국어', '원어민', '영어' 같은 언어 설명 단어는 절대 넣지 마세요.
-6. 구령 언어 모드 지침 ({lang_mode}):
-   {lang_instruction}
-7. 콤보 구성 지침:
-   {combo_count_guide}
-8. 특수기호(&, · 등)는 읽을 때 어색하므로 제목과 구령에 절대 쓰지 말고 '와/과', '그리고', 쉼표(,)로 자연스럽게 연결하세요.
+2. '기립'이라는 한자어는 절대 쓰지 마세요. 대신 '신속히 일어나서', '빠르게 일어나', '신속하게 다음 동작 연결'로 표현하세요.
+3. 반말은 절대 금지하며, 정중하고 절도 있는 사범님의 지도 존댓말("~하세요", "~해 주세요")을 사용하세요.
+4. 사전 설명 방송(intro_text):
+   - 단순 단어 나열 금지! 실제 사범님이 수련생들에게 오늘 할 운동 구성과 훈련 목적을 자연스럽게 설명하듯 작성하세요.
+   - 흐름: "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [핵심 동작들]을 연결하여 [훈련 효과]를 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+   - 사전 설명에 '한국어', '원어민', '영어' 같은 언어 메타 단어는 절대 넣지 마세요.
+5. {english_guide}
+6. 1번 콤보에는 사범님이 요청한 핵심 동작 루틴을 100% 정확히 반영하고, 총 4개의 세트별 콤보를 구성하세요. (사범님이 세트별 동작을 각각 지정했다면 그 순서대로 구성하세요.)
+7. 특수기호(&, · 등)는 읽을 때 어색하므로 제목과 구령에 절대 쓰지 마세요.
 
-[반드시 아래 JSON 포맷으로만 응답하세요 (마크다운 코드블록 없이 순수 JSON 권장)]
+[반드시 아래 JSON 포맷으로만 응답하세요]
 {{
-  "theme_title": "훈련 테마 제목 (예: 팔굽혀펴기와 빠른발차기 버피 복합 서킷)",
+  "theme_title": "훈련 테마 제목 (예: 팔굽혀펴기와 빠른 발차기 그리고 버피 실전 서킷)",
   "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 ...",
   "combos": [
     {{
@@ -277,13 +420,63 @@ class AIGenerator:
   ]
 }}"""
 
-        user_msg = f"[사범님 지시사항]\n{user_prompt.strip() if user_prompt else '수련계획표 문서 기반 서킷 루틴 구성'}\n"
+        user_msg = f"[사범님 운동 요구사항]\n{user_prompt.strip() if user_prompt else '제공된 수련계획표 기반 서킷 구성'}\n"
         if document_text:
-            user_msg += f"\n[첨부된 수련계획표/문서 내용]\n{document_text[:4000]}\n"
+            user_msg += f"\n[참고 수련계획표/링크 문서 내용]\n{document_text[:4000]}\n"
+        elif common_info:
+            user_msg += f"\n[공통 설정 수련계획표/기본 정보]\n{common_info[:3000]}\n"
 
-        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1500, temperature=0.5)
+        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1600, temperature=0.5)
+        return self._parse_circuit_json_response(raw_resp)
 
-        # Clean JSON block if wrapped in ```json ... ```
+    def refine_edited_circuit_routine(
+        self,
+        edited_moves_text: str,
+        current_intro_text: str = "",
+        user_prompt: str = "",
+        lang_mode: str = "mix_kids",
+        current_theme_title: str = "",
+        mode_type: str = "cycle"
+    ) -> dict:
+        """
+        Takes the template text that the user edited in Korean (in txt_circuit_moves),
+        preserves the user's exact Korean exercise choices and counts, and regenerates
+        matching easy conversational coaching English cues, intro_text, and coaching tips!
+        """
+        english_guide = self._get_easy_conversational_english_guide(lang_mode)
+
+        system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 한/영 코칭 대본 전문가입니다.
+사범님이 대본 편집창에서 [한국어 동작이나 횟수]를 직접 수정했습니다.
+사범님이 수정한 각 콤보의 **한국어 동작 내용과 횟수, 구성을 100% 그대로 최우선 기준으로 삼아서**,
+그에 딱 맞는 **쉽고 자연스러운 현장 생활/운동 영어 구령**과 **사범 지도 팁**, 그리고 전체 동작을 아우르는 **사전 설명 방송(intro_text)**과 **테마 제목(theme_title)**을 다시 맞춰주세요!
+
+[핵심 규칙 - 절대 준수!]
+1. 사범님이 수정한 각 세트의 한국어 동작과 횟수를 임의로 다른 운동으로 바꾸지 마세요! 사범님이 적은 한국어 동작을 그대로 살리면서 자연스럽게 다듬고, 뒷부분의 영어 구령(`- 영어 구령!`)과 아래 줄의 `➔ [지도 팁]`을 그 한국어 동작에 1:1로 정확히 일치시켜 다시 작성하세요.
+2. 만약 사범님이 영어 없이 한국어만 적어 놓았더라도(예: "1번 콤보: 무릎점프 3회 후 빠른발차기 5회"), 선택된 언어 모드에 맞춰 자연스러운 현장 영어 구령과 지도 팁을 완벽하게 붙여주세요.
+3. '도장'과 '기립' 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서', '빠르게 일어나' 사용).
+4. {english_guide}
+
+[반드시 아래 JSON 포맷으로만 응답하세요]
+{{
+  "theme_title": "수정된 운동에 맞춘 테마 제목",
+  "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [수정된 핵심 동작들]을 연결하여 ...",
+  "combos": [
+    {{
+      "speech": "1번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
+    }}
+  ]
+}}"""
+
+        user_msg = (
+            f"[사범님이 직접 수정한 대본 템플릿 내용]\n{edited_moves_text.strip()}\n\n"
+            f"[추가 요구사항 메모]: {user_prompt.strip() if user_prompt else '없음 (위 수정된 대본의 한글 동작 기준으로 영어와 설명 자동 맞춤)'}\n"
+        )
+        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1600, temperature=0.4)
+        return self._parse_circuit_json_response(raw_resp)
+
+    @staticmethod
+    def _parse_circuit_json_response(raw_resp: str) -> dict:
         cleaned = re.sub(r"^```(?:json)?\s*", "", raw_resp.strip(), flags=re.IGNORECASE)
         cleaned = re.sub(r"\s*```$", "", cleaned.strip())
         start_idx = cleaned.find("{")
@@ -311,39 +504,43 @@ class AIGenerator:
             "combos": combos,
         }
 
-    def generate_draft(self, user_text: str, difficulty_level: str = "3단계", document_text: str = "") -> str:
+    def generate_draft(
+        self,
+        user_text: str,
+        difficulty_level: str = "3단계",
+        document_text: str = "",
+        existing_draft: str = ""
+    ) -> str:
         """
-        Generates a general class TTS script with [딜레이 N초] tags for the main TTS tab.
+        Generates or refines a general class TTS script with [딜레이 N초] tags
+        and natural conversational coaching English for the main TTS tab.
         """
-        try:
-            level_match = re.search(r"(\d+)", str(difficulty_level))
-            level = int(level_match.group(1)) if level_match else 3
-        except Exception:
-            level = 3
+        common_cfg = load_common_settings()
+        common_info = common_cfg.get("common_info", "").strip()
 
-        system_prompt = """당신은 무도 체육관(태권도·합기도 등)에서 수련생을 지도하는 수석 사범이자 TTS 음성 방송 대본 전문가입니다.
-사범님이 입력한 간단한 지시사항이나 첨부된 수련계획표 문서를 바탕으로, 즉시 스피커로 틀어 수업을 진행할 수 있는 [TTS 전용 훈련 대본]을 작성하세요.
+        system_prompt = """당신은 무도·체력 체육관에서 수련생을 지도하는 수석 사범이자 TTS 음성 방송 대본 전문가입니다.
+사범님이 입력한 요구사항(또는 수정한 한글 대본, 수련계획표 문서/링크)을 바탕으로, 즉시 스피커로 틀어 수업을 진행할 수 있는 [즉석 TTS 수업 대본 템플릿]을 작성하세요.
 
 [필수 작성 규칙]
 1. 인사말이나 부연 설명 없이 오직 실제 스피커로 읽힐 대본과 [딜레이 N초] 태그만 출력하세요.
 2. 반말을 절대 쓰지 말고, 정중하고 절도 있는 사범님의 지도 존댓말("~하세요", "~해 주세요")로 통일하세요.
 3. '도장'이나 '기립' 같은 어색한 단어는 쓰지 마세요 ('기립' 대신 '신속히 일어나서' 사용).
-4. 문장이 너무 빠르지 않도록 호흡 구간마다 쉼표(,)를 자연스럽게 넣어주세요.
-5. 동작과 동작 사이, 또는 수련생들이 실제로 운동을 수행하는 시간에는 반드시 [딜레이 3초], [딜레이 5초], [딜레이 10초] 형태로 대기 태그를 삽입하세요.
-6. 영어 구령이 필요한 경우 본토 도장에서 실제로 쓰는 짧고 명확한 구령(예: Two pushups!, Five fast kicks!, Catch your breath!, Take a break!)을 자연스럽게 섞어주세요.
+4. 영어 구령은 교과서적인 어려운 영어가 아니라, 실제 운동 현장에서 원어민 코치가 일상적으로 자주 쓰는 **쉽고 자연스러운 생활/운동 대화형 영어**를 사용하세요:
+   - 예: "Two pushups! Down and up!", "Five fast kicks! Let's go!", "Catch your breath! Deep breath!", "Take a break! Shake your legs!", "Good job everyone, keep moving!"
+5. 문장이 너무 빠르지 않도록 호흡 구간마다 쉼표(,)를 자연스럽게 넣어주세요.
+6. 동작과 동작 사이, 또는 수련생들이 실제로 운동을 수행하는 시간에는 반드시 [딜레이 3초], [딜레이 5초], [딜레이 10초] 형태로 대기 태그를 삽입하세요.
+7. 만약 사범님이 기존 대본 초안의 한글 내용을 일부 수정해서 다시 생성을 요청한 경우, 수정된 한글 동작과 횟수를 100% 반영하여 영어 구령과 흐름을 자연스럽게 맞춰주세요."""
 
-[출력 예시]
-자, 지금부터 체력 강화 및 발차기 집중 훈련을 시작합니다! 모두 간격을 벌려 준비해 주세요. [딜레이 3초]
-첫 번째 동작은 팔굽혀펴기 2회 후 빠른 발차기 5회입니다! 구령에 맞춰 힘차게 시작합니다, 준비! [딜레이 2초]
-Two pushups! Five fast kicks! Go! [딜레이 5초]
-갈려~! 호흡을 가다듬고 다리를 가볍게 털어주세요. Catch your breath! [딜레이 5초]"""
-
-        user_message = f"[요청 수준]: {level}단계\n[사범님 지시사항]:\n{user_text}\n"
-        if document_text:
-            user_message += f"\n[첨부된 수련계획표 문서 내용]:\n{document_text[:4000]}\n"
+        user_message = f"[사범님 요구사항 / 지시사항]:\n{user_text.strip() if user_text else '제공된 내용 기반 대본 작성'}\n"
+        if existing_draft.strip():
+            user_message += f"\n[사범님이 현재 화면에서 작성/수정한 대본 내용 (이 한글 내용을 기준으로 영어 구령과 대본 완성)]:\n{existing_draft.strip()}\n"
+        if document_text.strip():
+            user_message += f"\n[첨부된 수련계획표/구글드라이브 문서 내용]:\n{document_text[:4000]}\n"
+        elif common_info:
+            user_message += f"\n[공통 설정 수련계획표/기본 정보]:\n{common_info[:3000]}\n"
 
         try:
-            return self._call_llm(system_prompt, user_message, max_tokens=1500, temperature=0.6)
+            return self._call_llm(system_prompt, user_message, max_tokens=1600, temperature=0.55)
         except Exception as e:
             print(traceback.format_exc())
             return f"오류: {str(e)}"

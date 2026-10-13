@@ -1,6 +1,6 @@
 {
-  "version": "1.9.2",
+  "version": "1.9.3",
   "release_date": "2026-10-13",
   "app_name": "AIMaster_TTS",
-  "description": "Gemini 3.1 Flash-Lite 기반 원클릭 서킷 설명·대본 자동생성기 및 수련계획표 파일(.txt/.docx/.md) 자동 대본화 탑재"
+  "description": "즉석 템플릿 생성 ➔ 한글 수정 후 현장 영어·설명 재작성, 구글 드라이브 링크 연동, 넓은 편집창 및 AI·수련자료 통합 설정 탑재"
 }

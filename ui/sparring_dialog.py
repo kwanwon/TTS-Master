@@ -17,39 +17,80 @@ from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QSpinBox, QDoubleSpinBox, QCheckBox, QFileDialog, QMessageBox, QComboBox,
-    QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTextEdit, QTabWidget, QApplication, QSlider
+    QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTextEdit, QTabWidget, QApplication, QSlider,
+    QInputDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from core.sparring_training_engine import SparringTrainingEngine, CIRCUIT_INTERVAL_THEMES, clean_speech_text
 from core.shuttle_run_engine import ShuttleRunEngine
-from core.ai_generator import AIGenerator, extract_text_from_file
+from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_from_url, load_common_settings
+from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.effects_generator import ensure_default_effects
 from pydub import AudioSegment
 from pydub.effects import normalize
 
 
+class CompatibleTextEdit(QTextEdit):
+    """
+    넓고 시원한 멀티라인 입력을 지원하면서도 QLineEdit의 .text() / .setText() 인터페이스와
+    100% 호환되는 스마트 텍스트 입력 위젯.
+    """
+    returnPressed = pyqtSignal()
+
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setText(self, val: str):
+        self.setPlainText(val or "")
+
+
 class AICircuitWorker(QThread):
-    """비동기 AI 서킷 대본 및 사전 설명 자동 생성 워커 (0.5초 초고속 응답, UI 블로킹 방지)"""
+    """비동기 AI 서킷 즉석 템플릿 생성 및 한글 수정분 현장 영어·설명 재맞춤 워커"""
     finished_ok = pyqtSignal(dict)
     failed = pyqtSignal(str)
 
-    def __init__(self, prompt: str, lang_mode: str, mode_type: str, doc_text: str = "", parent=None):
+    def __init__(
+        self,
+        prompt: str,
+        lang_mode: str,
+        mode_type: str,
+        doc_text: str = "",
+        refine_mode: bool = False,
+        edited_moves_text: str = "",
+        current_theme_title: str = "",
+        current_intro_text: str = "",
+        parent=None
+    ):
         super().__init__(parent)
         self.prompt = prompt
         self.lang_mode = lang_mode
         self.mode_type = mode_type
         self.doc_text = doc_text
+        self.refine_mode = refine_mode
+        self.edited_moves_text = edited_moves_text
+        self.current_theme_title = current_theme_title
+        self.current_intro_text = current_intro_text
 
     def run(self):
         try:
             gen = AIGenerator()
-            res = gen.generate_circuit_routine(
-                user_prompt=self.prompt,
-                lang_mode=self.lang_mode,
-                mode_type=self.mode_type,
-                document_text=self.doc_text,
-            )
+            if self.refine_mode:
+                res = gen.refine_edited_circuit_routine(
+                    edited_moves_text=self.edited_moves_text,
+                    current_intro_text=self.current_intro_text,
+                    user_prompt=self.prompt,
+                    lang_mode=self.lang_mode,
+                    current_theme_title=self.current_theme_title,
+                    mode_type=self.mode_type,
+                )
+            else:
+                res = gen.generate_circuit_routine(
+                    user_prompt=self.prompt,
+                    lang_mode=self.lang_mode,
+                    mode_type=self.mode_type,
+                    document_text=self.doc_text,
+                )
             self.finished_ok.emit(res)
         except Exception as e:
             self.failed.emit(str(e))
@@ -810,25 +851,29 @@ class SparringDialog(QDialog):
         l_ct.addLayout(h_theme_edit)
 
         h_intro_edit = QHBoxLayout()
-        h_intro_edit.addWidget(QLabel("📢 사전 설명 방송:"))
-        self.txt_circuit_intro = QLineEdit()
-        self.txt_circuit_intro.setPlaceholderText("훈련 시작 전 사범님이 설명하는 안내 멘트 (AI 자동 생성 또는 직접 수정 가능)")
+        lbl_intro_title = QLabel("📢 사전 설명 방송\n(자유 수정):")
+        lbl_intro_title.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        h_intro_edit.addWidget(lbl_intro_title)
+        self.txt_circuit_intro = CompatibleTextEdit()
+        self.txt_circuit_intro.setFixedHeight(58)
+        self.txt_circuit_intro.setPlaceholderText("훈련 시작 전 사범님이 설명하는 안내 멘트 (즉석 템플릿 생성 시 자동 작성되며 자유롭게 수정 가능)")
+        self.txt_circuit_intro.setStyleSheet("font-size: 13px; padding: 4px 6px;")
         h_intro_edit.addWidget(self.txt_circuit_intro, stretch=1)
         l_ct.addLayout(h_intro_edit)
         l_circuit.addWidget(g_c_theme)
 
         # 2. 연령/수준별 맞춤 구령 언어 선택 (도장 현장 실전 용어 기반)
-        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어 (도장 현장 실전 용어)")
+        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어 (쉬운 현장 생활/코칭 영어)")
         l_cl = QVBoxLayout(g_c_lang)
         self.combo_circuit_lang = NoScrollComboBox()
-        self.combo_circuit_lang.addItem("🇰🇷 [도장 한국어 전용] 표준 동작 설명 및 힘찬 기합 구령", "kr")
-        self.combo_circuit_lang.addItem("🌱 [도장 현장 영어: 액션 콜] 한국어 동작 + 본토 실전 지시어 (Three times! Double kicks! Go!)", "mix_kids")
-        self.combo_circuit_lang.addItem("⚡ [도장 대련 영어: 전술 콤보] 본토 대련 테크닉 구령 (Lead cut, back kick, non-stop!)", "dual_step")
-        self.combo_circuit_lang.addItem("🇺🇸 [본토 도장 풀 잉글리시] Full English Dojo Drill (원어민 코치 실전 진행)", "en_advanced")
+        self.combo_circuit_lang.addItem("🇰🇷 [한국어 전용] 표준 동작 설명 및 힘찬 기합 구령", "kr")
+        self.combo_circuit_lang.addItem("🌱 [현장 생활 영어: 액션 콜] 한국어 동작 + 쉽고 신나는 현장 영어 (Two pushups! Five fast kicks! Let's go!)", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ [현장 대화형 코칭 영어] 한국어 동작 + 자연스러운 코칭 연결어 (Down for two pushups, up fast!)", "dual_step")
+        self.combo_circuit_lang.addItem("🇺🇸 [원어민 코치 풀 잉글리시] Full English Coaching (자연스러운 대화형 영어 진행)", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
         l_cl.addWidget(self.combo_circuit_lang)
 
-        lbl_lang_guide = QLabel("💡 <b>현장 영어 지도 팁</b>: 횟수/동작/방향(One time!, Two pushups!, Step back!)을 짧고 명확한 본토 실전 용어로 자주 들려주어 수련생들이 자연스럽게 체득합니다.")
+        lbl_lang_guide = QLabel("💡 <b>현장 영어 지도 팁</b>: 교과서적인 어려운 단어가 아니라, 실제 운동하며 자주 쓰는 쉽고 자연스러운 대화형 영어(Two pushups! Jump high! Let's go!)로 자동 매칭됩니다.")
         lbl_lang_guide.setStyleSheet("color: #0284c7; font-size: 11px;")
         l_cl.addWidget(lbl_lang_guide)
         l_circuit.addWidget(g_c_lang)
@@ -904,69 +949,108 @@ class SparringDialog(QDialog):
         l_ctime.addLayout(h_c_preset)
         l_circuit.addWidget(g_c_time)
 
-        # 4. 세부 훈련 동작 구성 및 사범 지도 팁
-        g_c_moves = QGroupBox("4. 세트별 복합 콤보 루틴 구성 및 사범 지도 팁 (AI 원클릭 자동완성 / 직접 편집)")
+        # 4. 요구사항 입력 ➔ 즉석 템플릿 제공 ➔ 한글 자유 수정 후 다시 생성 / 음원 생성
+        g_c_moves = QGroupBox("4. 즉석 맞춤 템플릿 생성 및 대본 편집 (한글로 수정하면 영어는 AI가 자동 완성)")
         l_cm = QVBoxLayout(g_c_moves)
+        l_cm.setSpacing(8)
 
-        # 🤖 초간편 AI 한 줄 지시 / 계획표 파일 ➔ 서킷 설명·대본 원클릭 자동 완성 바
-        h_ai_bar = QHBoxLayout()
-        lbl_ai = QLabel("🤖 AI 자동완성:")
-        lbl_ai.setStyleSheet("font-weight: bold; color: #6d28d9;")
-        h_ai_bar.addWidget(lbl_ai)
+        # (A) 상단 버튼 바: 요구사항 타이틀 + 파일/링크/통합설정/즉석 템플릿 생성 버튼
+        h_ai_header = QHBoxLayout()
+        lbl_ai = QLabel("📝 [1단계] 할 운동 요구사항 입력 (또는 링크·파일 불러오기):")
+        lbl_ai.setStyleSheet("font-weight: bold; color: #5b21b6; font-size: 13px;")
+        h_ai_header.addWidget(lbl_ai)
+        h_ai_header.addStretch()
 
-        self.txt_ai_circuit_prompt = QLineEdit()
-        self.txt_ai_circuit_prompt.setPlaceholderText("할 운동만 편하게 적으세요! 예: 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야 (Enter 즉시 생성)")
-        self.txt_ai_circuit_prompt.setStyleSheet(
-            "border: 2px solid #8b5cf6; border-radius: 5px; padding: 5px 8px; background-color: #faf5ff; font-weight: bold;"
+        self.btn_open_ai_settings = QPushButton("⚙️ 통합 설정 (API키/공통자료)")
+        self.btn_open_ai_settings.setToolTip("API 키와 공통으로 사용할 구글 드라이브 링크·수련계획표 파일을 설정합니다.")
+        self.btn_open_ai_settings.setStyleSheet(
+            "background-color: #475569; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
-        self.txt_ai_circuit_prompt.returnPressed.connect(self._on_ai_generate_circuit)
-        h_ai_bar.addWidget(self.txt_ai_circuit_prompt, stretch=1)
+        self.btn_open_ai_settings.clicked.connect(self._on_open_ai_settings_dialog)
+        h_ai_header.addWidget(self.btn_open_ai_settings)
 
-        self.btn_ai_circuit_file = QPushButton("📂 계획표 파일")
-        self.btn_ai_circuit_file.setToolTip("수련계획표 문서(.txt, .docx, .md, .csv)를 불러와 서킷 설명과 대본을 자동 작성합니다.")
+        self.btn_ai_circuit_link = QPushButton("🔗 구글드라이브 링크")
+        self.btn_ai_circuit_link.setToolTip("구글 드라이브·문서(Docs)·시트(Sheets) 공유 링크에서 수련 내용을 바로 불러옵니다.")
+        self.btn_ai_circuit_link.setStyleSheet(
+            "background-color: #0d9488; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_ai_circuit_link.clicked.connect(self._on_ai_load_gdrive_link)
+        h_ai_header.addWidget(self.btn_ai_circuit_link)
+
+        self.btn_ai_circuit_file = QPushButton("📂 파일 불러오기")
+        self.btn_ai_circuit_file.setToolTip("내 컴퓨터의 수련계획표 문서(.txt, .docx, .md, .csv)를 불러와 즉석 템플릿을 만듭니다.")
         self.btn_ai_circuit_file.setStyleSheet(
             "background-color: #0284c7; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
         self.btn_ai_circuit_file.clicked.connect(self._on_ai_load_circuit_file)
-        h_ai_bar.addWidget(self.btn_ai_circuit_file)
+        h_ai_header.addWidget(self.btn_ai_circuit_file)
 
-        self.btn_ai_circuit_gen = QPushButton("✨ AI 설명·대본 자동완성")
-        self.btn_ai_circuit_gen.setToolTip("입력한 동작(또는 첨부 파일)을 바탕으로 사전 설명 방송과 한/영 콤보 대본, 지도 팁을 0.5초 만에 자동 완성합니다.")
+        self.btn_ai_circuit_gen = QPushButton("✨ 요구사항으로 즉석 템플릿 생성")
+        self.btn_ai_circuit_gen.setToolTip("아래 입력한 요구사항(또는 불러온 파일·링크)에 맞춰 사전 설명과 세트별 한/영 템플릿을 즉석에서 제공합니다.")
         self.btn_ai_circuit_gen.setStyleSheet(
-            "background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 12px; border-radius: 5px; font-size: 12px;"
+            "background-color: #7c3aed; color: white; font-weight: bold; padding: 6px 14px; border-radius: 5px; font-size: 13px;"
         )
         self.btn_ai_circuit_gen.clicked.connect(self._on_ai_generate_circuit)
-        h_ai_bar.addWidget(self.btn_ai_circuit_gen)
-        l_cm.addLayout(h_ai_bar)
+        h_ai_header.addWidget(self.btn_ai_circuit_gen)
+        l_cm.addLayout(h_ai_header)
 
-        # 진행 방식 선택 (종목 순환 vs 단일 종목 집중 반복) 및 콤보 랜덤 생성 버튼
+        # (B) 시원하고 넓은 요구사항 입력칸
+        self.txt_ai_circuit_prompt = CompatibleTextEdit()
+        self.txt_ai_circuit_prompt.setFixedHeight(68)
+        self.txt_ai_circuit_prompt.setPlaceholderText(
+            "💡 원하는 운동 구성을 편하게 타이핑하세요! (예: 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회를 할거야 / 또는 세트별로 할 운동 메모)\n"
+            "   입력 후 우측 위 [✨ 요구사항으로 즉석 템플릿 생성]을 누르면 아래 넓은 창에 맞춤 템플릿이 즉시 제공됩니다."
+        )
+        self.txt_ai_circuit_prompt.setStyleSheet(
+            "border: 2px solid #8b5cf6; border-radius: 6px; padding: 6px 8px; background-color: #faf5ff; font-size: 13px; font-weight: bold;"
+        )
+        l_cm.addWidget(self.txt_ai_circuit_prompt)
+
+        # (C) 2단계 템플릿 확인·수정 컨트롤 바 + [수정한 한글로 영어·설명 다시 생성하기] 버튼
         h_cm_mode = QHBoxLayout()
-        h_cm_mode.addWidget(QLabel("🎯 진행 방식:"))
-        self.rb_circuit_cycle = QRadioButton("🔄 세트마다 종목 순환 (1번➔2번➔3번 콤보 순환)")
-        self.rb_circuit_single = QRadioButton("🎯 단일 종목 집중 반복 (1세트 설명 후 2세트부터 설명 없이 3,2,1로 즉시 진행)")
+        lbl_step2 = QLabel("✏️ [2단계] 제공된 템플릿 확인 및 수정:")
+        lbl_step2.setStyleSheet("font-weight: bold; color: #0f766e; font-size: 13px;")
+        h_cm_mode.addWidget(lbl_step2)
+
+        self.rb_circuit_cycle = QRadioButton("🔄 세트마다 종목 순환")
+        self.rb_circuit_single = QRadioButton("🎯 단일 종목 집중 반복")
         self.rb_circuit_cycle.setChecked(True)
         h_cm_mode.addWidget(self.rb_circuit_cycle)
         h_cm_mode.addWidget(self.rb_circuit_single)
         h_cm_mode.addStretch()
 
-        self.btn_shuffle_circuit = QPushButton("🎲 기본 테마 무작위 추출")
-        self.btn_shuffle_circuit.setToolTip("현재 테마의 풍부한 동작 라이브러리에서 매일 다른 신선한 콤보 루틴을 무작위로 자동 조합합니다.")
+        self.btn_ai_refine_circuit = QPushButton("🔄 수정한 한글로 영어·설명 다시 생성하기")
+        self.btn_ai_refine_circuit.setToolTip(
+            "아래 템플릿 창에서 한국어 동작이나 횟수만 편하게 고친 뒤 이 버튼을 누르면,\n"
+            "수정한 한국어에 맞춰 쉽고 현장감 있는 영어 구령과 사전 설명, 지도 팁을 AI가 다시 짝맞춰 줍니다!"
+        )
+        self.btn_ai_refine_circuit.setStyleSheet(
+            "background-color: #059669; color: white; font-weight: bold; padding: 6px 14px; border-radius: 5px; font-size: 13px;"
+        )
+        self.btn_ai_refine_circuit.clicked.connect(self._on_ai_refine_circuit)
+        h_cm_mode.addWidget(self.btn_ai_refine_circuit)
+
+        self.btn_shuffle_circuit = QPushButton("🎲 기본 테마 무작위")
+        self.btn_shuffle_circuit.setToolTip("선택된 기본 테마에서 무작위로 4개 콤보를 추출합니다.")
         self.btn_shuffle_circuit.setStyleSheet(
-            "background-color: #4f46e5; color: white; font-weight: bold; padding: 4px 10px; border-radius: 4px; font-size: 12px;"
+            "background-color: #4f46e5; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
         self.btn_shuffle_circuit.clicked.connect(self._shuffle_circuit_moves)
         h_cm_mode.addWidget(self.btn_shuffle_circuit)
         l_cm.addLayout(h_cm_mode)
 
+        # (D) 넓고 시원한 즉석 템플릿(대본) 편집창
         self.txt_circuit_moves = QTextEdit()
-        self.txt_circuit_moves.setMaximumHeight(170)
+        self.txt_circuit_moves.setMinimumHeight(250)
+        self.txt_circuit_moves.setMaximumHeight(360)
+        self.txt_circuit_moves.setStyleSheet("font-size: 13px; padding: 8px; line-height: 1.4;")
         self.txt_circuit_moves.textChanged.connect(self._on_circuit_moves_text_changed)
         l_cm.addWidget(self.txt_circuit_moves)
 
         lbl_moves_hint = QLabel(
-            "💡 [초간편 사용 팁 & 음성 구분]\n"
-            "  • 🤖 [AI 자동완성]: 위 보라색 칸에 '팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회'처럼 적고 Enter만 치면 설명과 한/영 대본이 자동 완성됩니다!\n"
-            "  • 📢 [실제 음성 송출]: '1번 콤보:' 줄만 스피커로 힘차게 방송되며, '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 눈 참고용입니다."
+            "💡 [쉬운 3단계 사용법]\n"
+            "  ① 위 보라색 칸에 할 운동을 적고 [✨ 요구사항으로 즉석 템플릿 생성] 클릭 ➔ ② 아래 넓은 템플릿에서 한글 동작을 원하는 대로 수정 후 [🔄 수정한 한글로 영어·설명 다시 생성하기] 클릭 ➔ ③ 맨 아래 [🚀 맞춤 훈련 음원 생성하기] 클릭!\n"
+            "  • 📢 '1번 콤보:' 줄만 실제 스피커로 힘차게 방송되며, '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 눈 참고용입니다."
         )
         lbl_moves_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 6px; font-size: 11px; font-weight: bold;")
         l_cm.addWidget(lbl_moves_hint)
@@ -1750,6 +1834,49 @@ class SparringDialog(QDialog):
         self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
 
+    def _on_open_ai_settings_dialog(self):
+        """AI 키·구글 드라이브 링크·공통 수련계획표를 관리하는 통합 설정창 열기"""
+        dlg = GlobalAISettingsDialog(self)
+        if dlg.exec():
+            common = load_common_settings()
+            common_doc = common.get("common_doc_text", "").strip()
+            if common_doc and not getattr(self, '_ai_loaded_doc_text', ''):
+                self._ai_loaded_doc_text = common_doc
+            if hasattr(self, 'status_lbl'):
+                self.status_lbl.setText("✅ AI 키 및 공통 수련계획표 설정이 반영되었습니다.")
+
+    def _on_ai_load_gdrive_link(self):
+        """구글 드라이브 / 구글 문서 / 구글 시트 공유 링크를 입력받아 즉시 수련계획표 로드 및 템플릿 생성"""
+        common = load_common_settings()
+        default_url = common.get("gdrive_url", "")
+        url, ok = QInputDialog.getText(
+            self,
+            "🔗 구글 드라이브 / 문서 링크 불러오기",
+            "구글 문서(Docs), 스프레드시트(Sheets), 드라이브 파일 공유 링크를 붙여넣으세요:\n"
+            "(※ 링크가 있는 모든 사용자에게 '뷰어' 권한이 열려 있어야 합니다)",
+            QLineEdit.EchoMode.Normal,
+            default_url
+        )
+        if not ok or not url.strip():
+            return
+
+        if hasattr(self, 'status_lbl'):
+            self.status_lbl.setText("⏳ 구글 드라이브 링크에서 수련계획표 내용을 불러오는 중...")
+        QApplication.processEvents()
+
+        ok_fetch, result_text = fetch_text_from_url(url.strip())
+        if not ok_fetch:
+            QMessageBox.warning(self, "링크 불러오기 실패", result_text)
+            if hasattr(self, 'status_lbl'):
+                self.status_lbl.setText("⚠️ 구글 드라이브 링크 불러오기에 실패했습니다.")
+            return
+
+        self._ai_loaded_doc_text = result_text
+        if hasattr(self, 'txt_ai_circuit_prompt') and not self.txt_ai_circuit_prompt.text().strip():
+            self.txt_ai_circuit_prompt.setText("[구글 드라이브 링크] 수련계획표 기반 서킷 루틴")
+
+        self._on_ai_generate_circuit()
+
     def _on_ai_load_circuit_file(self):
         """수련계획표나 운동 메모 파일(.txt, .docx, .md, .csv)을 불러와 즉시 AI 서킷 대본으로 자동 생성"""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1774,17 +1901,20 @@ class SparringDialog(QDialog):
         self._on_ai_generate_circuit()
 
     def _on_ai_generate_circuit(self):
-        """한 줄 운동 지시어 또는 첨부된 계획표 파일을 기반으로 테마명·사전설명·콤보대본 원클릭 자동 완성"""
+        """요구사항 타이핑 또는 첨부된 계획표/링크를 기반으로 즉석 템플릿(사전설명+콤보대본) 생성"""
         user_prompt = self.txt_ai_circuit_prompt.text().strip() if hasattr(self, 'txt_ai_circuit_prompt') else ""
         doc_text = getattr(self, '_ai_loaded_doc_text', '')
+        if not doc_text:
+            common = load_common_settings()
+            doc_text = common.get("common_doc_text", "").strip()
 
         if not user_prompt and not doc_text:
             QMessageBox.information(
                 self,
-                "운동 지시어 입력 안내",
-                "원하는 서킷 동작을 한 줄로 편하게 입력하거나 [📂 계획표 파일]을 선택해 주세요.\n\n"
+                "운동 요구사항 입력 안내",
+                "원하는 서킷 운동 요구사항을 입력하거나 [🔗 구글드라이브 링크] / [📂 내 컴퓨터 파일]을 선택해 주세요.\n\n"
                 "💡 입력 예시:\n"
-                "• 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야\n"
+                "• 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야\n"
                 "• 스쿼트 점프 3회 후 나래차기와 전방회전낙법\n"
                 "• 초등부 순발력 강화 점프 발차기 서킷"
             )
@@ -1797,15 +1927,57 @@ class SparringDialog(QDialog):
 
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(False)
-            self.btn_ai_circuit_gen.setText("⏳ AI 대본 작성 중...")
+            self.btn_ai_circuit_gen.setText("⏳ 즉석 템플릿 생성 중...")
+        if hasattr(self, 'btn_ai_refine_circuit'):
+            self.btn_ai_refine_circuit.setEnabled(False)
         if hasattr(self, 'status_lbl'):
-            self.status_lbl.setText("🤖 AI가 사범님 맞춤 사전 설명과 세트별 한/영 서킷 대본을 자동 작성하고 있습니다...")
+            self.status_lbl.setText("🤖 요구사항에 맞는 즉석 템플릿(사전 설명 + 세트별 현장 영어/한글 대본)을 생성하고 있습니다...")
 
         self._ai_circuit_worker = AICircuitWorker(
             prompt=user_prompt,
             lang_mode=lang_mode,
             mode_type=mode_type,
             doc_text=doc_text,
+            refine_mode=False,
+            parent=self
+        )
+        self._ai_circuit_worker.finished_ok.connect(self._on_ai_circuit_finished)
+        self._ai_circuit_worker.failed.connect(self._on_ai_circuit_failed)
+        self._ai_circuit_worker.start()
+
+    def _on_ai_refine_circuit(self):
+        """사용자가 한국어로 수정한 템플릿 내용을 바탕으로 현장감 있는 쉬운 영어 구령과 사전 설명을 AI가 다시 맞춰줌"""
+        edited_moves = self.txt_circuit_moves.toPlainText().strip() if hasattr(self, 'txt_circuit_moves') else ""
+        if not edited_moves:
+            QMessageBox.information(
+                self,
+                "수정할 템플릿 없음",
+                "아래 템플릿 편집창에 동작이나 한글 설명을 먼저 입력하거나 수정해 주세요."
+            )
+            return
+
+        cur_theme_title = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
+        cur_intro_text = self.txt_circuit_intro.text().strip() if hasattr(self, 'txt_circuit_intro') else ""
+        user_prompt = self.txt_ai_circuit_prompt.text().strip() if hasattr(self, 'txt_ai_circuit_prompt') else ""
+        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+        mode_type = "single" if (hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked()) else "cycle"
+
+        if hasattr(self, 'btn_ai_refine_circuit'):
+            self.btn_ai_refine_circuit.setEnabled(False)
+            self.btn_ai_refine_circuit.setText("⏳ 한글 수정본 맞춰 영어·설명 재작성 중...")
+        if hasattr(self, 'btn_ai_circuit_gen'):
+            self.btn_ai_circuit_gen.setEnabled(False)
+        if hasattr(self, 'status_lbl'):
+            self.status_lbl.setText("🔄 수정하신 한국어 동작에 맞춰 쉽고 자연스러운 현장 영어 구령과 사전 설명을 다시 생성하고 있습니다...")
+
+        self._ai_circuit_worker = AICircuitWorker(
+            prompt=user_prompt,
+            lang_mode=lang_mode,
+            mode_type=mode_type,
+            refine_mode=True,
+            edited_moves_text=edited_moves,
+            current_theme_title=cur_theme_title,
+            current_intro_text=cur_intro_text,
             parent=self
         )
         self._ai_circuit_worker.finished_ok.connect(self._on_ai_circuit_finished)
@@ -1815,7 +1987,10 @@ class SparringDialog(QDialog):
     def _on_ai_circuit_finished(self, res: dict):
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(True)
-            self.btn_ai_circuit_gen.setText("✨ AI 설명·대본 자동완성")
+            self.btn_ai_circuit_gen.setText("✨ 요구사항으로 즉석 템플릿 생성")
+        if hasattr(self, 'btn_ai_refine_circuit'):
+            self.btn_ai_refine_circuit.setEnabled(True)
+            self.btn_ai_refine_circuit.setText("🔄 수정한 한글로 영어·설명 다시 생성하기")
 
         self._programmatic_circuit_text_update = True
         try:
@@ -1843,7 +2018,7 @@ class SparringDialog(QDialog):
 
             if hasattr(self, 'status_lbl'):
                 self.status_lbl.setText(
-                    "✨ AI가 사전 설명 방송과 세트별 한/영 서킷 대본을 자동 완성했습니다! 바로 아래 [🚀 맞춤 훈련 음원 생성하기]를 누르세요."
+                    "✨ 템플릿과 현장 영어 구령이 완성되었습니다! 내용을 확인·수정한 뒤 아래 [🚀 맞춤 훈련 음원 생성하기]를 누르세요."
                 )
         finally:
             self._programmatic_circuit_text_update = False
@@ -1851,7 +2026,10 @@ class SparringDialog(QDialog):
     def _on_ai_circuit_failed(self, err_msg: str):
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(True)
-            self.btn_ai_circuit_gen.setText("✨ AI 설명·대본 자동완성")
+            self.btn_ai_circuit_gen.setText("✨ 요구사항으로 즉석 템플릿 생성")
+        if hasattr(self, 'btn_ai_refine_circuit'):
+            self.btn_ai_refine_circuit.setEnabled(True)
+            self.btn_ai_refine_circuit.setText("🔄 수정한 한글로 영어·설명 다시 생성하기")
         if hasattr(self, 'status_lbl'):
             self.status_lbl.setText(f"⚠️ AI 대본 생성 오류: {err_msg}")
         QMessageBox.warning(self, "AI 자동완성 오류", f"AI 대본 생성 중 오류가 발생했습니다:\n{err_msg}")

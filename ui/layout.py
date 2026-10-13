@@ -14,7 +14,8 @@ from PyQt6.QtGui import QIcon
 
 # 코어 모듈 임포트
 from core.tts_engine import TTSEngine
-from core.ai_generator import AIGenerator, extract_text_from_file
+from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_from_url, load_common_settings
+from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.project_manager import ProjectManager
 from utils.model_installer import ModelInstallerThread
 from utils.hangul_composer import compose_hangul_jamo
@@ -26,10 +27,11 @@ class AIScriptWorker(QThread):
     finished_ok = pyqtSignal(str)
     failed = pyqtSignal(str)
 
-    def __init__(self, prompt: str, doc_text: str = "", parent=None):
+    def __init__(self, prompt: str, doc_text: str = "", existing_draft: str = "", parent=None):
         super().__init__(parent)
         self.prompt = prompt
         self.doc_text = doc_text
+        self.existing_draft = existing_draft
 
     def run(self):
         try:
@@ -38,6 +40,7 @@ class AIScriptWorker(QThread):
                 user_text=self.prompt,
                 difficulty_level="3단계",
                 document_text=self.doc_text,
+                existing_draft=self.existing_draft,
             )
             if script.startswith("오류:"):
                 self.failed.emit(script)
@@ -209,8 +212,12 @@ class MainWindow(QMainWindow):
             pass
             
     def init_ui(self):
-        # 상단 메뉴바 구성 (도움말 -> 업데이트 확인)
+        # 상단 메뉴바 구성 (설정 및 수련자료 / 도움말)
         menubar = self.menuBar()
+        settings_menu = menubar.addMenu("설정 및 수련자료(&S)")
+        act_ai_settings = settings_menu.addAction("⚙️ AI 키·구글링크·공통 수련자료 통합 설정")
+        act_ai_settings.triggered.connect(self.open_global_ai_settings)
+
         help_menu = menubar.addMenu("도움말(&H)")
         act_update = help_menu.addAction("🔄 최신 업데이트 확인")
         act_update.triggered.connect(self.manual_check_update)
@@ -224,7 +231,7 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         
-        # 최상단 헤더 바 (앱 타이틀 및 업데이트 확인 버튼)
+        # 최상단 헤더 바 (앱 타이틀, AI·수련자료 통합 설정, 업데이트 확인 버튼)
         top_bar = QHBoxLayout()
         from utils.auto_updater import AutoUpdater
         cur_v = AutoUpdater().current_version
@@ -232,6 +239,24 @@ class MainWindow(QMainWindow):
         title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #2563eb;")
         top_bar.addWidget(title_lbl)
         top_bar.addStretch()
+
+        self.btn_global_ai_settings = QPushButton("⚙️ AI·수련자료 통합 설정")
+        self.btn_global_ai_settings.setToolTip("Gemini API Key, 구글 드라이브 공유 링크, 수련계획표 파일, 공통 기본 정보를 한곳에서 설정합니다.")
+        self.btn_global_ai_settings.setStyleSheet("""
+            QPushButton {
+                background-color: #7c3aed;
+                color: white;
+                font-weight: bold;
+                padding: 4px 12px;
+                border-radius: 4px;
+                border: 1px solid #6d28d9;
+            }
+            QPushButton:hover {
+                background-color: #6d28d9;
+            }
+        """)
+        self.btn_global_ai_settings.clicked.connect(self.open_global_ai_settings)
+        top_bar.addWidget(self.btn_global_ai_settings)
         
         self.btn_check_update = QPushButton("🔄 최신 업데이트 확인")
         self.btn_check_update.setStyleSheet("""
@@ -447,66 +472,75 @@ class MainWindow(QMainWindow):
 
         guide_box = QTextEdit()
         guide_box.setReadOnly(True)
-        guide_box.setMaximumHeight(160)
+        guide_box.setMaximumHeight(105)
         guide_box.setStyleSheet(
             "background-color: #fef9e7; color: #784212; "
             "border: 1px solid #f0b429; border-radius: 5px; "
-            "padding: 8px; font-size: 13px;"
+            "padding: 6px; font-size: 12px;"
         )
         guide_box.setPlainText(
-            "💡 [Qwen3-TTS 0.6B 맞춤 AI 디렉팅 완벽 가이드]  (스크롤 가능)\n"
-            "=" * 55 + "\n\n"
-            "▶ [1] 에너지/청량조 조절\n"
-            "  !  (1개) : 평언   '준비!'   → 형승님조\n"
-            "  !! (2개) : 자신감  '시작!!'  → 활기찬 30\n"
-            "  !!! (3개): 외침   '하앗!!!' → 고강도 외침\n"
-            "  ?  : 끝 올림. '준비 됐는거야?' → 다정하게 잘 됨\n"
-            "  ?! : 놀람+경고 혼합. '에?! 개하의?!' → 경트 소리\n\n"
-            "▶ [2] 템포 & 휴지 (가장 중요!)\n"
-            "  , (쉼표)  : 약 0.2~0.3초 숨고르기.\n"
-            "    0.6B는 쉼표 없으면 문장을 너무 빠르게 읽습니다. 반드시 넣으세요!\n"
-            "    예) '모아, 뛰어!!' 처럼 동작 사이에 넣기\n"
-            "  ... (말줄임표): 약 0.6초 깊은 휴지. 미스터리 효과\n"
-            "  \\n (줄바꿈/엔터): 약 0.25초 쉬어갑니다. 동작 교체 시 유용\n"
-            "  [딜레이 3초]: 정확히 3초 무음. 음악 비트에 맞출 때 핵심!\n"
-            "    예) '준비, [딜레이 2초] 시작!!'\n\n"
-            "▶ [3] 한/영 혼용 및 본토 발음 팁\n"
-            "  ✅ '현수' 화자: 태그 없이도 영어를 유창한 원어민 발음으로 읽어줍니다!\n"
-            "  ✅ '선히'/'인준' 화자: 영어 문장을 $...$ 로 감싸면(예: $Let's go!$) 100% 미국 원어민으로 자동 전환!\n\n"
-            "▶ [4] 주의사항\n"
-            "  ⚠️ 한 문장이 너무 길면 호흡이 부자연스러울 수 있으니 쉼표(,)를 적극 활용하세요.\n"
-            "  ✅ 숫자는 한글로: 1, 2 → '하나, 둘' / 10 → '열'"
+            "💡 [즉석 템플릿 생성 ➔ 한글 수정 ➔ 다시 생성 ➔ 오디오 생성 가이드] (스크롤 가능)\n"
+            "• 1단계: 아래 요구사항 입력칸에 원하는 운동을 적거나 [🔗 구글링크] / [📂 파일]로 불러와 [✨ 즉석 대본 생성]을 누르세요.\n"
+            "• 2단계: 아래 대본 편집창에서 한국어 동작이나 횟수를 편하게 수정한 뒤 [🔄 수정한 한글로 다시 생성]을 누르면 현장 영어 구령이 자동 완성됩니다!\n"
+            "• 팁: 쉼표(,)는 0.25초 호흡, [딜레이 2초]는 2초 무음, $Let's go!$는 미국 원어민 음성으로 자동 전환됩니다."
         )
         local_layout.addWidget(guide_box)
 
-        # 🤖 초간편 AI 수업 대본 자동 작성 바 (한 줄 입력 또는 파일 불러오기)
-        h_ai_script = QHBoxLayout()
-        self.txt_ai_script_prompt = QLineEdit()
-        self.txt_ai_script_prompt.setPlaceholderText("🤖 AI 대본 자동작성: 할 운동 입력 (예: 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회) [Enter 즉시 생성]")
-        self.txt_ai_script_prompt.setStyleSheet("border: 2px solid #8b5cf6; border-radius: 5px; padding: 5px 8px; font-weight: bold;")
-        self.txt_ai_script_prompt.returnPressed.connect(self._on_ai_generate_script)
-        h_ai_script.addWidget(self.txt_ai_script_prompt, stretch=1)
+        # 🤖 초간편 AI 수업 대본 즉석 템플릿 & 한글 수정 재작성 박스 (넓은 입력창)
+        ai_box_layout = QVBoxLayout()
+        ai_box_layout.setSpacing(4)
 
-        self.btn_ai_script_file = QPushButton("📂 파일 불러오기")
-        self.btn_ai_script_file.setToolTip("수련계획표나 메모 파일(.txt, .docx, .md, .csv)을 불러와 TTS 수업 대본을 자동 작성합니다.")
-        self.btn_ai_script_file.setStyleSheet("background-color: #0284c7; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px;")
+        self.txt_ai_script_prompt = QTextEdit()
+        self.txt_ai_script_prompt.setPlaceholderText(
+            "🤖 요구사항 입력 (넓은 입력창): 예) 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야. 쉽고 자연스러운 현장 영어 구령 넣어줘."
+        )
+        self.txt_ai_script_prompt.setMinimumHeight(56)
+        self.txt_ai_script_prompt.setMaximumHeight(72)
+        self.txt_ai_script_prompt.setStyleSheet(
+            "border: 2px solid #8b5cf6; border-radius: 6px; padding: 6px 8px; font-size: 13px; font-weight: bold;"
+        )
+        ai_box_layout.addWidget(self.txt_ai_script_prompt)
+
+        h_ai_script = QHBoxLayout()
+        self.btn_ai_script_link = QPushButton("🔗 구글링크")
+        self.btn_ai_script_link.setToolTip("구글 드라이브 / 문서 / 시트 공유 링크에서 수련계획표를 불러와 대본을 생성합니다.")
+        self.btn_ai_script_link.setStyleSheet("background-color: #2563eb; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
+        self.btn_ai_script_link.clicked.connect(self._on_ai_load_script_gdrive)
+        h_ai_script.addWidget(self.btn_ai_script_link)
+
+        self.btn_ai_script_file = QPushButton("📂 파일")
+        self.btn_ai_script_file.setToolTip("내 컴퓨터의 수련계획표(.txt, .docx, .md, .csv)를 불러와 TTS 수업 대본을 자동 작성합니다.")
+        self.btn_ai_script_file.setStyleSheet("background-color: #0284c7; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_file.clicked.connect(self._on_ai_load_script_file)
         h_ai_script.addWidget(self.btn_ai_script_file)
 
-        self.btn_ai_script_gen = QPushButton("✨ AI 대본 생성")
-        self.btn_ai_script_gen.setToolTip("입력한 운동이나 파일 내용을 바탕으로 [딜레이]와 한/영 구령이 포함된 TTS 대본을 0.5초 만에 자동 생성합니다.")
-        self.btn_ai_script_gen.setStyleSheet("background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 12px; border-radius: 5px;")
+        self.btn_ai_script_gen = QPushButton("✨ 즉석 대본 생성")
+        self.btn_ai_script_gen.setToolTip("입력한 요구사항이나 계획표를 바탕으로 즉석 수업 대본 템플릿을 자동 생성합니다.")
+        self.btn_ai_script_gen.setStyleSheet("background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_gen.clicked.connect(self._on_ai_generate_script)
         h_ai_script.addWidget(self.btn_ai_script_gen)
-        local_layout.addLayout(h_ai_script)
+
+        self.btn_ai_script_refine = QPushButton("🔄 수정한 한글로 다시 생성")
+        self.btn_ai_script_refine.setToolTip("아래 대본 편집창에서 한국어만 편하게 수정한 뒤 누르면, 수정한 한글에 맞춰 현장 영어 구령과 설명을 다시 맞춰줍니다!")
+        self.btn_ai_script_refine.setStyleSheet("background-color: #059669; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;")
+        self.btn_ai_script_refine.clicked.connect(self._on_ai_refine_script)
+        h_ai_script.addWidget(self.btn_ai_script_refine)
+
+        ai_box_layout.addLayout(h_ai_script)
+        local_layout.addLayout(ai_box_layout)
 
         self.local_input_text = CustomTextEdit(layout_ref=self, is_api=False)
-        self.local_input_text.setPlaceholderText("로컬 텍스트 입력 (예: 다 같이 앞차기 준비, 하앗!) [Enter: 재생 / Shift+Enter: 줄바꿈]")
+        self.local_input_text.setMinimumHeight(210)
+        self.local_input_text.setPlaceholderText(
+            "✏️ 제공된 대본 템플릿 확인 및 자유 수정 (넓은 편집창)\n"
+            "• 한국어로 동작이나 횟수를 수정한 뒤 위 [🔄 수정한 한글로 다시 생성]을 누르면 영어 구령이 자동으로 맞춰집니다!\n"
+            "• 수정 완료 후 아래 [⚙️ 로컬 렌더링 및 재생] 또는 [⬇️ 오디오 파일로 저장]을 누르세요."
+        )
         font_local = self.local_input_text.font()
         font_local.setFamily("Apple SD Gothic Neo")
         font_local.setPointSize(14)
         self.local_input_text.setFont(font_local)
-        local_layout.addWidget(self.local_input_text)
+        local_layout.addWidget(self.local_input_text, stretch=1)
 
         h_local_action = QHBoxLayout()
         self.local_stream_btn = QPushButton("⚙️ 로컬 렌더링 및 재생 (Enter)")
@@ -1240,6 +1274,41 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "성공", f"{title} 목소리가 등록되었습니다!\nQwen3 엔진이 이 파일의 특징을 캐싱(추출)하여 복제합니다.")
             self.refresh_voice_status()
 
+    def open_global_ai_settings(self):
+        """상단 메뉴 및 버튼에서 AI 키·구글 드라이브 링크·공통 수련계획표 통합 설정창 열기"""
+        dlg = GlobalAISettingsDialog(self)
+        if dlg.exec():
+            common = load_common_settings()
+            common_doc = common.get("common_doc_text", "").strip()
+            if common_doc and not getattr(self, '_ai_main_doc_text', ''):
+                self._ai_main_doc_text = common_doc
+
+    def _on_ai_load_script_gdrive(self):
+        """구글 드라이브 / 구글 문서 / 시트 공유 링크에서 수련계획표를 불러와 즉시 TTS 대본 생성"""
+        common = load_common_settings()
+        default_url = common.get("gdrive_url", "")
+        url, ok = QInputDialog.getText(
+            self,
+            "🔗 구글 드라이브 / 문서 공유 링크 불러오기",
+            "구글 문서(Docs), 스프레드시트(Sheets), 드라이브 파일 공유 링크를 붙여넣으세요:\n"
+            "(※ 링크가 있는 모든 사용자에게 '뷰어' 권한이 열려 있어야 합니다)",
+            QLineEdit.EchoMode.Normal,
+            default_url
+        )
+        if not ok or not url.strip():
+            return
+
+        ok_fetch, result_text = fetch_text_from_url(url.strip())
+        if not ok_fetch:
+            QMessageBox.warning(self, "링크 불러오기 실패", result_text)
+            return
+
+        self._ai_main_doc_text = result_text
+        if hasattr(self, 'txt_ai_script_prompt') and not self.txt_ai_script_prompt.toPlainText().strip():
+            self.txt_ai_script_prompt.setPlainText("[구글 드라이브 링크] 수련계획표 기반 수업 대본")
+
+        self._on_ai_generate_script()
+
     def _on_ai_load_script_file(self):
         """수련계획표나 운동 메모 파일을 불러와 즉시 TTS 대본으로 자동 생성"""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -1258,23 +1327,26 @@ class MainWindow(QMainWindow):
 
         self._ai_main_doc_text = doc_text
         base_name = os.path.basename(file_path)
-        if hasattr(self, 'txt_ai_script_prompt') and not self.txt_ai_script_prompt.text().strip():
-            self.txt_ai_script_prompt.setText(f"[{base_name}] 파일 기반 수업 대본")
+        if hasattr(self, 'txt_ai_script_prompt') and not self.txt_ai_script_prompt.toPlainText().strip():
+            self.txt_ai_script_prompt.setPlainText(f"[{base_name}] 파일 기반 수업 대본")
 
         self._on_ai_generate_script()
 
     def _on_ai_generate_script(self):
-        user_prompt = self.txt_ai_script_prompt.text().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
+        user_prompt = self.txt_ai_script_prompt.toPlainText().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
         doc_text = getattr(self, '_ai_main_doc_text', '')
+        if not doc_text:
+            common = load_common_settings()
+            doc_text = common.get("common_doc_text", "").strip()
 
         if not user_prompt and not doc_text:
             QMessageBox.information(
                 self,
-                "운동 지시어 입력 안내",
-                "원하는 수업 내용이나 동작을 한 줄로 입력하거나 [📂 파일 불러오기]를 선택해 주세요.\n\n"
+                "운동 요구사항 입력 안내",
+                "원하는 수업 내용이나 운동 요구사항을 입력하거나 [🔗 구글링크] / [📂 파일]을 선택해 주세요.\n\n"
                 "💡 입력 예시:\n"
-                "• 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 수업 대본\n"
-                "• 초등부 앞차기, 돌려차기 10회씩 한영 구령 포함"
+                "• 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 수업 대본\n"
+                "• 초등부 앞차기, 돌려차기 10회씩 쉬운 현장 영어 구령 포함"
             )
             if hasattr(self, 'txt_ai_script_prompt'):
                 self.txt_ai_script_prompt.setFocus()
@@ -1283,8 +1355,40 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(False)
             self.btn_ai_script_gen.setText("⏳ 생성 중...")
+        if hasattr(self, 'btn_ai_script_refine'):
+            self.btn_ai_script_refine.setEnabled(False)
 
         self._ai_script_worker = AIScriptWorker(prompt=user_prompt, doc_text=doc_text, parent=self)
+        self._ai_script_worker.finished_ok.connect(self._on_ai_script_finished)
+        self._ai_script_worker.failed.connect(self._on_ai_script_failed)
+        self._ai_script_worker.start()
+
+    def _on_ai_refine_script(self):
+        """사용자가 한국어로 수정한 대본 내용을 바탕으로 현장 영어 구령과 설명을 다시 맞춰줌"""
+        existing_draft = self.local_input_text.toPlainText().strip() if hasattr(self, 'local_input_text') else ""
+        if not existing_draft:
+            QMessageBox.information(
+                self,
+                "수정할 대본 없음",
+                "아래 대본 편집창에 먼저 대본을 입력하거나 생성한 뒤 한글 내용을 수정해 주세요."
+            )
+            return
+
+        user_prompt = self.txt_ai_script_prompt.toPlainText().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
+        doc_text = getattr(self, '_ai_main_doc_text', '')
+
+        if hasattr(self, 'btn_ai_script_refine'):
+            self.btn_ai_script_refine.setEnabled(False)
+            self.btn_ai_script_refine.setText("⏳ 다시 생성 중...")
+        if hasattr(self, 'btn_ai_script_gen'):
+            self.btn_ai_script_gen.setEnabled(False)
+
+        self._ai_script_worker = AIScriptWorker(
+            prompt=user_prompt,
+            doc_text=doc_text,
+            existing_draft=existing_draft,
+            parent=self
+        )
         self._ai_script_worker.finished_ok.connect(self._on_ai_script_finished)
         self._ai_script_worker.failed.connect(self._on_ai_script_failed)
         self._ai_script_worker.start()
@@ -1292,14 +1396,20 @@ class MainWindow(QMainWindow):
     def _on_ai_script_finished(self, script_text: str):
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(True)
-            self.btn_ai_script_gen.setText("✨ AI 대본 생성")
+            self.btn_ai_script_gen.setText("✨ 즉석 대본 생성")
+        if hasattr(self, 'btn_ai_script_refine'):
+            self.btn_ai_script_refine.setEnabled(True)
+            self.btn_ai_script_refine.setText("🔄 수정한 한글로 다시 생성")
         if hasattr(self, 'local_input_text'):
             self.local_input_text.setPlainText(script_text.strip())
 
     def _on_ai_script_failed(self, err_msg: str):
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(True)
-            self.btn_ai_script_gen.setText("✨ AI 대본 생성")
+            self.btn_ai_script_gen.setText("✨ 즉석 대본 생성")
+        if hasattr(self, 'btn_ai_script_refine'):
+            self.btn_ai_script_refine.setEnabled(True)
+            self.btn_ai_script_refine.setText("🔄 수정한 한글로 다시 생성")
         QMessageBox.warning(self, "AI 대본 생성 오류", f"대본 생성 중 오류가 발생했습니다:\n{err_msg}")
 
     def manual_check_update(self):
