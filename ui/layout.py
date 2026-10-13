@@ -18,7 +18,7 @@ from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_fr
 from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.project_manager import ProjectManager
 from utils.model_installer import ModelInstallerThread
-from utils.hangul_composer import compose_hangul_jamo
+from utils.hangul_composer import compose_hangul_jamo, bind_hangul_composer
 import pygame
 from PyQt6.QtCore import QThread, pyqtSignal
 
