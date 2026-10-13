@@ -146,7 +146,7 @@ def main():
     app = QApplication(sys.argv)
     app.aboutToQuit.connect(cleanup_lock)
     
-    # 앱 전체 아이콘 설정 (은색 사자 엠블럼)
+    # 앱 전체 아이콘 설정 (사자 엠블럼) 및 macOS 데스크톱 .app 번들 아이콘 자동 복구
     for icon_path in [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png"),
         os.path.join(getattr(sys, '_MEIPASS', ''), "assets", "icon.png") if hasattr(sys, '_MEIPASS') else "",
@@ -156,6 +156,30 @@ def main():
         if icon_path and os.path.exists(icon_path):
             app.setWindowIcon(QIcon(icon_path))
             break
+
+    if sys.platform == "darwin":
+        def _ensure_mac_bundle_icon():
+            try:
+                import subprocess
+                icns_candidates = [
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.icns"),
+                    os.path.join(getattr(sys, '_MEIPASS', ''), "assets", "icon.icns") if hasattr(sys, '_MEIPASS') else "",
+                ]
+                icns_path = next((p for p in icns_candidates if p and os.path.exists(p)), "")
+                desktop_app = os.path.expanduser("~/Desktop/AIMaster_TTS_Mac.app")
+                if icns_path and os.path.exists(desktop_app):
+                    icon_r = os.path.join(desktop_app, "Icon\r")
+                    if not os.path.exists(icon_r) or os.path.getsize(icon_r) == 0:
+                        subprocess.run([
+                            "swift", "-e",
+                            f'import AppKit; if let img = NSImage(contentsOfFile: "{icns_path}") {{ '
+                            f'NSWorkspace.shared.setIcon(img, forFile: "{desktop_app}", options: []); '
+                            f'NSWorkspace.shared.noteFileSystemChanged("{desktop_app}") }}'
+                        ], check=False)
+            except Exception:
+                pass
+        import threading
+        threading.Thread(target=_ensure_mac_bundle_icon, daemon=True).start()
     
     # 중복 실행 방지: 이미 실행 중인 경우 알림 후 종료
     if not ensure_single_instance():
