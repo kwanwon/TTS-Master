@@ -19,6 +19,7 @@ from PyQt6.QtGui import QFont
 
 from core.shuttle_run_engine import ShuttleRunEngine
 from utils.effects_generator import ensure_default_effects
+import utils.edge_tts_patch  # Microsoft Edge-TTS 2026 엔드포인트 패치
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 

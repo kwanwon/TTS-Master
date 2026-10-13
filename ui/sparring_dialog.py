@@ -28,6 +28,7 @@ from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_fr
 from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.effects_generator import ensure_default_effects
 from utils.hangul_composer import bind_hangul_composer, compose_hangul_jamo
+import utils.edge_tts_patch  # Microsoft Edge-TTS 2026 엔드포인트 패치
 from pydub import AudioSegment
 from pydub.effects import normalize
 

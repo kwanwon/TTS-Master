@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 
 import edge_tts
+import utils.edge_tts_patch  # Microsoft Edge-TTS 2026 엔드포인트 패치
 from pydub import AudioSegment
 from pydub.effects import normalize
 

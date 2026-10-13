@@ -876,6 +876,43 @@ class MainWindow(QMainWindow):
             self.auto_save_state()
             self.refresh_voice_status()
         
+    def _sync_api_voice_from_main(self, voice_text: str):
+        if not hasattr(self, 'api_voice_combo') or not voice_text:
+            return
+        vt = voice_text.lower()
+        target_keyword = None
+        for kw in ["인준", "선히", "현수"]:
+            if kw in vt:
+                target_keyword = kw
+                break
+        if target_keyword:
+            self.api_voice_combo.blockSignals(True)
+            for idx in range(self.api_voice_combo.count()):
+                txt = self.api_voice_combo.itemText(idx)
+                if target_keyword in txt:
+                    self.api_voice_combo.setCurrentIndex(idx)
+                    break
+            self.api_voice_combo.blockSignals(False)
+
+    def _sync_main_voice_from_api(self, index: int):
+        if not hasattr(self, 'voice_combo') or index < 0:
+            return
+        txt = self.api_voice_combo.currentText()
+        target_keyword = None
+        for kw in ["인준", "선히", "현수"]:
+            if kw in txt:
+                target_keyword = kw
+                break
+        if target_keyword:
+            self.voice_combo.blockSignals(True)
+            for idx in range(self.voice_combo.count()):
+                vt = self.voice_combo.itemText(idx)
+                if target_keyword in vt:
+                    self.voice_combo.setCurrentIndex(idx)
+                    self.update_voice_desc(vt)
+                    break
+            self.voice_combo.blockSignals(False)
+
     def connect_signals(self):
         self.engine_combo.currentTextChanged.connect(self.on_engine_changed)
         self.speed_slider.valueChanged.connect(self.on_speed_changed)
@@ -889,6 +926,8 @@ class MainWindow(QMainWindow):
         
         self.engine_combo.currentTextChanged.connect(lambda _: self.auto_save_state())
         self.voice_combo.currentTextChanged.connect(self.update_voice_desc)
+        self.voice_combo.currentTextChanged.connect(self._sync_api_voice_from_main)
+        self.api_voice_combo.currentIndexChanged.connect(self._sync_main_voice_from_api)
         self.voice_combo.currentTextChanged.connect(lambda _: self.auto_save_state())
         self.speed_slider.valueChanged.connect(lambda _: self.auto_save_state())
 
@@ -1117,9 +1156,17 @@ class MainWindow(QMainWindow):
             # [무료 모드] Edge-TTS 화자인 경우 API 키 없이 즉시 무료 말하기
             if "[무료]" in current_api_text or "Edge-TTS" in current_api_text:
                 self.tts_engine.switch_engine("Edge-TTS (초고음질 온라인)")
-                self.tts_engine.set_voice(current_api_text)
+                # 상단 voice_combo와 일치하는 키워드 우선 적용하여 화자 불일치 원천 차단
+                target_v = current_api_text
+                main_v = self.voice_combo.currentText()
+                for kw in ["인준", "현수", "선히"]:
+                    if kw in main_v:
+                        target_v = kw
+                        break
+                self.tts_engine.set_voice(target_v)
                 self.tts_engine.use_api = False
-                self.dl_status.setText("⚡ [무료] 실시간 음성 생성 중...")
+                voice_label = "인준" if "인준" in target_v else ("현수" if "현수" in target_v else "선히")
+                self.dl_status.setText(f"⚡ [Edge-TTS] 실시간 음성 생성 중... (화자: {voice_label})")
             else:
                 # [유료 모드] 알리바바 DashScope API
                 if not self.api_key:

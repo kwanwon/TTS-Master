@@ -6,6 +6,7 @@ import tempfile
 import traceback
 import re
 from pydub import AudioSegment
+import utils.edge_tts_patch  # Microsoft Edge-TTS 2026 엔드포인트 및 날짜 파싱 전역 패치
 
 class CoquiEngine:
     def __init__(self):
@@ -352,21 +353,11 @@ class EdgeTTSEngine:
                 # 발음 가능한 글자가 전혀 없으면 API 호출 생략
                 if not re.search(r'[A-Za-z0-9\uAC00-\uD7A3]', chunk_text):
                     return AudioSegment.silent(duration=100)
-                try:
-                    communicate = edge_tts.Communicate(chunk_text, voice, rate=rate_str)
-                    mp3_fp = io.BytesIO()
-                    async for c in communicate.stream():
-                        if c['type'] == 'audio':
-                            mp3_fp.write(c['data'])
-                    if mp3_fp.tell() == 0:
-                        raise ValueError("No audio bytes received")
-                    mp3_fp.seek(0)
-                    return AudioSegment.from_file(mp3_fp, format="mp3")
-                except Exception as inner_e:
-                    print(f"[Edge-TTS] 화자 '{voice}' 실패 ({inner_e}) -> 기본 화자(선히)로 안전 재시도")
+                
+                # 1. 대상 화자로 최대 4회 재시도 (429 Rate Limit 및 일시적 연결 지연 자동 극복)
+                for attempt in range(4):
                     try:
-                        fallback_voice = "ko-KR-SunHiNeural"
-                        communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
+                        communicate = edge_tts.Communicate(chunk_text, voice, rate=rate_str)
                         mp3_fp = io.BytesIO()
                         async for c in communicate.stream():
                             if c['type'] == 'audio':
@@ -374,9 +365,31 @@ class EdgeTTSEngine:
                         if mp3_fp.tell() > 0:
                             mp3_fp.seek(0)
                             return AudioSegment.from_file(mp3_fp, format="mp3")
-                    except Exception as fallback_e:
-                        print(f"[Edge-TTS] 기본 화자 재시도도 실패 ({fallback_e}) -> 무음 대체로 파이프라인 보호")
-                    return AudioSegment.silent(duration=100)
+                    except Exception as inner_e:
+                        print(f"[Edge-TTS] 화자 '{voice}' 시도 {attempt+1}/4 실패 ({inner_e})")
+                        if attempt < 3:
+                            await asyncio.sleep(0.5 * (attempt + 1))
+
+                # 2. 기본 화자(선히)로 안전 폴백 (선히 자체가 아닐 때만)
+                if voice != "ko-KR-SunHiNeural":
+                    print(f"[Edge-TTS] 화자 '{voice}' 최종 실패 -> 기본 화자(선히)로 안전 재시도")
+                    for attempt in range(2):
+                        try:
+                            fallback_voice = "ko-KR-SunHiNeural"
+                            communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
+                            mp3_fp = io.BytesIO()
+                            async for c in communicate.stream():
+                                if c['type'] == 'audio':
+                                    mp3_fp.write(c['data'])
+                            if mp3_fp.tell() > 0:
+                                mp3_fp.seek(0)
+                                return AudioSegment.from_file(mp3_fp, format="mp3")
+                        except Exception as fallback_e:
+                            print(f"[Edge-TTS] 기본 화자 시도 {attempt+1}/2 실패 ({fallback_e})")
+                            if attempt < 1:
+                                await asyncio.sleep(0.4)
+
+                return AudioSegment.silent(duration=100)
 
             for chunk in chunks:
                 if not chunk.strip():
