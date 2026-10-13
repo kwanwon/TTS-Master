@@ -1100,10 +1100,25 @@ class SparringTrainingEngine:
             if not cues_list:
                 cues_list = ["백스텝 후 받아차기 교차 상단"]
 
-            fighter_names = ["A선수", "B선수", "C선수", "D선수"]
+            if fighters_count == 2:
+                fighter_names = ["플레이어", "보조자"]
+                change_msg = "역할 교대!"
+                chg_label = "역할 교대"
+            elif fighters_count == 3:
+                fighter_names = ["플레이어", "1번 보조자", "2번 보조자"]
+                change_msg = "보조자 교대!"
+                chg_label = "보조자 교대"
+            elif fighters_count == 4:
+                fighter_names = ["플레이어", "1번 보조자", "2번 보조자", "3번 보조자"]
+                change_msg = "보조자 교대!"
+                chg_label = "보조자 교대"
+            else:
+                fighter_names = ["플레이어"] + [f"{i}번 보조자" for i in range(1, fighters_count)]
+                change_msg = "보조자 교대!"
+                chg_label = "보조자 교대"
 
             for c in range(1, cycles + 1):
-                # 세트별 훈련 종목 결정: 동일 세트 내에서는 A, B, C 모든 선수가 같은 발차기 훈련!
+                # 세트별 훈련 종목 결정: 동일 세트 내에서는 플레이어 및 보조자가 순환하며 같은 발차기 훈련!
                 # 등록된 기술이 여러 개일 경우 세트가 바뀔 때마다 순차적으로 다음 기술로 전환
                 current_cue = cues_list[(c - 1) % len(cues_list)]
 
@@ -1122,9 +1137,9 @@ class SparringTrainingEngine:
                 curr_time += set_dur + 0.8  # 세트 안내 후 0.8초 호흡 정렬
 
                 for f in range(1, fighters_count + 1):
-                    fighter_name = fighter_names[f - 1] if f <= len(fighter_names) else f"{f}번째 선수"
+                    fighter_name = fighter_names[f - 1] if f <= len(fighter_names) else f"{f}번 보조자"
 
-                    # 2. 선수 준비 멘트 (예: "A선수 준비!", "B선수 준비!")
+                    # 2. 플레이어 / 보조자 준비 멘트 (예: "플레이어 준비!", "1번 보조자 준비!", "보조자 준비!")
                     call_text = f"{fighter_name} 준비!"
                     call_dur = max(1.5, round(len(call_text) * 0.22, 2))
                     events.append({
@@ -1138,8 +1153,8 @@ class SparringTrainingEngine:
                     duck_segments.append((int(curr_time * 1000), int((curr_time + call_dur) * 1000)))
                     curr_time += call_dur + 0.4
 
-                    # ⭐ [사용자 승인] 1세트 첫 번째 선수(c == 1, f == 1) 준비 멘트 직후에 카운트다운 배치!
-                    # 순서: [사전 안내] ➔ [1세트 설명: 앞차기! A선수 준비!] ➔ [카운트다운: 셋, 둘, 하나] ➔ [삑~익!]
+                    # ⭐ [사용자 승인] 1세트 첫 번째 참가자(c == 1, f == 1) 준비 멘트 직후에 카운트다운 배치!
+                    # 순서: [사전 안내] ➔ [1세트 설명: 앞차기! 플레이어 준비!] ➔ [카운트다운: 셋, 둘, 하나] ➔ [삑~익!]
                     if c == 1 and f == 1 and countdown_enabled:
                         cd_text = "[카운트다운] Three, Two, One"
                         if cd_style == "ko_321":
@@ -1165,7 +1180,7 @@ class SparringTrainingEngine:
                         duck_segments.append((int(curr_time * 1000), int((curr_time + cd_dur) * 1000)))
                         curr_time += cd_dur + 0.6
                     else:
-                        curr_time += 0.5  # 카운트다운 없는 경우(교대 선수 또는 2세트 이후) 0.5초 호흡 긴장 딜레이
+                        curr_time += 0.5  # 카운트다운 없는 경우(교대 참가자 또는 2세트 이후) 0.5초 호흡 긴장 딜레이
 
                     # 3. 타격 시작 신호음 (삑~익!)
                     events.append({
@@ -1209,19 +1224,18 @@ class SparringTrainingEngine:
                     )
                     curr_time += delta + 0.4  # 종료 신호 후 0.4초 호흡 대기
 
-                    # 6. 선수 교대 안내
+                    # 6. 보조자 / 역할 교대 안내
                     is_last_fighter_in_set = (f == fighters_count)
                     is_last_overall = (c == cycles and is_last_fighter_in_set)
 
                     if not is_last_overall:
                         if not is_last_fighter_in_set:
-                            # 세트 내 다음 선수로 교대
-                            change_msg = "선수 교대!"
+                            # 세트 내 다음 참가자로 교대
                             chg_dur = 1.3
                             events.append({
                                 "time": curr_time,
                                 "type": "voice",
-                                "text": f"[선수 교대] {change_msg}",
+                                "text": f"[{chg_label}] {change_msg}",
                                 "duration": chg_dur,
                                 "track": 2,
                                 "vol": 2.5
@@ -1229,7 +1243,7 @@ class SparringTrainingEngine:
                             duck_segments.append((int(curr_time * 1000), int((curr_time + chg_dur) * 1000)))
                             curr_time += chg_dur + change_sec
                         else:
-                            # 세트의 마지막 선수 완료 후 다음 세트로 넘어가는 휴식/교대 대기
+                            # 세트의 마지막 참가자 완료 후 다음 세트로 넘어가는 휴식/교대 대기
                             curr_time += change_sec
 
             # 7. 모든 세트 종료 시 정중하고 자연스러운 마무리 멘트
@@ -1633,8 +1647,8 @@ class SparringTrainingEngine:
                 if r < total_rounds:
                     # 휴식 멘트
                     if round_type == "attack_defense" and atk_def_mode == "alternate":
-                        next_atk = "B선수" if (r % 2 == 1) else "A선수"
-                        next_def = "A선수" if (r % 2 == 1) else "B선수"
+                        next_atk = "보조자" if (r % 2 == 1) else "플레이어"
+                        next_def = "플레이어" if (r % 2 == 1) else "보조자"
                         rest_msg = f"휴식 {int(rest_sec)}초입니다. 다음 라운드는 {next_atk} 공격, {next_def} 방어 차례입니다! 호흡 정돈하세요."
                     elif round_type == "shadow":
                         rest_msg = f"휴식 {int(rest_sec)}초입니다. 호흡을 가다듬고 다리 가볍게 털어주세요."

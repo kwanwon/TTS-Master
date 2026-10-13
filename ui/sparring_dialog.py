@@ -88,12 +88,16 @@ class AICircuitWorker(QThread):
         self.current_theme_title = current_theme_title
         self.current_intro_text = current_intro_text
         self.tab_mode = tab_mode
-        self.current_fields = current_fields or {
-            "moves_text": edited_moves_text,
-            "intro_text": current_intro_text,
-            "theme_title": current_theme_title,
-            "mode_type": mode_type,
-        }
+        self.current_fields = dict(current_fields) if current_fields else {}
+        if edited_moves_text and "moves_text" not in self.current_fields:
+            self.current_fields["moves_text"] = edited_moves_text
+            self.current_fields["formatted_moves"] = edited_moves_text
+        if current_intro_text and "intro_text" not in self.current_fields:
+            self.current_fields["intro_text"] = current_intro_text
+        if current_theme_title and "theme_title" not in self.current_fields:
+            self.current_fields["theme_title"] = current_theme_title
+        if "mode_type" not in self.current_fields:
+            self.current_fields["mode_type"] = mode_type
 
     def run(self):
         try:
@@ -864,12 +868,17 @@ class SparringDialog(QDialog):
         h_ai_row1.addWidget(lbl_lang)
 
         self.combo_circuit_lang = NoScrollComboBox()
-        self.combo_circuit_lang.addItem("🌱 [현장 액션 영어 추천] 한국어 동작 + 쉬운 현장 영어 (Two pushups! Five fast kicks! Let's go!)", "mix_kids")
-        self.combo_circuit_lang.addItem("⚡ [현장 대화형 코칭 영어] 한국어 동작 + 자연스러운 코칭 영어 (Down for two pushups, up fast!)", "dual_step")
-        self.combo_circuit_lang.addItem("🇰🇷 [한국어 전용] 표준 동작 설명 및 힘찬 기합 구령", "kr")
-        self.combo_circuit_lang.addItem("🇺🇸 [원어민 코치 풀 잉글리시] Full English Coaching (대화형 영어 진행)", "en_advanced")
+        self.combo_circuit_lang.addItem("🌱 [직관 액션 구령 (유소년·초보 추천)] 횟수·동작을 짧고 명쾌하게 지시 (Two pushups! Five fast kicks! Go!)", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ [자세·흐름 코칭 (중·상급 추천)] 동작 간 호흡·자세 연결 대화형 코칭 (Down for two pushups, explode up fast!)", "dual_step")
+        self.combo_circuit_lang.addItem("🇰🇷 [한국어 전용] 명확한 한국어 기술 명칭 + 절도 있는 사범님 기합 구령", "kr")
+        self.combo_circuit_lang.addItem("🇺🇸 [원어민 코치 풀 잉글리시] Full English Coaching (시작 안내부터 전 과정 영어)", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
         h_ai_row1.addWidget(self.combo_circuit_lang, stretch=1)
+
+        self.lbl_lang_mode_desc = QLabel(
+            "💡 [직관 액션 구령]: 횟수와 동작을 짧고 명확하게 외쳐 수련생이 직관적으로 바로 반응하도록 지도합니다. (유치부·초등부 추천)"
+        )
+        self.lbl_lang_mode_desc.setStyleSheet("color: #6b21a8; font-size: 11px; font-weight: bold; padding: 2px 4px;")
 
         self.btn_open_ai_settings = QPushButton("⚙️ 통합 설정 (API키/공통자료)")
         self.btn_open_ai_settings.setToolTip("Gemini API 키와 공통으로 사용할 구글 드라이브 링크·수련계획표를 설정합니다.")
@@ -895,6 +904,7 @@ class SparringDialog(QDialog):
         self.btn_ai_circuit_file.clicked.connect(self._on_ai_load_circuit_file)
         h_ai_row1.addWidget(self.btn_ai_circuit_file)
         l_ai_top.addLayout(h_ai_row1)
+        l_ai_top.addWidget(self.lbl_lang_mode_desc)
 
         # Row 2: 넓은 요구사항 입력칸 + [✨ 요구사항으로 즉석 템플릿 생성] + [🔄 수정한 한글로 다시 생성]
         h_ai_row2 = QHBoxLayout()
@@ -967,7 +977,21 @@ class SparringDialog(QDialog):
         self.txt_circuit_theme_title = QLineEdit("실전 대련과 낙법 협응 콤보")
         self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭 자유 수정")
         h_theme_top.addWidget(self.txt_circuit_theme_title, stretch=1)
+
+        self.btn_apply_theme_title = QPushButton("👉 테마 명칭 반영")
+        self.btn_apply_theme_title.setToolTip("수정한 테마 명칭을 아래 사전 설명 방송과 대본에 즉시 연결하여 반영합니다.")
+        self.btn_apply_theme_title.setStyleSheet(
+            "background-color: #0f766e; color: white; font-weight: bold; padding: 4px 10px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_apply_theme_title.clicked.connect(self._on_apply_circuit_theme_title)
+        h_theme_top.addWidget(self.btn_apply_theme_title)
         l_cm.addLayout(h_theme_top)
+
+        self.lbl_circuit_theme_desc = QLabel(
+            "🥋 [실전 대련과 낙법 협응]: 점프 발차기 후 신속한 전방낙법으로 연결하여 위기 대처 능력과 신체 협응력을 기르는 실전 훈련 루프"
+        )
+        self.lbl_circuit_theme_desc.setStyleSheet("color: #4338ca; font-size: 11px; font-weight: bold; padding: 1px 4px;")
+        l_cm.addWidget(self.lbl_circuit_theme_desc)
 
         # 사전 설명 방송 (넓은 멀티라인)
         h_intro_edit = QHBoxLayout()
@@ -1102,9 +1126,9 @@ class SparringDialog(QDialog):
         h_rt_tmpl = QHBoxLayout()
         h_rt_tmpl.addWidget(QLabel("📋 기본 릴레이 템플릿:"))
         self.combo_relay_template = NoScrollComboBox()
-        self.combo_relay_template.addItem("🥋 [실전 3인 방족술/미트] 1번: 잡고 몸통 밀기 / 2번: 암미트 전진 몸통 / 3번: 손미트 상단 끊어차기", "tmpl_bangjok")
-        self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 1] A선수: 백스텝 받아차기 교차 상단 / B선수: 전진 몸통 후 사이드 왼발 상단", "tmpl_combo1")
-        self.combo_relay_template.addItem("🎯 [카운터 & 반격 콤보] 1번: 앞발 컷트 후 뒷발 상단 / 2번: 사이드 스텝 뒤차기 카운터", "tmpl_counter")
+        self.combo_relay_template.addItem("🥋 [실전 3인 방족술/미트] 플레이어: 잡고 몸통 밀기 / 1번 보조자: 암미트 전진 몸통 / 2번 보조자: 손미트 상단 끊어차기", "tmpl_bangjok")
+        self.combo_relay_template.addItem("⚡ [실전 콤보 1] 플레이어: 백스텝 받아차기 교차 상단 / 보조자: 전진 몸통 후 사이드 왼발 상단", "tmpl_combo1")
+        self.combo_relay_template.addItem("🎯 [카운터 & 반격 콤보] 플레이어: 앞발 컷트 후 뒷발 상단 / 보조자: 사이드 스텝 뒤차기 카운터", "tmpl_counter")
         self.combo_relay_template.addItem("🛡️ [단일 기술 집중] 백스텝 후 받아차기 교차 상단", "tmpl_single")
         self.combo_relay_template.addItem("🔥 [연타 콤보] 1연타, 2연타, 3연타, 나래차기 연타", "tmpl_speed")
         self.combo_relay_template.currentIndexChanged.connect(self._on_relay_template_changed)
@@ -1112,18 +1136,18 @@ class SparringDialog(QDialog):
         h_rt_tmpl.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
         l_rscript.addLayout(h_rt_tmpl)
 
-        l_rscript.addWidget(QLabel("📢 훈련 종합 설명 & 받기자 미트 착용 행동요령 (시작 전 사전 안내 음성 - 자유 수정):"))
+        l_rscript.addWidget(QLabel("📢 훈련 종합 설명 & 보조자 미트 착용 행동요령 (시작 전 사전 안내 음성 - 자유 수정):"))
         self.txt_relay_intro = CompatibleTextEdit()
         self.txt_relay_intro.setFixedHeight(78)
-        self.txt_relay_intro.setPlaceholderText("시작 전 선수와 받기자들에게 송출할 종합 훈련 안내 및 미트 착용 요령을 입력하세요")
-        self.txt_relay_intro.setPlainText("1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 2번 받기자 암미트 착용, 3번 조금씩 거리 좁히며 빠른발 상단 끊어차기!, 3번 받기자 손미트 착용, 빠르게 준비해 주세요. 플레이어는 패턴을 숙지해 주세요.")
+        self.txt_relay_intro.setPlaceholderText("시작 전 플레이어와 보조자들에게 송출할 종합 훈련 안내 및 미트 착용 요령을 입력하세요")
+        self.txt_relay_intro.setPlainText("1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 1번 보조자 암미트 착용, 2번 보조자 손미트 착용 후 조금씩 거리 좁히며 빠른발 상단 끊어차기! 보조자들은 빠르게 준비해 주시고 플레이어는 기술 패턴을 숙지해 주세요.")
         l_rscript.addWidget(self.txt_relay_intro)
 
-        l_rscript.addWidget(QLabel("🥊 실제 진행 시 선수별 지시 기술 대본 (줄바꿈으로 1번·2번·3번 선수 개별 기술 구분 - 넓은 편집창):"))
+        l_rscript.addWidget(QLabel("🥊 실제 진행 시 플레이어 및 보조자별 지시 기술 대본 (줄바꿈으로 플레이어/보조자별 순환 기술 구분 - 넓은 편집창):"))
         self.txt_relay_cue = CompatibleTextEdit()
         self.txt_relay_cue.setMinimumHeight(130)
         self.txt_relay_cue.setMaximumHeight(200)
-        self.txt_relay_cue.setPlaceholderText("각 줄마다 선수가 타격할 기술명을 입력하세요.\n예:\n한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
+        self.txt_relay_cue.setPlaceholderText("각 줄마다 플레이어 및 보조자가 타격할 기술명을 입력하세요.\n예:\n한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
         self.txt_relay_cue.setPlainText("한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
         l_rscript.addWidget(self.txt_relay_cue)
 
@@ -1133,12 +1157,12 @@ class SparringDialog(QDialog):
         l_relay.addWidget(g_relay_script)
 
         # [탭1 - 2번] 인원 및 시간 설정
-        g_relay_t = QGroupBox("2. 선수 인원 구성 및 타격·교대 시간 설정")
+        g_relay_t = QGroupBox("2. 훈련 참여자 인원 구성 및 타격·교대 시간 설정")
         l_rt = QVBoxLayout(g_relay_t)
         hl_rf = QHBoxLayout()
-        self.rb_relay_11 = QRadioButton("1 : 1 교대 (A선수 ↔ B선수)")
-        self.rb_relay_12 = QRadioButton("1 : 2 교대 (3인 1조 로테이션)")
-        self.rb_relay_13 = QRadioButton("1 : 3 교대 (4인 1조 로테이션)")
+        self.rb_relay_11 = QRadioButton("1 : 1 훈련 (플레이어 ↔ 보조자)")
+        self.rb_relay_12 = QRadioButton("1 : 2 훈련 (플레이어 1명 & 보조자 1번·2번)")
+        self.rb_relay_13 = QRadioButton("1 : 3 훈련 (플레이어 1명 & 보조자 1번·2번·3번)")
         self.rb_relay_11.setChecked(True)
         hl_rf.addWidget(self.rb_relay_11)
         hl_rf.addWidget(self.rb_relay_12)
@@ -1463,7 +1487,7 @@ class SparringDialog(QDialog):
         self.combo_rnd_type.addItem("🥊 실전 스파링 (자유 대련 - 경기 룰 및 종료 구령)", "real")
         self.combo_rnd_type.addItem("🏃 섀도우 스파링 (가상 상대 이미지 트레이닝 & 전신 풋워크)", "shadow")
         self.combo_rnd_type.addItem("🤝 약속 스파링 (사전 합의된 공격/방어 기술 집중 훈련)", "promise")
-        self.combo_rnd_type.addItem("⚔️ A선수 공격 / B선수 방어 (공수 분리 역할 훈련)", "attack_defense")
+        self.combo_rnd_type.addItem("⚔️ 플레이어 공격 / 보조자 방어 (공수 분리 역할 훈련)", "attack_defense")
         h_rtype_sel.addWidget(self.combo_rnd_type, stretch=1)
         h_rtype_sel.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
         l_rtype.addLayout(h_rtype_sel)
@@ -1492,16 +1516,16 @@ class SparringDialog(QDialog):
         h_atk_mode = QHBoxLayout()
         h_atk_mode.addWidget(QLabel("🔄 공수 진행 방식:"))
         self.combo_atk_def_mode = NoScrollComboBox()
-        self.combo_atk_def_mode.addItem("🔁 라운드별 공수 자동 교대 (1R: A공격/B방어, 2R: B공격/A방어...)", "alternate")
-        self.combo_atk_def_mode.addItem("🅰️ A선수 공격 / B선수 방어 (전 라운드 고정)", "a_attack_only")
-        self.combo_atk_def_mode.addItem("🅱️ B선수 공격 / A선수 방어 (전 라운드 고정)", "b_attack_only")
+        self.combo_atk_def_mode.addItem("🔁 라운드별 공수 자동 교대 (1R: 플레이어공격/보조자방어, 2R: 보조자공격/플레이어방어...)", "alternate")
+        self.combo_atk_def_mode.addItem("🥋 플레이어 공격 / 보조자 방어 (전 라운드 고정)", "a_attack_only")
+        self.combo_atk_def_mode.addItem("🛡️ 보조자 공격 / 플레이어 방어 (전 라운드 고정)", "b_attack_only")
         h_atk_mode.addWidget(self.combo_atk_def_mode, stretch=1)
         l_atk_def.addLayout(h_atk_mode)
         l_rtype.addWidget(self.widget_atk_def_opt)
 
         l_rtype.addWidget(QLabel("📢 스파링 사전 설명 및 안전 주의사항 방송 대본 (넓은 편집창 - 자유 수정):"))
         self.txt_atk_def_caution = CompatibleTextEdit(
-            "스파링 시 안전에 유의하세요. 방어 선수는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격 선수는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!"
+            "스파링 시 안전에 유의하세요. 방어자는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격자는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!"
         )
         self.txt_atk_def_caution.setFixedHeight(85)
         self.txt_atk_def_caution.setPlaceholderText("스파링 시작 전 송출될 전술 설명 및 안전 주의사항을 자유롭게 입력하세요")
@@ -1780,6 +1804,17 @@ class SparringDialog(QDialog):
 
     def _on_circuit_theme_changed(self, idx):
         selected_theme = self.combo_circuit_theme.currentData()
+        theme_desc_map = {
+            "power_agility": "🥋 [실전 대련과 낙법 협응]: 점프 발차기 후 신속한 전방낙법으로 연결하여 위기 대처 능력과 신체 협응력을 기르는 실전 훈련 루프",
+            "agility_power_combo": "⚡ [순발력과 민첩성 폭발]: 버피와 점프턴, 빠른 나래차기로 심폐 한계를 극복하고 폭발적인 반응을 끌어올리는 루틴",
+            "footwork_reaction_combo": "🏃‍♂️ [스파링 풋워크와 카운터]: 전후좌우 스텝으로 거리를 조율하고 상대 공격 시 신속한 컷트와 뒤차기로 반격하는 전술 루틴",
+            "strength_endurance_combo": "💪 [근지구력과 전신 파워]: 푸시업과 복근, 지치지 않는 연속 발차기를 결합한 전신 체력 강화 루틴",
+            "taekwondo_sparring_tactics": "🔥 [겨루기 실전 전술 콤보]: 나래차기 연타 후 회전 뒤후리기와 돌개차기로 이어지는 대회 실전 연속기 훈련",
+            "custom": "✏️ [사범님 맞춤 테마]: 원하는 테마 명칭과 운동 루틴을 직접 입력하거나 수정 후 [👉 테마 명칭 반영] 또는 [✨ 즉석 템플릿 생성]을 누르세요."
+        }
+        if hasattr(self, 'lbl_circuit_theme_desc'):
+            self.lbl_circuit_theme_desc.setText(theme_desc_map.get(selected_theme, ""))
+
         if selected_theme == "custom":
             if hasattr(self, 'txt_circuit_theme_title'):
                 cur_title = self.txt_circuit_theme_title.text().strip()
@@ -1802,7 +1837,32 @@ class SparringDialog(QDialog):
         self._ai_generated_active = False
         self._update_circuit_moves_text()
 
+    def _on_apply_circuit_theme_title(self):
+        """사범님이 수정한 테마 명칭을 사전 설명 방송 및 상태창에 즉시 연결하여 반영"""
+        title = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
+        if not title:
+            title = "실전 맞춤형 서킷 인터벌 콤보"
+            if hasattr(self, 'txt_circuit_theme_title'):
+                self.txt_circuit_theme_title.setText(title)
+
+        if hasattr(self, 'txt_circuit_intro'):
+            new_intro = f"지금부터 {title} 인터벌 훈련을 시작합니다! 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+            self.txt_circuit_intro.setPlainText(new_intro)
+
+        if hasattr(self, 'status_lbl'):
+            self.status_lbl.setText(f"✅ '{title}' 테마 명칭이 사전 설명 방송에 즉시 반영되었습니다. 이제 [🔄 수정한 한글로 영어·설명 다시 생성하기]를 누르면 일치된 영어가 생성됩니다.")
+
     def _on_circuit_lang_changed(self, idx):
+        cur_lang = self.combo_circuit_lang.currentData() if hasattr(self, 'combo_circuit_lang') else "mix_kids"
+        if hasattr(self, 'lbl_lang_mode_desc'):
+            desc_map = {
+                "mix_kids": "💡 [직관 액션 구령 (유소년·초보 추천)]: 횟수·동작을 짧고 명쾌하게 끊어 외쳐 수련생이 직관적으로 바로 반응합니다. (예: Two pushups! Five fast kicks! Go!)",
+                "dual_step": "⚡ [자세·흐름 코칭 (중·상급 추천)]: 단순 횟수 외침을 넘어 호흡과 자세 전환을 코칭하는 대화형 현장 영어입니다. (예: Down for two pushups, explode up fast!)",
+                "kr": "🇰🇷 [한국어 전용]: 또렷한 한국어 동작 설명 및 절도 있는 사범님 기합 구령으로만 진행합니다.",
+                "en_advanced": "🇺🇸 [원어민 코치 풀 잉글리시]: 시작 사전 안내부터 훈련 전 과정이 100% 원어민 코치 영어로 진행됩니다."
+            }
+            self.lbl_lang_mode_desc.setText(desc_map.get(cur_lang, ""))
+
         # 만약 방금 AI로 자동 생성한 상태라면, 변경된 언어 모드로 즉시 AI 재변환
         if getattr(self, '_ai_generated_active', False) and (
             (hasattr(self, 'txt_ai_circuit_prompt') and self.txt_ai_circuit_prompt.text().strip())
@@ -1896,30 +1956,48 @@ class SparringDialog(QDialog):
 
     def _collect_active_tab_fields(self, tab_mode: str) -> dict:
         if tab_mode == "circuit":
+            moves = self.txt_circuit_moves.toPlainText().strip() if hasattr(self, 'txt_circuit_moves') else ""
+            intro = self.txt_circuit_intro.toPlainText().strip() if hasattr(self, 'txt_circuit_intro') else ""
+            theme = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
             return {
-                "theme_title": self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else "",
-                "intro_text": self.txt_circuit_intro.text().strip() if hasattr(self, 'txt_circuit_intro') else "",
-                "formatted_moves": self.txt_circuit_moves.toPlainText().strip() if hasattr(self, 'txt_circuit_moves') else "",
+                "theme_title": theme,
+                "intro_text": intro,
+                "formatted_moves": moves,
+                "moves_text": moves,
+                "mode_type": "single" if (hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked()) else "cycle"
             }
         elif tab_mode == "relay":
+            intro = self.txt_relay_intro.toPlainText().strip() if hasattr(self, 'txt_relay_intro') else ""
+            cue = self.txt_relay_cue.toPlainText().strip() if hasattr(self, 'txt_relay_cue') else ""
             return {
-                "intro_text": self.txt_relay_intro.toPlainText().strip() if hasattr(self, 'txt_relay_intro') else "",
-                "cue_text": self.txt_relay_cue.toPlainText().strip() if hasattr(self, 'txt_relay_cue') else "",
+                "intro_text": intro,
+                "relay_intro": intro,
+                "cue_text": cue,
+                "relay_cues": cue,
             }
         elif tab_mode == "reaction":
+            cues = self.txt_reac_cues.text().strip() if hasattr(self, 'txt_reac_cues') else ""
             return {
-                "cues": self.txt_reac_cues.text().strip() if hasattr(self, 'txt_reac_cues') else "",
+                "cues": cues,
+                "reac_cues": cues,
             }
         elif tab_mode == "combo":
+            steps = self.txt_combo_steps.text().strip() if hasattr(self, 'txt_combo_steps') else ""
+            kicks = self.txt_combo_kicks.text().strip() if hasattr(self, 'txt_combo_kicks') else ""
             return {
-                "step_types": self.txt_combo_steps.text().strip() if hasattr(self, 'txt_combo_steps') else "",
-                "kick_types": self.txt_combo_kicks.text().strip() if hasattr(self, 'txt_combo_kicks') else "",
+                "step_types": steps,
+                "combo_steps": steps,
+                "kick_types": kicks,
+                "combo_kicks": kicks,
             }
         elif tab_mode == "round":
+            rnd_type = self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real"
+            promise = self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else ""
+            caution = self.txt_atk_def_caution.text().strip() if hasattr(self, 'txt_atk_def_caution') else ""
             return {
-                "round_type": self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real",
-                "promise_detail": self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else "",
-                "caution_text": self.txt_atk_def_caution.text().strip() if hasattr(self, 'txt_atk_def_caution') else "",
+                "round_type": rnd_type,
+                "promise_detail": promise,
+                "caution_text": caution,
             }
         return {}
 
@@ -2053,21 +2131,21 @@ class SparringDialog(QDialog):
                 self._ai_generated_active = True
 
             elif tab_mode == "relay":
-                intro_text = res.get("intro_text", "").strip()
-                cue_text = res.get("cue_text", "").strip()
+                intro_text = (res.get("intro_text") or res.get("relay_intro") or "").strip()
+                cue_text = (res.get("cue_text") or res.get("relay_cues") or "").strip()
                 if intro_text and hasattr(self, 'txt_relay_intro'):
                     self.txt_relay_intro.setPlainText(intro_text)
                 if cue_text and hasattr(self, 'txt_relay_cue'):
                     self.txt_relay_cue.setPlainText(cue_text)
 
             elif tab_mode == "reaction":
-                cues = res.get("cues", "").strip()
+                cues = (res.get("cues") or res.get("reac_cues") or "").strip()
                 if cues and hasattr(self, 'txt_reac_cues'):
                     self.txt_reac_cues.setText(cues)
 
             elif tab_mode == "combo":
-                step_types = res.get("step_types", "").strip()
-                kick_types = res.get("kick_types", "").strip()
+                step_types = (res.get("step_types") or res.get("combo_steps") or "").strip()
+                kick_types = (res.get("kick_types") or res.get("combo_kicks") or "").strip()
                 if step_types and hasattr(self, 'txt_combo_steps'):
                     self.txt_combo_steps.setText(step_types)
                 if kick_types and hasattr(self, 'txt_combo_kicks'):
@@ -2219,7 +2297,7 @@ class SparringDialog(QDialog):
         tmpl_key = self.combo_relay_template.currentData()
         templates = {
             "tmpl_bangjok": (
-                "1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 2번 받기자 암미트 착용, 3번 조금씩 거리 좁히며 빠른발 상단 끊어차기!, 3번 받기자 손미트 착용, 빠르게 준비해 주세요. 플레이어는 패턴을 숙지해 주세요.",
+                "1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 1번 보조자 암미트 착용, 2번 보조자 손미트 착용 후 조금씩 거리 좁히며 빠른발 상단 끊어차기! 보조자들은 빠르게 준비해 주시고 플레이어는 기술 패턴을 숙지해 주세요.",
                 "한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기"
             ),
             "tmpl_combo1": (
@@ -2274,20 +2352,20 @@ class SparringDialog(QDialog):
         elif rnd_type == "promise":
             self.lbl_rnd_type_desc.setText(
                 "💡 사전에 합의된 공격/방어 기술을 집중 훈련합니다. "
-                "약속 기술을 입력하시면 사전 안내 방송에 함께 호명되어 선수들의 집중도를 극대화합니다."
+                "약속 기술을 입력하시면 사전 안내 방송에 함께 호명되어 수련생들의 집중도를 극대화합니다."
             )
             self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(False)
         elif rnd_type == "attack_defense":
             self.lbl_rnd_type_desc.setText(
-                "💡 한 선수는 공격, 한 선수는 방어만 수행하는 공수 특화 훈련입니다. "
-                "라운드별로 공수를 자동 교대하거나 특정 선수의 역할을 고정하여 진행할 수 있습니다."
+                "💡 플레이어는 공격, 보조자는 방어(또는 교대)를 수행하는 공수 특화 훈련입니다. "
+                "라운드별로 역할을 자동 교대하거나 특정 역할을 고정하여 진행할 수 있습니다."
             )
             self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(True)
         else:  # real
             self.lbl_rnd_type_desc.setText(
-                "💡 실전 경기와 동일한 환경으로 양 선수가 마주보고 자유 대련을 펼칩니다. "
+                "💡 실전 경기와 동일한 환경으로 양 참가자가 마주보고 자유 대련을 펼칩니다. "
                 "경기 시작 휘슬, 10초 전 '공격!' 구령, 종료 시 '갈려!' 및 최종 경기 종료 멘트가 지원됩니다."
             )
             self.widget_promise_opt.setVisible(True)

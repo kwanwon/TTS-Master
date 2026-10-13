@@ -452,7 +452,8 @@ class AIGenerator:
 
 [핵심 규칙 - 절대 준수!]
 1. 사범님이 수정한 각 세트의 한국어 동작과 횟수를 임의로 다른 운동으로 바꾸지 마세요! 사범님이 적은 한국어 동작을 그대로 살리면서 자연스럽게 다듬고, 뒷부분의 영어 구령(`- 영어 구령!`)과 아래 줄의 `➔ [지도 팁]`을 그 한국어 동작에 1:1로 정확히 일치시켜 다시 작성하세요.
-2. 만약 사범님이 영어 없이 한국어만 적어 놓았더라도(예: "1번 콤보: 무릎점프 3회 후 빠른발차기 5회"), 선택된 언어 모드에 맞춰 자연스러운 현장 영어 구령과 지도 팁을 완벽하게 붙여주세요.
+2. [절대 콤보 삭제 금지 - 총 4개 콤보 필수 유지!]:
+   사범님이 제공한 콤보가 4개 미만이거나 1개만 있더라도, 절대로 콤보 개수를 1개로 줄이지 말고, 반드시 총 4개의 콤보(1번 콤보, 2번 콤보, 3번 콤보, 4번 콤보)를 모두 포함하여 combos 배열에 4개 아이템을 반환하세요! (사범님이 수정한 콤보는 그대로 살리고, 나머지 번호는 기존 루틴을 유지하거나 연관된 기능성/발차기 운동으로 알차게 채우세요).
 3. '도장'과 '기립' 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서', '빠르게 일어나' 사용).
 4. {english_guide}
 
@@ -463,6 +464,18 @@ class AIGenerator:
   "combos": [
     {{
       "speech": "1번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
+    }},
+    {{
+      "speech": "2번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
+    }},
+    {{
+      "speech": "3번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
+    }},
+    {{
+      "speech": "4번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
       "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
     }}
   ]
@@ -489,6 +502,16 @@ class AIGenerator:
         intro_text = data.get("intro_text", "").strip()
         combos = data.get("combos", [])
 
+        # 안전장치: 콤보가 4개 미만인 경우 기본 서킷 루틴으로 보충하여 항상 4개 세트 유지
+        default_fallbacks = [
+            {"speech": "팔굽혀펴기 2회 후 빠른 발차기 5회! - Two pushups, five fast kicks! Go!", "tip": "푸시업 후 신속히 일어나서 빠른발 연결"},
+            {"speech": "무릎 올려 제자리 점프 3회 후 앞차기! - High knees three times, front kick!", "tip": "무릎을 가슴까지 높게 당겨 점프 후 앞차기 타격"},
+            {"speech": "개구리 점프 3회 후 나래차기와 전방낙법! - Three squat jumps, double kicks and front roll!", "tip": "하체 폭발력 점프 후 연속 발차기와 안전한 낙법"},
+            {"speech": "버피 2회 후 뒤차기와 연속 타격! - Two burpees, back kick combo!", "tip": "지치지 않고 전력으로 다음 동작 신속히 연결"}
+        ]
+        while len(combos) < 4:
+            combos.append(default_fallbacks[len(combos)])
+
         lines = []
         for idx, c in enumerate(combos, 1):
             speech = str(c.get("speech", "")).strip()
@@ -501,6 +524,7 @@ class AIGenerator:
             "theme_title": theme_title,
             "intro_text": intro_text,
             "formatted_moves": formatted_moves,
+            "moves_text": formatted_moves,
             "combos": combos,
         }
 
@@ -565,20 +589,24 @@ class AIGenerator:
         """
         current_fields = current_fields or {}
         if tab_mode == "circuit":
+            moves_text = current_fields.get("moves_text") or current_fields.get("formatted_moves") or ""
+            intro_text = current_fields.get("intro_text", "")
+            theme_title = current_fields.get("theme_title", "")
+            mode_type = current_fields.get("mode_type", "cycle")
             if refine_mode:
                 return self.refine_edited_circuit_routine(
-                    edited_moves_text=current_fields.get("moves_text", ""),
-                    current_intro_text=current_fields.get("intro_text", ""),
+                    edited_moves_text=moves_text,
+                    current_intro_text=intro_text,
                     user_prompt=user_prompt,
                     lang_mode=lang_mode,
-                    current_theme_title=current_fields.get("theme_title", ""),
-                    mode_type=current_fields.get("mode_type", "cycle"),
+                    current_theme_title=theme_title,
+                    mode_type=mode_type,
                 )
             else:
                 return self.generate_circuit_routine(
                     user_prompt=user_prompt,
                     lang_mode=lang_mode,
-                    mode_type=current_fields.get("mode_type", "cycle"),
+                    mode_type=mode_type,
                     document_text=document_text,
                 )
 
@@ -588,28 +616,33 @@ class AIGenerator:
 
         if tab_mode == "relay":
             schema_desc = """{
-  "relay_intro": "시작 전 선수와 받기자들에게 송출할 종합 훈련 설명 및 미트 착용 행동요령 (정중한 사범님 존댓말, '도장'/'기립' 단어 금지)",
-  "relay_cues": "1번 선수 기술 구령\\n2번 선수 기술 구령\\n3번 선수 기술 구령 (줄바꿈으로 구분, 선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함)"
+  "intro_text": "시작 전 플레이어와 보조자들에게 송출할 종합 훈련 설명 및 미트 착용 행동요령 (정중한 사범님 존댓말, '도장'/'기립'/'선수' 단어 절대 금지, '플레이어'와 '보조자' 명칭 사용)",
+  "cue_text": "플레이어 및 보조자별 기술 구령 (줄바꿈으로 구분, '플레이어: 기술명\\n1번 보조자: 기술명' 형식 또는 순환 기술 목록, 선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함)"
 }"""
+            r_intro = current_fields.get('intro_text') or current_fields.get('relay_intro', '')
+            r_cue = current_fields.get('cue_text') or current_fields.get('relay_cues', '')
             current_context = (
-                f"[현재 화면의 훈련 종합 설명]:\n{current_fields.get('relay_intro', '')}\n\n"
-                f"[현재 화면의 선수별 지시 기술 대본]:\n{current_fields.get('relay_cues', '')}\n"
+                f"[현재 화면의 훈련 종합 설명]:\n{r_intro}\n\n"
+                f"[현재 화면의 플레이어/보조자 지시 기술 대본]:\n{r_cue}\n"
             )
-            role_desc = "1:1 / 1:2 / 1:3 다자간 릴레이 미트 순환 훈련"
+            role_desc = "1:1 / 1:2 / 1:3 플레이어 및 보조자 다자간 릴레이 미트 순환 훈련"
         elif tab_mode == "reaction":
             schema_desc = """{
-  "reac_cues": "쉼표(,)로 구분된 4~6개의 실전 반응 타격 기술 구령 (선택된 언어 모드에 맞춰 한국어 동작 및 쉬운 현장 영어 구령 포함. 예: 백스텝 받아차기 상단! - Step back counter kick!, 전진 몸통 2연타! - Double body kicks!)"
+  "cues": "쉼표(,)로 구분된 4~6개의 실전 반응 타격 기술 구령 (선택된 언어 모드에 맞춰 한국어 동작 및 쉬운 현장 영어 구령 포함. 예: 백스텝 받아차기 상단! - Step back counter kick!, 전진 몸통 2연타! - Double body kicks!)"
 }"""
-            current_context = f"[현재 화면의 반응 타격 구령 목록]:\n{current_fields.get('reac_cues', '')}\n"
+            reac_c = current_fields.get('cues') or current_fields.get('reac_cues', '')
+            current_context = f"[현재 화면의 반응 타격 구령 목록]:\n{reac_c}\n"
             role_desc = "스텝 & 실전 반사 반응 발차기 훈련"
         elif tab_mode == "combo":
             schema_desc = """{
-  "combo_steps": "쉼표(,)로 구분된 4~6개의 세트별 스텝 지시 구령 (예: 제자리 스텝, 앞뒤 스텝, 업다운 스텝, 사이드 스텝, 앞발 발바꿔 스텝)",
-  "combo_kicks": "쉼표(,)로 구분된 3~4개의 집중 공격/발차기 콤비네이션 구령 (선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함 가능)"
+  "step_types": "쉼표(,)로 구분된 4~6개의 세트별 스텝 지시 구령 (예: 제자리 스텝, 앞뒤 스텝, 업다운 스텝, 사이드 스텝, 앞발 발바꿔 스텝)",
+  "kick_types": "쉼표(,)로 구분된 3~4개의 집중 공격/발차기 콤비네이션 구령 (선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함 가능)"
 }"""
+            c_steps = current_fields.get('step_types') or current_fields.get('combo_steps', '')
+            c_kicks = current_fields.get('kick_types') or current_fields.get('combo_kicks', '')
             current_context = (
-                f"[현재 화면의 스텝 목록]:\n{current_fields.get('combo_steps', '')}\n\n"
-                f"[현재 화면의 집중 훈련 공격 기술]:\n{current_fields.get('combo_kicks', '')}\n"
+                f"[현재 화면의 스텝 목록]:\n{c_steps}\n\n"
+                f"[현재 화면의 집중 훈련 공격 기술]:\n{c_kicks}\n"
             )
             role_desc = "스텝 유지 후 신호음에 폭발적인 콤비네이션 연타를 치는 인터벌 훈련"
         else:  # "round"
@@ -617,9 +650,11 @@ class AIGenerator:
   "promise_detail": "라운드 중 집중 수행할 약속 스파링/실전 전술 핵심 동작 요약 (한글 및 쉬운 현장 코칭 영어 구령)",
   "caution_text": "스파링 시작 전 사범님이 안내하는 라운드 전술 목표 및 부상 방지 안전 수칙 방송 멘트 (정중한 존댓말)"
 }"""
+            p_detail = current_fields.get('promise_detail', '')
+            c_text = current_fields.get('caution_text', '')
             current_context = (
-                f"[현재 화면의 약속/전술 기술 내용]:\n{current_fields.get('promise_detail', '')}\n\n"
-                f"[현재 화면의 사전 설명 및 안전 주의사항]:\n{current_fields.get('caution_text', '')}\n"
+                f"[현재 화면의 약속/전술 기술 내용]:\n{p_detail}\n\n"
+                f"[현재 화면의 사전 설명 및 안전 주의사항]:\n{c_text}\n"
             )
             role_desc = "정규 스파링 라운드 (자유/섀도우/약속/공수분리 대련) 훈련"
 
@@ -634,9 +669,10 @@ class AIGenerator:
 
 [필수 준수 규칙]
 1. '도장', '기립', '출발' 같은 어색한 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서' 사용).
-2. 반말 금지! 사범님의 절도 있고 정중한 존댓말("~하세요", "~해 주세요")을 사용하세요.
-3. 특수기호(&, · 등)는 사용하지 마세요.
-4. {english_guide}
+2. 'A선수', 'B선수', '1번 선수' 등 '선수'라는 호칭은 절대 쓰지 마세요! 릴레이 훈련에서는 반드시 **'플레이어'**와 **'보조자'** ('1번 보조자', '2번 보조자') 명칭만 사용하세요.
+3. 반말 금지! 사범님의 절도 있고 정중한 존댓말("~하세요", "~해 주세요")을 사용하세요.
+4. 특수기호(&, · 등)는 사용하지 마세요.
+5. {english_guide}
 
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {schema_desc}"""
@@ -657,6 +693,29 @@ class AIGenerator:
             cleaned = cleaned[s_idx:e_idx + 1]
         data = json.loads(cleaned)
         data["tab_mode"] = tab_mode
+
+        # 모든 탭 키 양방향 호환 보장
+        if "intro_text" in data or "relay_intro" in data:
+            val = (data.get("intro_text") or data.get("relay_intro") or "").strip()
+            data["intro_text"] = val
+            data["relay_intro"] = val
+        if "cue_text" in data or "relay_cues" in data:
+            val = (data.get("cue_text") or data.get("relay_cues") or "").strip()
+            data["cue_text"] = val
+            data["relay_cues"] = val
+        if "cues" in data or "reac_cues" in data:
+            val = (data.get("cues") or data.get("reac_cues") or "").strip()
+            data["cues"] = val
+            data["reac_cues"] = val
+        if "step_types" in data or "combo_steps" in data:
+            val = (data.get("step_types") or data.get("combo_steps") or "").strip()
+            data["step_types"] = val
+            data["combo_steps"] = val
+        if "kick_types" in data or "combo_kicks" in data:
+            val = (data.get("kick_types") or data.get("combo_kicks") or "").strip()
+            data["kick_types"] = val
+            data["combo_kicks"] = val
+
         return data
 
     def generate_or_refine_warmup_routine(
