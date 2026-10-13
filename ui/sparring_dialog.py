@@ -27,6 +27,7 @@ from core.shuttle_run_engine import ShuttleRunEngine
 from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_from_url, load_common_settings
 from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.effects_generator import ensure_default_effects
+from utils.hangul_composer import bind_hangul_composer, compose_hangul_jamo
 from pydub import AudioSegment
 from pydub.effects import normalize
 
@@ -34,19 +35,31 @@ from pydub.effects import normalize
 class CompatibleTextEdit(QTextEdit):
     """
     넓고 시원한 멀티라인 입력을 지원하면서도 QLineEdit의 .text() / .setText() 인터페이스와
-    100% 호환되는 스마트 텍스트 입력 위젯.
+    100% 호환되며, macOS 한글 자모 분리('ㅅㅡㅍㅏㄹㅣㅇ') 실시간 자동 조합이 내장된 스마트 위젯.
     """
     returnPressed = pyqtSignal()
 
+    def __init__(self, initial_text: str = "", parent=None):
+        super().__init__(parent)
+        bind_hangul_composer(self)
+        if initial_text:
+            self.setPlainText(initial_text)
+
+    def insertFromMimeData(self, source):
+        if source.hasText():
+            self.insertPlainText(compose_hangul_jamo(source.text()))
+        else:
+            super().insertFromMimeData(source)
+
     def text(self) -> str:
-        return self.toPlainText()
+        return compose_hangul_jamo(self.toPlainText())
 
     def setText(self, val: str):
         self.setPlainText(val or "")
 
 
 class AICircuitWorker(QThread):
-    """비동기 AI 서킷 즉석 템플릿 생성 및 한글 수정분 현장 영어·설명 재맞춤 워커"""
+    """비동기 AI 전 탭(서킷/릴레이/반응/콤비/라운드) 즉석 템플릿 생성 및 한글 수정분 현장 영어·설명 재맞춤 워커"""
     finished_ok = pyqtSignal(dict)
     failed = pyqtSignal(str)
 
@@ -54,12 +67,14 @@ class AICircuitWorker(QThread):
         self,
         prompt: str,
         lang_mode: str,
-        mode_type: str,
+        mode_type: str = "cycle",
         doc_text: str = "",
         refine_mode: bool = False,
         edited_moves_text: str = "",
         current_theme_title: str = "",
         current_intro_text: str = "",
+        tab_mode: str = "circuit",
+        current_fields: Optional[Dict[str, Any]] = None,
         parent=None
     ):
         super().__init__(parent)
@@ -71,26 +86,26 @@ class AICircuitWorker(QThread):
         self.edited_moves_text = edited_moves_text
         self.current_theme_title = current_theme_title
         self.current_intro_text = current_intro_text
+        self.tab_mode = tab_mode
+        self.current_fields = current_fields or {
+            "moves_text": edited_moves_text,
+            "intro_text": current_intro_text,
+            "theme_title": current_theme_title,
+            "mode_type": mode_type,
+        }
 
     def run(self):
         try:
             gen = AIGenerator()
-            if self.refine_mode:
-                res = gen.refine_edited_circuit_routine(
-                    edited_moves_text=self.edited_moves_text,
-                    current_intro_text=self.current_intro_text,
-                    user_prompt=self.prompt,
-                    lang_mode=self.lang_mode,
-                    current_theme_title=self.current_theme_title,
-                    mode_type=self.mode_type,
-                )
-            else:
-                res = gen.generate_circuit_routine(
-                    user_prompt=self.prompt,
-                    lang_mode=self.lang_mode,
-                    mode_type=self.mode_type,
-                    document_text=self.doc_text,
-                )
+            res = gen.generate_or_refine_sparring_tab(
+                tab_mode=self.tab_mode,
+                user_prompt=self.prompt,
+                lang_mode=self.lang_mode,
+                document_text=self.doc_text,
+                refine_mode=self.refine_mode,
+                current_fields=self.current_fields,
+            )
+            res["tab_mode"] = self.tab_mode
             self.finished_ok.emit(res)
         except Exception as e:
             self.failed.emit(str(e))
@@ -782,200 +797,94 @@ class SparringWorker(QThread):
 
 
 class SparringDialog(QDialog):
-    """스파링 훈련 음원 생성 마법사 UI 다이얼로그"""
+    """스파링 훈련 음원 생성 마법사 UI 다이얼로그 (전 탭 AI 즉석 템플릿 & 한글 수정 후 다시 생성 지원)"""
 
-    def __init__(self, parent=None, tts_engine=None):
+    def __init__(
+        self,
+        parent=None,
+        tts_engine=None,
+        initial_tab: int = 0,
+        initial_prompt: str = "",
+        initial_doc_text: str = ""
+    ):
         super().__init__(parent)
         self.tts_engine = tts_engine
-        self.setWindowTitle("🥋 스파링 & 기능성 인터벌 마법사 (HIIT·순발력·민첩성·대련)")
-        self.resize(720, 800)
+        self.setWindowTitle("🥋 스파링 & 기능성 인터벌 마법사 (서킷·릴레이·반응·콤비·스파링 전 탭 AI 자동생성)")
+        self.resize(960, 880)
         self.bgm_playlist: List[str] = []
         self.generated_result = None
+        self._ai_loaded_doc_text = initial_doc_text or ""
 
         self.init_ui()
 
-    def init_ui(self):
-        main_layout = QVBoxLayout(self)
+        if 0 <= initial_tab < self.tabs.count():
+            self.tabs.setCurrentIndex(initial_tab)
+        if initial_prompt.strip():
+            self.txt_ai_circuit_prompt.setText(initial_prompt.strip())
+        if initial_prompt.strip() or initial_doc_text.strip():
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(180, self._on_ai_generate_circuit)
 
-        # 상단 안내 배너
-        header_box = QGroupBox()
-        header_box.setStyleSheet("background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 6px;")
-        hb_layout = QVBoxLayout(header_box)
-        title_lbl = QLabel("🥋 맞춤형 실전 스파링 & 기능성 인터벌(HIIT) 훈련 음원 마법사")
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: bold; color: #9d174d;")
-        desc_lbl = QLabel(
-            "오늘의 훈련 목표(기능성 서킷 인터벌, 1:1/1:2/1:3 릴레이 미트, 스텝 반응, 연타 콤보, 스파링 라운드)에 맞춰\n"
-            "순발력, 민첩성, 근력, 반사신경, 발차기 기술과 수준별(유치부 한영믹스/초등부/원어민) 구령을 자동 합성합니다."
+    def _make_refine_btn(self, label_text: str = "🔄 수정한 한글로 영어·설명 다시 생성") -> QPushButton:
+        btn = QPushButton(label_text)
+        btn.setToolTip(
+            "아래 대본/기술 칸에서 한국어 동작이나 횟수만 편하게 수정한 뒤 누르면,\n"
+            "수정한 한글에 맞춰 쉽고 자연스러운 현장 영어 구령과 사전 설명을 AI가 다시 완성합니다!"
         )
-        desc_lbl.setStyleSheet("color: #475569; font-size: 12px;")
-        hb_layout.addWidget(title_lbl)
-        hb_layout.addWidget(desc_lbl)
-        main_layout.addWidget(header_box)
+        btn.setStyleSheet(
+            "background-color: #059669; color: white; font-weight: bold; padding: 5px 12px; border-radius: 5px; font-size: 12px;"
+        )
+        btn.clicked.connect(self._on_ai_refine_circuit)
+        self._refine_buttons.append(btn)
+        return btn
 
-        # 스크롤 영역 생성 (작은 화면에서도 하단 버튼이 잘리지 않고 전체 스크롤 지원)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
+    def init_ui(self):
+        self._refine_buttons: List[QPushButton] = []
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(6)
+        main_layout.setContentsMargins(10, 8, 10, 8)
 
-        # 5가지 훈련 모드 탭 (기능성 인터벌 신설)
-        self.tabs = QTabWidget()
+        # ══════════════════════════════════════════════════════════════════
+        # [상단 고정] 전 탭 공통 AI 즉석 템플릿 생성 & 한글 수정 후 다시 생성 컨트롤 바
+        # ══════════════════════════════════════════════════════════════════
+        ai_top_group = QGroupBox("🤖 [1단계] 할 운동 요구사항 입력 ➔ 현재 선택된 탭 맞춤 [즉석 템플릿 생성] (모든 탭 공통 작동)")
+        ai_top_group.setStyleSheet(
+            "QGroupBox { background-color: #faf5ff; border: 2px solid #8b5cf6; border-radius: 8px; margin-top: 8px; padding-top: 6px; font-weight: bold; color: #5b21b6; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }"
+        )
+        l_ai_top = QVBoxLayout(ai_top_group)
+        l_ai_top.setSpacing(5)
+        l_ai_top.setContentsMargins(8, 6, 8, 6)
 
-        # ── 탭 0: 🔥 기능성 서킷 인터벌 (HIIT & Tabata) ──
-        tab_circuit = QWidget()
-        l_circuit = QVBoxLayout(tab_circuit)
+        # Row 1: 구령 언어 선택 + 통합설정 / 구글드라이브 링크 / 파일 불러오기
+        h_ai_row1 = QHBoxLayout()
+        lbl_lang = QLabel("🌍 구령 언어:")
+        lbl_lang.setStyleSheet("font-weight: bold; color: #1e293b;")
+        h_ai_row1.addWidget(lbl_lang)
 
-        circuit_info = QLabel("💡 [실전 복합 콤보 루프(Flow Loop) 방식]: 세트당 단순 1동작이 아닙니다. 15~20초 운동 시간 동안 [기초 체력(점프/버피) ➔ 실전 발차기 ➔ 회전낙법/점프턴]을 1세트로 묶어 전력으로 무한 반복하고 10초 휴식하는, 도장 실전 대련에 최적화된 복합 서킷 인터벌입니다.")
-        circuit_info.setStyleSheet("background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #be123c; font-size: 12px;")
-        l_circuit.addWidget(circuit_info)
-
-        # 1. 훈련 테마 선택
-        g_c_theme = QGroupBox("1. 서킷 인터벌 훈련 테마 선택 및 명칭 커스텀")
-        l_ct = QVBoxLayout(g_c_theme)
-        self.combo_circuit_theme = NoScrollComboBox()
-        self.combo_circuit_theme.addItem("🥋 [실전 대련과 낙법 협응] 점프·발차기·전방낙법 루프", "power_agility")
-        self.combo_circuit_theme.addItem("⚡ [순발력과 민첩성 폭발] 버피·점프턴·나래차기 루프", "agility_power_combo")
-        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크와 카운터] 스텝·컷트·뒤차기 루프", "footwork_reaction_combo")
-        self.combo_circuit_theme.addItem("💪 [근지구력과 전신 파워] 푸시업·복근·연타킥 서킷", "strength_endurance_combo")
-        self.combo_circuit_theme.addItem("🔥 [겨루기 실전 전술 콤보] 나래차기·뒤후리기·돌개차기 루프", "taekwondo_sparring_tactics")
-        self.combo_circuit_theme.addItem("✏️ [직접 입력] 도장 맞춤형 커스텀 테마 (자유 입력)", "custom")
-        self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
-        l_ct.addWidget(self.combo_circuit_theme)
-
-        h_theme_edit = QHBoxLayout()
-        h_theme_edit.addWidget(QLabel("✏️ 테마 명칭 (자유 수정):"))
-        self.txt_circuit_theme_title = QLineEdit("실전 대련과 낙법 협응 콤보")
-        self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭을 자유롭게 입력하세요 (예: 상하체 폭발 서킷 인터벌)")
-        h_theme_edit.addWidget(self.txt_circuit_theme_title, stretch=1)
-        l_ct.addLayout(h_theme_edit)
-
-        h_intro_edit = QHBoxLayout()
-        lbl_intro_title = QLabel("📢 사전 설명 방송\n(자유 수정):")
-        lbl_intro_title.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        h_intro_edit.addWidget(lbl_intro_title)
-        self.txt_circuit_intro = CompatibleTextEdit()
-        self.txt_circuit_intro.setFixedHeight(58)
-        self.txt_circuit_intro.setPlaceholderText("훈련 시작 전 사범님이 설명하는 안내 멘트 (즉석 템플릿 생성 시 자동 작성되며 자유롭게 수정 가능)")
-        self.txt_circuit_intro.setStyleSheet("font-size: 13px; padding: 4px 6px;")
-        h_intro_edit.addWidget(self.txt_circuit_intro, stretch=1)
-        l_ct.addLayout(h_intro_edit)
-        l_circuit.addWidget(g_c_theme)
-
-        # 2. 연령/수준별 맞춤 구령 언어 선택 (도장 현장 실전 용어 기반)
-        g_c_lang = QGroupBox("2. 연령/수준별 맞춤 구령 언어 (쉬운 현장 생활/코칭 영어)")
-        l_cl = QVBoxLayout(g_c_lang)
         self.combo_circuit_lang = NoScrollComboBox()
+        self.combo_circuit_lang.addItem("🌱 [현장 액션 영어 추천] 한국어 동작 + 쉬운 현장 영어 (Two pushups! Five fast kicks! Let's go!)", "mix_kids")
+        self.combo_circuit_lang.addItem("⚡ [현장 대화형 코칭 영어] 한국어 동작 + 자연스러운 코칭 영어 (Down for two pushups, up fast!)", "dual_step")
         self.combo_circuit_lang.addItem("🇰🇷 [한국어 전용] 표준 동작 설명 및 힘찬 기합 구령", "kr")
-        self.combo_circuit_lang.addItem("🌱 [현장 생활 영어: 액션 콜] 한국어 동작 + 쉽고 신나는 현장 영어 (Two pushups! Five fast kicks! Let's go!)", "mix_kids")
-        self.combo_circuit_lang.addItem("⚡ [현장 대화형 코칭 영어] 한국어 동작 + 자연스러운 코칭 연결어 (Down for two pushups, up fast!)", "dual_step")
-        self.combo_circuit_lang.addItem("🇺🇸 [원어민 코치 풀 잉글리시] Full English Coaching (자연스러운 대화형 영어 진행)", "en_advanced")
+        self.combo_circuit_lang.addItem("🇺🇸 [원어민 코치 풀 잉글리시] Full English Coaching (대화형 영어 진행)", "en_advanced")
         self.combo_circuit_lang.currentIndexChanged.connect(self._on_circuit_lang_changed)
-        l_cl.addWidget(self.combo_circuit_lang)
-
-        lbl_lang_guide = QLabel("💡 <b>현장 영어 지도 팁</b>: 교과서적인 어려운 단어가 아니라, 실제 운동하며 자주 쓰는 쉽고 자연스러운 대화형 영어(Two pushups! Jump high! Let's go!)로 자동 매칭됩니다.")
-        lbl_lang_guide.setStyleSheet("color: #0284c7; font-size: 11px;")
-        l_cl.addWidget(lbl_lang_guide)
-        l_circuit.addWidget(g_c_lang)
-
-        # 3. 시간 및 세트 설정
-        g_c_time = QGroupBox("3. 인터벌 시간 및 세트 설정")
-        l_ctime = QVBoxLayout(g_c_time)
-
-        h_ct1 = QHBoxLayout()
-        h_ct1.addWidget(QLabel("⏱️ 운동(전력) 시간:"))
-        self.sp_circuit_work = QSpinBox()
-        self.sp_circuit_work.setRange(5, 120)
-        self.sp_circuit_work.setValue(20)
-        self.sp_circuit_work.setSuffix(" 초")
-        self.sp_circuit_work.setFixedWidth(90)
-        h_ct1.addWidget(self.sp_circuit_work)
-
-        h_ct1.addWidget(QLabel("🧘 휴식(숨고르기) 시간:"))
-        self.sp_circuit_rest = QSpinBox()
-        self.sp_circuit_rest.setRange(5, 60)
-        self.sp_circuit_rest.setValue(10)
-        self.sp_circuit_rest.setSuffix(" 초")
-        self.sp_circuit_rest.setFixedWidth(90)
-        h_ct1.addWidget(self.sp_circuit_rest)
-
-        h_ct1.addWidget(QLabel("🔁 총 세트 수:"))
-        self.sp_circuit_sets = QSpinBox()
-        self.sp_circuit_sets.setRange(1, 30)
-        self.sp_circuit_sets.setValue(8)
-        self.sp_circuit_sets.setSuffix(" 세트")
-        self.sp_circuit_sets.setFixedWidth(90)
-        h_ct1.addWidget(self.sp_circuit_sets)
-        h_ct1.addStretch()
-        l_ctime.addLayout(h_ct1)
-
-        # 세트 종료 신호 선택
-        h_c_stop = QHBoxLayout()
-        h_c_stop.addWidget(QLabel("🔔 세트 종료 및 정지 신호:"))
-        self.combo_circuit_stop_signal = NoScrollComboBox()
-        self.combo_circuit_stop_signal.addItem("🥋 음성: '갈려! 휴식!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
-        self.combo_circuit_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 세트 종료)", "bell")
-        self.combo_circuit_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
-        self.combo_circuit_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
-        self.combo_circuit_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
-        self.combo_circuit_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        h_c_stop.addWidget(self.combo_circuit_stop_signal, stretch=1)
-        l_ctime.addLayout(h_c_stop)
-
-        # 쉬는 상황 맞춤 휴식 멘트 선택 (Catch your breath! & Take a break!)
-        h_c_rest = QHBoxLayout()
-        h_c_rest.addWidget(QLabel("🧘 쉬는 시간 음성 (휴식 구령):"))
-        self.combo_circuit_rest_style = NoScrollComboBox()
-        self.combo_circuit_rest_style.addItem("🔄 [본토 실전 순환] Catch your breath! & Take a break! 번갈아 구령 (강력 추천)", "auto_mix")
-        self.combo_circuit_rest_style.addItem("💨 [호흡 집중형] 'Catch your breath! Deep breath!' (호흡 가다듬기 위주)", "catch_breath")
-        self.combo_circuit_rest_style.addItem("☕ [휴식/재정비형] 'Take a break! Shake your legs!' (휴식 및 재충전 위주)", "take_break")
-        self.combo_circuit_rest_style.addItem("🇰🇷 [한국어 전용] '휴식! 호흡을 가다듬고 다음 세트를 준비하세요'", "kr_only")
-        self.combo_circuit_rest_style.addItem("🔇 [무음 휴식] 신호음만 울림 (멘트 생략)", "none")
-        h_c_rest.addWidget(self.combo_circuit_rest_style, stretch=1)
-        l_ctime.addLayout(h_c_rest)
-
-        # 빠른 프리셋 버튼
-        h_c_preset = QHBoxLayout()
-        h_c_preset.addWidget(QLabel("⚡ 빠른 세팅:"))
-        btn_tabata = QPushButton("타바타 정석 (20초/10초/8세트)")
-        btn_tabata.clicked.connect(lambda: self._set_circuit_time_preset(20, 10, 8))
-        btn_speed = QPushButton("도장 스피드 (15초/10초/6세트)")
-        btn_speed.clicked.connect(lambda: self._set_circuit_time_preset(15, 10, 6))
-        btn_power = QPushButton("체력 강화 (30초/15초/8세트)")
-        btn_power.clicked.connect(lambda: self._set_circuit_time_preset(30, 15, 8))
-        h_c_preset.addWidget(btn_tabata)
-        h_c_preset.addWidget(btn_speed)
-        h_c_preset.addWidget(btn_power)
-        l_ctime.addLayout(h_c_preset)
-        l_circuit.addWidget(g_c_time)
-
-        # 4. 요구사항 입력 ➔ 즉석 템플릿 제공 ➔ 한글 자유 수정 후 다시 생성 / 음원 생성
-        g_c_moves = QGroupBox("4. 즉석 맞춤 템플릿 생성 및 대본 편집 (한글로 수정하면 영어는 AI가 자동 완성)")
-        l_cm = QVBoxLayout(g_c_moves)
-        l_cm.setSpacing(8)
-
-        # (A) 상단 버튼 바: 요구사항 타이틀 + 파일/링크/통합설정/즉석 템플릿 생성 버튼
-        h_ai_header = QHBoxLayout()
-        lbl_ai = QLabel("📝 [1단계] 할 운동 요구사항 입력 (또는 링크·파일 불러오기):")
-        lbl_ai.setStyleSheet("font-weight: bold; color: #5b21b6; font-size: 13px;")
-        h_ai_header.addWidget(lbl_ai)
-        h_ai_header.addStretch()
+        h_ai_row1.addWidget(self.combo_circuit_lang, stretch=1)
 
         self.btn_open_ai_settings = QPushButton("⚙️ 통합 설정 (API키/공통자료)")
-        self.btn_open_ai_settings.setToolTip("API 키와 공통으로 사용할 구글 드라이브 링크·수련계획표 파일을 설정합니다.")
+        self.btn_open_ai_settings.setToolTip("Gemini API 키와 공통으로 사용할 구글 드라이브 링크·수련계획표를 설정합니다.")
         self.btn_open_ai_settings.setStyleSheet(
             "background-color: #475569; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
         self.btn_open_ai_settings.clicked.connect(self._on_open_ai_settings_dialog)
-        h_ai_header.addWidget(self.btn_open_ai_settings)
+        h_ai_row1.addWidget(self.btn_open_ai_settings)
 
         self.btn_ai_circuit_link = QPushButton("🔗 구글드라이브 링크")
-        self.btn_ai_circuit_link.setToolTip("구글 드라이브·문서(Docs)·시트(Sheets) 공유 링크에서 수련 내용을 바로 불러옵니다.")
+        self.btn_ai_circuit_link.setToolTip("구글 드라이브·문서(Docs)·시트(Sheets) 공유 링크에서 수련계획표를 바로 불러옵니다.")
         self.btn_ai_circuit_link.setStyleSheet(
             "background-color: #0d9488; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
         self.btn_ai_circuit_link.clicked.connect(self._on_ai_load_gdrive_link)
-        h_ai_header.addWidget(self.btn_ai_circuit_link)
+        h_ai_row1.addWidget(self.btn_ai_circuit_link)
 
         self.btn_ai_circuit_file = QPushButton("📂 파일 불러오기")
         self.btn_ai_circuit_file.setToolTip("내 컴퓨터의 수련계획표 문서(.txt, .docx, .md, .csv)를 불러와 즉석 템플릿을 만듭니다.")
@@ -983,32 +892,97 @@ class SparringDialog(QDialog):
             "background-color: #0284c7; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
         )
         self.btn_ai_circuit_file.clicked.connect(self._on_ai_load_circuit_file)
-        h_ai_header.addWidget(self.btn_ai_circuit_file)
+        h_ai_row1.addWidget(self.btn_ai_circuit_file)
+        l_ai_top.addLayout(h_ai_row1)
 
+        # Row 2: 넓은 요구사항 입력칸 + [✨ 요구사항으로 즉석 템플릿 생성] + [🔄 수정한 한글로 다시 생성]
+        h_ai_row2 = QHBoxLayout()
+        self.txt_ai_circuit_prompt = CompatibleTextEdit()
+        self.txt_ai_circuit_prompt.setFixedHeight(54)
+        self.txt_ai_circuit_prompt.setPlaceholderText(
+            "💡 [여기 입력 후 우측 버튼 클릭] 원하는 훈련 내용을 편하게 적으세요! (예: 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 / 또는 1번 잡고 밀기, 2번 암미트 몸통차기)\n"
+            "   현재 선택된 탭(서킷 / 릴레이 미트 / 스텝 반응 / 콤비 연타 / 스파링 라운드)에 딱 맞는 즉석 템플릿이 아래 편집창에 바로 생성됩니다."
+        )
+        self.txt_ai_circuit_prompt.setStyleSheet(
+            "border: 2px solid #7c3aed; border-radius: 6px; padding: 4px 8px; background-color: #ffffff; color: #111827; font-size: 13px; font-weight: bold;"
+        )
+        h_ai_row2.addWidget(self.txt_ai_circuit_prompt, stretch=1)
+
+        v_ai_btns = QVBoxLayout()
+        v_ai_btns.setSpacing(4)
         self.btn_ai_circuit_gen = QPushButton("✨ 요구사항으로 즉석 템플릿 생성")
-        self.btn_ai_circuit_gen.setToolTip("아래 입력한 요구사항(또는 불러온 파일·링크)에 맞춰 사전 설명과 세트별 한/영 템플릿을 즉석에서 제공합니다.")
+        self.btn_ai_circuit_gen.setToolTip("입력한 요구사항(또는 불러온 링크·파일)에 맞춰 현재 탭의 대본 템플릿을 즉석에서 자동 생성합니다.")
         self.btn_ai_circuit_gen.setStyleSheet(
             "background-color: #7c3aed; color: white; font-weight: bold; padding: 6px 14px; border-radius: 5px; font-size: 13px;"
         )
         self.btn_ai_circuit_gen.clicked.connect(self._on_ai_generate_circuit)
-        h_ai_header.addWidget(self.btn_ai_circuit_gen)
-        l_cm.addLayout(h_ai_header)
+        v_ai_btns.addWidget(self.btn_ai_circuit_gen)
 
-        # (B) 시원하고 넓은 요구사항 입력칸
-        self.txt_ai_circuit_prompt = CompatibleTextEdit()
-        self.txt_ai_circuit_prompt.setFixedHeight(68)
-        self.txt_ai_circuit_prompt.setPlaceholderText(
-            "💡 원하는 운동 구성을 편하게 타이핑하세요! (예: 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회를 할거야 / 또는 세트별로 할 운동 메모)\n"
-            "   입력 후 우측 위 [✨ 요구사항으로 즉석 템플릿 생성]을 누르면 아래 넓은 창에 맞춤 템플릿이 즉시 제공됩니다."
-        )
-        self.txt_ai_circuit_prompt.setStyleSheet(
-            "border: 2px solid #8b5cf6; border-radius: 6px; padding: 6px 8px; background-color: #faf5ff; font-size: 13px; font-weight: bold;"
-        )
-        l_cm.addWidget(self.txt_ai_circuit_prompt)
+        self.btn_ai_refine_circuit = self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성")
+        v_ai_btns.addWidget(self.btn_ai_refine_circuit)
+        h_ai_row2.addLayout(v_ai_btns)
 
-        # (C) 2단계 템플릿 확인·수정 컨트롤 바 + [수정한 한글로 영어·설명 다시 생성하기] 버튼
+        l_ai_top.addLayout(h_ai_row2)
+        main_layout.addWidget(ai_top_group)
+
+        # 스크롤 영역 생성
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 5가지 훈련 모드 탭
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("QTabBar::tab { font-weight: bold; padding: 8px 14px; font-size: 13px; }")
+
+        # ══════════════════════════════════════════════════════════════════
+        # ── 탭 0: 🔥 기능성 서킷 인터벌 (HIIT & Tabata) ──
+        # ══════════════════════════════════════════════════════════════════
+        tab_circuit = QWidget()
+        l_circuit = QVBoxLayout(tab_circuit)
+        l_circuit.setSpacing(6)
+
+        # [탭0 - 1번 (맨 위!)] 제공된 서킷 템플릿 확인 및 대본 자유 수정 (스크롤 없이 한눈에 보임!)
+        g_c_moves = QGroupBox("1. [2단계] 제공된 서킷 템플릿 확인 및 대본 자유 수정 (한글만 고치고 [🔄 다시 생성]을 누르세요)")
+        l_cm = QVBoxLayout(g_c_moves)
+        l_cm.setSpacing(6)
+
+        # 테마 선택 + 테마 명칭 한 줄 배치
+        h_theme_top = QHBoxLayout()
+        h_theme_top.addWidget(QLabel("📋 기본 테마:"))
+        self.combo_circuit_theme = NoScrollComboBox()
+        self.combo_circuit_theme.addItem("🥋 [실전 대련과 낙법 협응] 점프·발차기·전방낙법 루프", "power_agility")
+        self.combo_circuit_theme.addItem("⚡ [순발력과 민첩성 폭발] 버피·점프턴·나래차기 루프", "agility_power_combo")
+        self.combo_circuit_theme.addItem("🏃‍♂️ [스파링 풋워크와 카운터] 스텝·컷트·뒤차기 루프", "footwork_reaction_combo")
+        self.combo_circuit_theme.addItem("💪 [근지구력과 전신 파워] 푸시업·복근·연타킥 서킷", "strength_endurance_combo")
+        self.combo_circuit_theme.addItem("🔥 [겨루기 실전 전술 콤보] 나래차기·뒤후리기·돌개차기 루프", "taekwondo_sparring_tactics")
+        self.combo_circuit_theme.addItem("✏️ [직접 입력 / AI 맞춤] 사범님 커스텀 테마", "custom")
+        self.combo_circuit_theme.currentIndexChanged.connect(self._on_circuit_theme_changed)
+        h_theme_top.addWidget(self.combo_circuit_theme, stretch=1)
+
+        h_theme_top.addWidget(QLabel("✏️ 테마 명칭:"))
+        self.txt_circuit_theme_title = QLineEdit("실전 대련과 낙법 협응 콤보")
+        self.txt_circuit_theme_title.setPlaceholderText("훈련 테마 명칭 자유 수정")
+        h_theme_top.addWidget(self.txt_circuit_theme_title, stretch=1)
+        l_cm.addLayout(h_theme_top)
+
+        # 사전 설명 방송 (넓은 멀티라인)
+        h_intro_edit = QHBoxLayout()
+        lbl_intro_title = QLabel("📢 사전 설명 방송\n(자유 수정):")
+        lbl_intro_title.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        h_intro_edit.addWidget(lbl_intro_title)
+        self.txt_circuit_intro = CompatibleTextEdit()
+        self.txt_circuit_intro.setFixedHeight(52)
+        self.txt_circuit_intro.setPlaceholderText("훈련 시작 전 사범님이 설명하는 안내 멘트 (즉석 템플릿 생성 시 자동 작성되며 자유롭게 수정 가능)")
+        self.txt_circuit_intro.setStyleSheet("font-size: 13px; padding: 4px 6px;")
+        h_intro_edit.addWidget(self.txt_circuit_intro, stretch=1)
+        l_cm.addLayout(h_intro_edit)
+
+        # 콤보 순환 옵션 + 다시 생성 버튼 바
         h_cm_mode = QHBoxLayout()
-        lbl_step2 = QLabel("✏️ [2단계] 제공된 템플릿 확인 및 수정:")
+        lbl_step2 = QLabel("✏️ 세트별 콤보 대본 편집창 (넓은 화면):")
         lbl_step2.setStyleSheet("font-weight: bold; color: #0f766e; font-size: 13px;")
         h_cm_mode.addWidget(lbl_step2)
 
@@ -1019,16 +993,7 @@ class SparringDialog(QDialog):
         h_cm_mode.addWidget(self.rb_circuit_single)
         h_cm_mode.addStretch()
 
-        self.btn_ai_refine_circuit = QPushButton("🔄 수정한 한글로 영어·설명 다시 생성하기")
-        self.btn_ai_refine_circuit.setToolTip(
-            "아래 템플릿 창에서 한국어 동작이나 횟수만 편하게 고친 뒤 이 버튼을 누르면,\n"
-            "수정한 한국어에 맞춰 쉽고 현장감 있는 영어 구령과 사전 설명, 지도 팁을 AI가 다시 짝맞춰 줍니다!"
-        )
-        self.btn_ai_refine_circuit.setStyleSheet(
-            "background-color: #059669; color: white; font-weight: bold; padding: 6px 14px; border-radius: 5px; font-size: 13px;"
-        )
-        self.btn_ai_refine_circuit.clicked.connect(self._on_ai_refine_circuit)
-        h_cm_mode.addWidget(self.btn_ai_refine_circuit)
+        h_cm_mode.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성하기"))
 
         self.btn_shuffle_circuit = QPushButton("🎲 기본 테마 무작위")
         self.btn_shuffle_circuit.setToolTip("선택된 기본 테마에서 무작위로 4개 콤보를 추출합니다.")
@@ -1039,107 +1004,102 @@ class SparringDialog(QDialog):
         h_cm_mode.addWidget(self.btn_shuffle_circuit)
         l_cm.addLayout(h_cm_mode)
 
-        # (D) 넓고 시원한 즉석 템플릿(대본) 편집창
-        self.txt_circuit_moves = QTextEdit()
-        self.txt_circuit_moves.setMinimumHeight(250)
-        self.txt_circuit_moves.setMaximumHeight(360)
+        # 넓고 시원한 서킷 대본 편집창
+        self.txt_circuit_moves = CompatibleTextEdit()
+        self.txt_circuit_moves.setMinimumHeight(210)
+        self.txt_circuit_moves.setMaximumHeight(320)
         self.txt_circuit_moves.setStyleSheet("font-size: 13px; padding: 8px; line-height: 1.4;")
         self.txt_circuit_moves.textChanged.connect(self._on_circuit_moves_text_changed)
         l_cm.addWidget(self.txt_circuit_moves)
 
         lbl_moves_hint = QLabel(
-            "💡 [쉬운 3단계 사용법]\n"
-            "  ① 위 보라색 칸에 할 운동을 적고 [✨ 요구사항으로 즉석 템플릿 생성] 클릭 ➔ ② 아래 넓은 템플릿에서 한글 동작을 원하는 대로 수정 후 [🔄 수정한 한글로 영어·설명 다시 생성하기] 클릭 ➔ ③ 맨 아래 [🚀 맞춤 훈련 음원 생성하기] 클릭!\n"
-            "  • 📢 '1번 콤보:' 줄만 실제 스피커로 힘차게 방송되며, '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 눈 참고용입니다."
+            "💡 '1번 콤보:' 줄만 실제 스피커로 힘차게 방송되며, '➔ [지도 팁]' 줄은 음성으로 읽지 않는 사범님 참고용입니다. 한국어만 고치고 [🔄 다시 생성]을 누르면 현장 영어가 자동 완성됩니다!"
         )
-        lbl_moves_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 6px; font-size: 11px; font-weight: bold;")
+        lbl_moves_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold;")
         l_cm.addWidget(lbl_moves_hint)
         l_circuit.addWidget(g_c_moves)
-        l_circuit.addStretch()
 
+        # [탭0 - 2번] 인터벌 시간 및 세트 설정
+        g_c_time = QGroupBox("2. 인터벌 시간·세트 및 휴식 구령 설정")
+        l_ctime = QVBoxLayout(g_c_time)
+        l_ctime.setSpacing(5)
+
+        h_ct1 = QHBoxLayout()
+        h_ct1.addWidget(QLabel("⏱️ 운동(전력) 시간:"))
+        self.sp_circuit_work = QSpinBox()
+        self.sp_circuit_work.setRange(5, 120)
+        self.sp_circuit_work.setValue(20)
+        self.sp_circuit_work.setSuffix(" 초")
+        self.sp_circuit_work.setFixedWidth(85)
+        h_ct1.addWidget(self.sp_circuit_work)
+
+        h_ct1.addWidget(QLabel("🧘 휴식 시간:"))
+        self.sp_circuit_rest = QSpinBox()
+        self.sp_circuit_rest.setRange(5, 60)
+        self.sp_circuit_rest.setValue(10)
+        self.sp_circuit_rest.setSuffix(" 초")
+        self.sp_circuit_rest.setFixedWidth(85)
+        h_ct1.addWidget(self.sp_circuit_rest)
+
+        h_ct1.addWidget(QLabel("🔁 총 세트 수:"))
+        self.sp_circuit_sets = QSpinBox()
+        self.sp_circuit_sets.setRange(1, 30)
+        self.sp_circuit_sets.setValue(8)
+        self.sp_circuit_sets.setSuffix(" 세트")
+        self.sp_circuit_sets.setFixedWidth(85)
+        h_ct1.addWidget(self.sp_circuit_sets)
+
+        btn_tabata = QPushButton("타바타(20/10/8)")
+        btn_tabata.clicked.connect(lambda: self._set_circuit_time_preset(20, 10, 8))
+        btn_speed = QPushButton("스피드(15/10/6)")
+        btn_speed.clicked.connect(lambda: self._set_circuit_time_preset(15, 10, 6))
+        btn_power = QPushButton("체력강화(30/15/8)")
+        btn_power.clicked.connect(lambda: self._set_circuit_time_preset(30, 15, 8))
+        h_ct1.addWidget(btn_tabata)
+        h_ct1.addWidget(btn_speed)
+        h_ct1.addWidget(btn_power)
+        h_ct1.addStretch()
+        l_ctime.addLayout(h_ct1)
+
+        h_c_signals = QHBoxLayout()
+        h_c_signals.addWidget(QLabel("🔔 세트 종료 신호:"))
+        self.combo_circuit_stop_signal = NoScrollComboBox()
+        self.combo_circuit_stop_signal.addItem("🥋 음성: '갈려! 휴식!' (강력 추천)", "voice_kalyeo")
+        self.combo_circuit_stop_signal.addItem("🔔 경기장 차임벨 (딩~동)", "bell")
+        self.combo_circuit_stop_signal.addItem("🛑 음성: '중지!'", "voice_stop")
+        self.combo_circuit_stop_signal.addItem("✋ 음성: '그만!'", "voice_end")
+        self.combo_circuit_stop_signal.addItem("📢 심판 호각 (휘슬)", "whistle")
+        self.combo_circuit_stop_signal.addItem("🔔 전자 비프음", "beep")
+        h_c_signals.addWidget(self.combo_circuit_stop_signal, stretch=1)
+
+        h_c_signals.addWidget(QLabel("🧘 휴식 구령:"))
+        self.combo_circuit_rest_style = NoScrollComboBox()
+        self.combo_circuit_rest_style.addItem("🔄 Catch your breath! & Take a break! 순환 (추천)", "auto_mix")
+        self.combo_circuit_rest_style.addItem("💨 Catch your breath! Deep breath!", "catch_breath")
+        self.combo_circuit_rest_style.addItem("☕ Take a break! Shake your legs!", "take_break")
+        self.combo_circuit_rest_style.addItem("🇰🇷 한국어 전용 휴식 멘트", "kr_only")
+        self.combo_circuit_rest_style.addItem("🔇 신호음만 (멘트 생략)", "none")
+        h_c_signals.addWidget(self.combo_circuit_rest_style, stretch=1)
+        l_ctime.addLayout(h_c_signals)
+
+        l_circuit.addWidget(g_c_time)
+        l_circuit.addStretch()
         self.tabs.addTab(tab_circuit, "🔥 기능성 서킷 인터벌 (HIIT)")
 
-        # ── 탭 1: 1:1, 1:2, 1:3 릴레이 미트 ──
+        # ══════════════════════════════════════════════════════════════════
+        # ── 탭 1: 🔄 1:1, 1:2, 1:3 릴레이 미트 ──
+        # ══════════════════════════════════════════════════════════════════
         tab_relay = QWidget()
         l_relay = QVBoxLayout(tab_relay)
+        l_relay.setSpacing(6)
 
-        # 실전 훈련 시퀀스 흐름 안내
-        relay_flow_info = QLabel("💡 동작 흐름: [선수 호명 및 기술 설명] ➔ (0.25초) ➔ [🔔 삑! 타격 신호음] ➔ [타격] ➔ [🗣️ '선수 교대! B선수 준비!'] (절대 '출발' 단어 없음)")
-        relay_flow_info.setStyleSheet("background-color: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #86198f; font-size: 12px;")
-        l_relay.addWidget(relay_flow_info)
-        
-        g_relay_f = QGroupBox("선수 인원 구성")
-        hl_rf = QHBoxLayout(g_relay_f)
-        self.rb_relay_11 = QRadioButton("1 : 1 교대 (A선수 ↔ B선수)")
-        self.rb_relay_12 = QRadioButton("1 : 2 교대 (3인 1조 로테이션)")
-        self.rb_relay_13 = QRadioButton("1 : 3 교대 (4인 1조 로테이션)")
-        self.rb_relay_11.setChecked(True)
-        hl_rf.addWidget(self.rb_relay_11)
-        hl_rf.addWidget(self.rb_relay_12)
-        hl_rf.addWidget(self.rb_relay_13)
-        l_relay.addWidget(g_relay_f)
+        # [탭1 - 1번 (맨 위!)] 제공된 릴레이 미트 템플릿 확인 및 대본 자유 수정
+        g_relay_script = QGroupBox("1. [2단계] 제공된 릴레이 미트 템플릿 확인 및 대본 자유 수정 (넓은 편집창)")
+        l_rscript = QVBoxLayout(g_relay_script)
+        l_rscript.setSpacing(6)
 
-        g_relay_t = QGroupBox("시간 및 실전 훈련 설정")
-        l_rt = QVBoxLayout(g_relay_t)
-        
-        grid_rt = QGridLayout()
-        grid_rt.setHorizontalSpacing(20)
-        grid_rt.setVerticalSpacing(10)
-
-        lbl_strike = QLabel("⏱️ 1인당 타격 시간:")
-        self.sp_relay_strike = QSpinBox()
-        self.sp_relay_strike.setRange(5, 60)
-        self.sp_relay_strike.setValue(15)
-        self.sp_relay_strike.setSuffix(" 초")
-        self.sp_relay_strike.setFixedWidth(90)
-        grid_rt.addWidget(lbl_strike, 0, 0)
-        grid_rt.addWidget(self.sp_relay_strike, 0, 1)
-
-        lbl_change = QLabel("🔄 선수 교대(준비) 시간:")
-        self.sp_relay_change = QSpinBox()
-        self.sp_relay_change.setRange(2, 15)
-        self.sp_relay_change.setValue(3)
-        self.sp_relay_change.setSuffix(" 초")
-        self.sp_relay_change.setFixedWidth(90)
-        grid_rt.addWidget(lbl_change, 0, 2)
-        grid_rt.addWidget(self.sp_relay_change, 0, 3)
-
-        lbl_prep_wait = QLabel("⏳ 설명 후 준비 대기:")
-        self.sp_relay_prep_wait = QSpinBox()
-        self.sp_relay_prep_wait.setRange(0, 60)
-        self.sp_relay_prep_wait.setValue(10)
-        self.sp_relay_prep_wait.setSuffix(" 초")
-        self.sp_relay_prep_wait.setFixedWidth(90)
-        self.sp_relay_prep_wait.setToolTip("사전 설명 음성 후 받기자들이 암미트/손미트를 착용하고 위치를 잡는 준비 대기 시간입니다. (0초 설정 시 대기 없이 즉시 시작)")
-        grid_rt.addWidget(lbl_prep_wait, 1, 0)
-        grid_rt.addWidget(self.sp_relay_prep_wait, 1, 1)
-
-        lbl_cycles = QLabel("🔁 전체 순환 세트:")
-        self.sp_relay_cycles = QSpinBox()
-        self.sp_relay_cycles.setRange(1, 10)
-        self.sp_relay_cycles.setValue(3)
-        self.sp_relay_cycles.setSuffix(" 세트")
-        self.sp_relay_cycles.setFixedWidth(90)
-        grid_rt.addWidget(lbl_cycles, 1, 2)
-        grid_rt.addWidget(self.sp_relay_cycles, 1, 3)
-
-        l_rt.addLayout(grid_rt)
-
-        # 타격 종료 및 교대 신호 선택
-        h_rt_sig = QHBoxLayout()
-        h_rt_sig.addWidget(QLabel("🔔 타격 종료 및 교대 신호:"))
-        self.combo_relay_stop_signal = NoScrollComboBox()
-        self.combo_relay_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
-        self.combo_relay_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
-        self.combo_relay_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
-        self.combo_relay_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        self.combo_relay_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
-        h_rt_sig.addWidget(self.combo_relay_stop_signal, stretch=1)
-        l_rt.addLayout(h_rt_sig)
-
-        # 릴레이 훈련 기술 템플릿 선택 드롭다운
         h_rt_tmpl = QHBoxLayout()
-        h_rt_tmpl.addWidget(QLabel("📋 실전 훈련 템플릿:"))
+        h_rt_tmpl.addWidget(QLabel("📋 기본 릴레이 템플릿:"))
         self.combo_relay_template = NoScrollComboBox()
         self.combo_relay_template.addItem("🥋 [실전 3인 방족술/미트] 1번: 잡고 몸통 밀기 / 2번: 암미트 전진 몸통 / 3번: 손미트 상단 끊어차기", "tmpl_bangjok")
         self.combo_relay_template.addItem("⚡ [실전 스파링 콤보 1] A선수: 백스텝 받아차기 교차 상단 / B선수: 전진 몸통 후 사이드 왼발 상단", "tmpl_combo1")
@@ -1148,56 +1108,148 @@ class SparringDialog(QDialog):
         self.combo_relay_template.addItem("🔥 [연타 콤보] 1연타, 2연타, 3연타, 나래차기 연타", "tmpl_speed")
         self.combo_relay_template.currentIndexChanged.connect(self._on_relay_template_changed)
         h_rt_tmpl.addWidget(self.combo_relay_template, stretch=1)
-        l_rt.addLayout(h_rt_tmpl)
+        h_rt_tmpl.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
+        l_rscript.addLayout(h_rt_tmpl)
 
-        # 1. 훈련 종합 설명 & 받기자 미트 착용 행동요령 (사전 안내 다중 행 입력)
-        l_rt.addWidget(QLabel("📢 훈련 종합 설명 & 받기자 미트 착용 행동요령 (시작 전 사전 안내 음성):"))
-        self.txt_relay_intro = QTextEdit()
-        self.txt_relay_intro.setFixedHeight(75)
-        self.txt_relay_intro.setPlaceholderText("시작 전 선수와 받기자들에게 송출할 종합 훈련 안내 및 미트 착용 요령을 입력하세요 (엔터로 줄바꿈 가능)")
+        l_rscript.addWidget(QLabel("📢 훈련 종합 설명 & 받기자 미트 착용 행동요령 (시작 전 사전 안내 음성 - 자유 수정):"))
+        self.txt_relay_intro = CompatibleTextEdit()
+        self.txt_relay_intro.setFixedHeight(78)
+        self.txt_relay_intro.setPlaceholderText("시작 전 선수와 받기자들에게 송출할 종합 훈련 안내 및 미트 착용 요령을 입력하세요")
         self.txt_relay_intro.setPlainText("1번 방족술 - 한손 잡고 반대손 몸통 밀기. 2번 방족술 모션으로 전진 스텝 후 뒷발 몸통 차기! 2번 받기자 암미트 착용, 3번 조금씩 거리 좁히며 빠른발 상단 끊어차기!, 3번 받기자 손미트 착용, 빠르게 준비해 주세요. 플레이어는 패턴을 숙지해 주세요.")
-        l_rt.addWidget(self.txt_relay_intro)
+        l_rscript.addWidget(self.txt_relay_intro)
 
-        lbl_prep_hint = QLabel("※ 설명 음성이 끝난 뒤 위 '설명 후 준비 대기 시간(n초)' 동안 받기자들이 미트를 착용하고, '모두 준비가 되었나요?' 안내 후 2초 뒤 본 훈련이 시작됩니다.")
-        lbl_prep_hint.setStyleSheet("color: #2563eb; font-size: 11px; font-weight: 500;")
-        l_rt.addWidget(lbl_prep_hint)
-
-        # 2. 실제 진행 시 선수별 지시 기술명 (엔터 줄바꿈 입력)
-        l_rt.addWidget(QLabel("🥊 실제 진행 시 선수별 지시 기술명 (줄바꿈(엔터)으로 선수별 개별 기술 구분):"))
-        self.txt_relay_cue = QTextEdit()
-        self.txt_relay_cue.setFixedHeight(75)
+        l_rscript.addWidget(QLabel("🥊 실제 진행 시 선수별 지시 기술 대본 (줄바꿈으로 1번·2번·3번 선수 개별 기술 구분 - 넓은 편집창):"))
+        self.txt_relay_cue = CompatibleTextEdit()
+        self.txt_relay_cue.setMinimumHeight(130)
+        self.txt_relay_cue.setMaximumHeight(200)
         self.txt_relay_cue.setPlaceholderText("각 줄마다 선수가 타격할 기술명을 입력하세요.\n예:\n한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
         self.txt_relay_cue.setPlainText("한손 잡고 반대손 몸통 밀기\n전진 스텝 후 뒷발 몸통 차기\n조금씩 거리 좁히며 빠른발 상단 끊어차기")
-        l_rt.addWidget(self.txt_relay_cue)
+        l_rscript.addWidget(self.txt_relay_cue)
 
-        lbl_relay_hint = QLabel("※ 줄바꿈(엔터)으로 입력 시 1:2 / 1:3 릴레이에서 [첫번째 선수], [두번째 선수], [세번째 선수]에게 차례로 개별 기술을 각각 지시합니다.")
-        lbl_relay_hint.setStyleSheet("color: #64748b; font-size: 11px;")
-        l_rt.addWidget(lbl_relay_hint)
+        lbl_relay_hint = QLabel("💡 위 보라색 [1단계] 칸에 원하는 릴레이 동작을 입력해 생성하거나, 아래 대본을 한글로 수정한 뒤 [🔄 수정한 한글로 영어·설명 다시 생성]을 누르세요!")
+        lbl_relay_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold;")
+        l_rscript.addWidget(lbl_relay_hint)
+        l_relay.addWidget(g_relay_script)
+
+        # [탭1 - 2번] 인원 및 시간 설정
+        g_relay_t = QGroupBox("2. 선수 인원 구성 및 타격·교대 시간 설정")
+        l_rt = QVBoxLayout(g_relay_t)
+        hl_rf = QHBoxLayout()
+        self.rb_relay_11 = QRadioButton("1 : 1 교대 (A선수 ↔ B선수)")
+        self.rb_relay_12 = QRadioButton("1 : 2 교대 (3인 1조 로테이션)")
+        self.rb_relay_13 = QRadioButton("1 : 3 교대 (4인 1조 로테이션)")
+        self.rb_relay_11.setChecked(True)
+        hl_rf.addWidget(self.rb_relay_11)
+        hl_rf.addWidget(self.rb_relay_12)
+        hl_rf.addWidget(self.rb_relay_13)
+        l_rt.addLayout(hl_rf)
+
+        grid_rt = QGridLayout()
+        grid_rt.setHorizontalSpacing(16)
+        grid_rt.setVerticalSpacing(6)
+
+        lbl_strike = QLabel("⏱️ 1인당 타격 시간:")
+        self.sp_relay_strike = QSpinBox()
+        self.sp_relay_strike.setRange(5, 60)
+        self.sp_relay_strike.setValue(15)
+        self.sp_relay_strike.setSuffix(" 초")
+        self.sp_relay_strike.setFixedWidth(85)
+        grid_rt.addWidget(lbl_strike, 0, 0)
+        grid_rt.addWidget(self.sp_relay_strike, 0, 1)
+
+        lbl_change = QLabel("🔄 선수 교대 시간:")
+        self.sp_relay_change = QSpinBox()
+        self.sp_relay_change.setRange(2, 15)
+        self.sp_relay_change.setValue(3)
+        self.sp_relay_change.setSuffix(" 초")
+        self.sp_relay_change.setFixedWidth(85)
+        grid_rt.addWidget(lbl_change, 0, 2)
+        grid_rt.addWidget(self.sp_relay_change, 0, 3)
+
+        lbl_prep_wait = QLabel("⏳ 설명 후 준비 대기:")
+        self.sp_relay_prep_wait = QSpinBox()
+        self.sp_relay_prep_wait.setRange(0, 60)
+        self.sp_relay_prep_wait.setValue(10)
+        self.sp_relay_prep_wait.setSuffix(" 초")
+        self.sp_relay_prep_wait.setFixedWidth(85)
+        grid_rt.addWidget(lbl_prep_wait, 0, 4)
+        grid_rt.addWidget(self.sp_relay_prep_wait, 0, 5)
+
+        lbl_cycles = QLabel("🔁 전체 순환 세트:")
+        self.sp_relay_cycles = QSpinBox()
+        self.sp_relay_cycles.setRange(1, 10)
+        self.sp_relay_cycles.setValue(3)
+        self.sp_relay_cycles.setSuffix(" 세트")
+        self.sp_relay_cycles.setFixedWidth(85)
+        grid_rt.addWidget(lbl_cycles, 0, 6)
+        grid_rt.addWidget(self.sp_relay_cycles, 0, 7)
+        l_rt.addLayout(grid_rt)
+
+        h_rt_sig = QHBoxLayout()
+        h_rt_sig.addWidget(QLabel("🔔 타격 종료 및 교대 신호:"))
+        self.combo_relay_stop_signal = NoScrollComboBox()
+        self.combo_relay_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_relay_stop_signal.addItem("🛑 음성: '중지!'", "voice_stop")
+        self.combo_relay_stop_signal.addItem("✋ 음성: '그만!'", "voice_end")
+        self.combo_relay_stop_signal.addItem("🔔 전자 비프음", "beep")
+        self.combo_relay_stop_signal.addItem("📢 심판 호각", "whistle")
+        h_rt_sig.addWidget(self.combo_relay_stop_signal, stretch=1)
+        l_rt.addLayout(h_rt_sig)
 
         l_relay.addWidget(g_relay_t)
         l_relay.addStretch()
         self.tabs.addTab(tab_relay, "🔄 1:1 / 1:2 / 1:3 릴레이 미트")
 
-        # ── 탭 2: 스텝 & 받아차기/반응 훈련 ──
+        # ══════════════════════════════════════════════════════════════════
+        # ── 탭 2: ⚡ 스텝 & 실전 반응 ──
+        # ══════════════════════════════════════════════════════════════════
         tab_reaction = QWidget()
         l_reac = QVBoxLayout(tab_reaction)
-        
-        # 실전 훈련 시퀀스 안내 배너
-        reac_info = QLabel("🎯 동작 순서: [기술 지시 (예: 1연타!)] ➔ [랜덤 초 긴장 대기] ➔ [신호음/구령 (삑! / 시작! / GO!)] 발차기 타격! ➔ [복귀 대기]")
-        reac_info.setStyleSheet("background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px; font-weight: bold; color: #1e40af; font-size: 12px;")
-        l_reac.addWidget(reac_info)
+        l_reac.setSpacing(6)
 
-        g_reac_t = QGroupBox("1. 훈련 시간, 복귀 템포 및 랜덤 긴장 대기")
+        # [탭2 - 1번 (맨 위!)] 기술 지시 구령 및 템플릿 편집 (넓은 편집창)
+        g_reac_cues = QGroupBox("1. [2단계] 제공된 실전 반응 타격 구령 확인 및 자유 수정 (넓은 편집창)")
+        l_rcc = QVBoxLayout(g_reac_cues)
+        l_rcc.setSpacing(6)
+
+        h_tmpl = QHBoxLayout()
+        h_tmpl.addWidget(QLabel("📋 기본 반응 템플릿:"))
+        self.combo_cues_template = NoScrollComboBox()
+        self.combo_cues_template.addItem("🥋 [실전 스파링 콤보] 백스텝 받아차기 교차 상단, 전진 몸통 후 사이드 상단, 앞발 컷트 후 뒷발 상단, 사이드 뒤차기", "백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
+        self.combo_cues_template.addItem("⚡ [스피드 연타] 1연타!, 2연타!, 3연타!, 앞발 나래차기!", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
+        self.combo_cues_template.addItem("🛡️ [받아차기 / 카운터] 백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!", "백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!")
+        self.combo_cues_template.addItem("🏃‍♂️ [기본기 순발력] 앞차기!, 돌려차기!, 내려찍기!, 옆차기!", "앞차기!, 돌려차기!, 내려찍기!, 옆차기!")
+        self.combo_cues_template.currentIndexChanged.connect(self._on_cues_template_changed)
+        h_tmpl.addWidget(self.combo_cues_template, stretch=1)
+        h_tmpl.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
+        l_rcc.addLayout(h_tmpl)
+
+        l_rcc.addWidget(QLabel("✏️ 적용할 반응 타격 기술 구령 대본 (쉼표 또는 줄바꿈으로 구분하여 자유롭게 수정하세요):"))
+        self.txt_reac_cues = CompatibleTextEdit(
+            "백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!"
+        )
+        self.txt_reac_cues.setMinimumHeight(130)
+        self.txt_reac_cues.setMaximumHeight(200)
+        self.txt_reac_cues.setPlaceholderText("쉼표(,) 또는 줄바꿈으로 구분하여 반응 타격 기술명을 자유롭게 입력하세요")
+        l_rcc.addWidget(self.txt_reac_cues)
+
+        lbl_hint = QLabel("💡 스텝 중 위 기술명이 먼저 방송되고, 랜덤 긴장 대기 후 신호음(삑!/시작!/Let's Go!)에 맞춰 즉시 반응 타격합니다.")
+        lbl_hint.setStyleSheet("color: #0369a1; background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold;")
+        l_rcc.addWidget(lbl_hint)
+        l_reac.addWidget(g_reac_cues)
+
+        # [탭2 - 2번] 훈련 시간, 복귀 템포 및 신호음
+        g_reac_t = QGroupBox("2. 훈련 시간, 랜덤 긴장 대기 및 타격 신호음 설정")
         l_rct = QVBoxLayout(g_reac_t)
-        
-        # 1행: 총 훈련 시간 & 타격 후 다음 구령까지 복귀 대기
+        l_rct.setSpacing(5)
+
         h_rct1 = QHBoxLayout()
         h_rct1.addWidget(QLabel("⏱️ 총 훈련 시간:"))
         self.sp_reac_dur = QSpinBox()
         self.sp_reac_dur.setRange(30, 600)
         self.sp_reac_dur.setValue(120)
         self.sp_reac_dur.setSuffix(" 초")
-        self.sp_reac_dur.setFixedWidth(90)
+        self.sp_reac_dur.setFixedWidth(85)
         h_rct1.addWidget(self.sp_reac_dur)
 
         h_rct1.addWidget(QLabel("🦶 타격 후 복귀 대기:"))
@@ -1206,56 +1258,42 @@ class SparringDialog(QDialog):
         self.sp_reac_recovery.setSingleStep(0.1)
         self.sp_reac_recovery.setValue(0.8)
         self.sp_reac_recovery.setSuffix(" 초")
-        self.sp_reac_recovery.setFixedWidth(90)
-        self.sp_reac_recovery.setToolTip("비프음으로 발차기 타격 후 착지하여 다음 구령이 나올 때까지의 준비 시간입니다. (스피드 연타는 0.4~0.6초 추천)")
+        self.sp_reac_recovery.setFixedWidth(85)
         h_rct1.addWidget(self.sp_reac_recovery)
-        h_rct1.addStretch()
-        l_rct.addLayout(h_rct1)
 
-        # 2행: 랜덤 긴장 대기 (지시어 방송 후 비프음이 울릴 때까지)
-        h_rct2 = QHBoxLayout()
-        h_rct2.addWidget(QLabel("🎲 랜덤 긴장 대기:"))
+        h_rct1.addWidget(QLabel("🎲 랜덤 대기:"))
         self.sp_reac_min = QDoubleSpinBox()
         self.sp_reac_min.setRange(0.3, 15.0)
         self.sp_reac_min.setSingleStep(0.2)
         self.sp_reac_min.setValue(1.0)
-        self.sp_reac_min.setSuffix("초 ~ ")
-        self.sp_reac_min.setFixedWidth(90)
+        self.sp_reac_min.setSuffix("초~")
+        self.sp_reac_min.setFixedWidth(80)
         self.sp_reac_max = QDoubleSpinBox()
         self.sp_reac_max.setRange(0.5, 20.0)
         self.sp_reac_max.setSingleStep(0.2)
         self.sp_reac_max.setValue(2.5)
         self.sp_reac_max.setSuffix("초")
-        self.sp_reac_max.setFixedWidth(90)
-        h_rct2.addWidget(self.sp_reac_min)
-        h_rct2.addWidget(self.sp_reac_max)
-        h_rct2.addStretch()
-        l_rct.addLayout(h_rct2)
+        self.sp_reac_max.setFixedWidth(80)
+        h_rct1.addWidget(self.sp_reac_min)
+        h_rct1.addWidget(self.sp_reac_max)
+        h_rct1.addStretch()
+        l_rct.addLayout(h_rct1)
 
-        # 3행: 훈련 템포 빠른 프리셋 버튼 3종
         h_presets = QHBoxLayout()
         h_presets.addWidget(QLabel("⚡ 템포 프리셋:"))
-        
-        btn_preset_speed = QPushButton("🚀 초고속 스피드 연타 (많이 차기)")
-        btn_preset_speed.setStyleSheet("background-color: #fee2e2; color: #991b1b; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
+        btn_preset_speed = QPushButton("🚀 초고속 스피드 연타")
         btn_preset_speed.clicked.connect(lambda: self._apply_reac_preset(rec=0.5, min_w=0.6, max_w=1.6))
-        
         btn_preset_standard = QPushButton("🥋 실전 스파링 (표준)")
-        btn_preset_standard.setStyleSheet("background-color: #e0f2fe; color: #0369a1; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
         btn_preset_standard.clicked.connect(lambda: self._apply_reac_preset(rec=0.8, min_w=1.0, max_w=2.5))
-
         btn_preset_tactical = QPushButton("🛡️ 전술 카운터 (여유)")
-        btn_preset_tactical.setStyleSheet("background-color: #f1f5f9; color: #334155; font-weight: bold; border-radius: 4px; padding: 4px 8px;")
         btn_preset_tactical.clicked.connect(lambda: self._apply_reac_preset(rec=1.5, min_w=2.5, max_w=5.0))
-
         h_presets.addWidget(btn_preset_speed)
         h_presets.addWidget(btn_preset_standard)
         h_presets.addWidget(btn_preset_tactical)
         l_rct.addLayout(h_presets)
 
-        # 4행: 실시간 예상 타격 횟수 배너
         self.lbl_reac_est = QLabel()
-        self.lbl_reac_est.setStyleSheet("color: #047857; font-weight: bold; font-size: 12px; background: #ecfdf5; padding: 6px 10px; border-radius: 4px; border: 1px solid #a7f3d0;")
+        self.lbl_reac_est.setStyleSheet("color: #047857; font-weight: bold; font-size: 12px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;")
         l_rct.addWidget(self.lbl_reac_est)
 
         self.sp_reac_dur.valueChanged.connect(self._update_reaction_estimate)
@@ -1263,12 +1301,6 @@ class SparringDialog(QDialog):
         self.sp_reac_min.valueChanged.connect(self._update_reaction_estimate)
         self.sp_reac_max.valueChanged.connect(self._update_reaction_estimate)
         self._update_reaction_estimate()
-
-        l_reac.addWidget(g_reac_t)
-
-        # 2. 발차기 출발/타격 신호음 종류 선택 및 훈련 종료 신호
-        g_reac_sig = QGroupBox("2. 타격 트리거 신호 및 훈련 종료 신호")
-        l_sig = QVBoxLayout(g_reac_sig)
 
         h_sig1 = QHBoxLayout()
         h_sig1.addWidget(QLabel("⚡ 타격 시작 신호:"))
@@ -1282,115 +1314,38 @@ class SparringDialog(QDialog):
         self.combo_reac_signal.addItem("🗣️ 음성 구령: '탕!'", "voice_bang")
         self.combo_reac_signal.addItem("🎲 랜덤 믹스 (휘슬 / 비프 / 시작! / Let's Go! 무작위)", "random_mix")
         h_sig1.addWidget(self.combo_reac_signal, stretch=1)
-        l_sig.addLayout(h_sig1)
 
-        h_sig2 = QHBoxLayout()
-        h_sig2.addWidget(QLabel("🏁 훈련 종료 신호:"))
+        h_sig1.addWidget(QLabel("🏁 종료 신호:"))
         self.combo_reac_stop_signal = NoScrollComboBox()
-        self.combo_reac_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
-        self.combo_reac_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
-        self.combo_reac_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
-        self.combo_reac_stop_signal.addItem("🔔 경기장 차임벨 (딩~동 훈련 종료)", "bell")
-        self.combo_reac_stop_signal.addItem("📢 심판 호각 (종료 휘슬)", "whistle")
-        self.combo_reac_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        h_sig2.addWidget(self.combo_reac_stop_signal, stretch=1)
-        l_sig.addLayout(h_sig2)
+        self.combo_reac_stop_signal.addItem("🥋 음성: '갈려!' (추천)", "voice_kalyeo")
+        self.combo_reac_stop_signal.addItem("🛑 음성: '중지!'", "voice_stop")
+        self.combo_reac_stop_signal.addItem("✋ 음성: '그만!'", "voice_end")
+        self.combo_reac_stop_signal.addItem("🔔 경기장 차임벨", "bell")
+        self.combo_reac_stop_signal.addItem("📢 심판 호각", "whistle")
+        self.combo_reac_stop_signal.addItem("🔔 전자 비프음", "beep")
+        h_sig1.addWidget(self.combo_reac_stop_signal, stretch=1)
+        l_rct.addLayout(h_sig1)
 
-        l_reac.addWidget(g_reac_sig)
-
-        # 3. 명령어 템플릿 프리셋 선택 및 직접 편집
-        g_reac_cues = QGroupBox("3. 기술 지시 구령 및 템플릿")
-        l_rcc = QVBoxLayout(g_reac_cues)
-        
-        h_tmpl = QHBoxLayout()
-        h_tmpl.addWidget(QLabel("📋 훈련 템플릿 선택:"))
-        self.combo_cues_template = NoScrollComboBox()
-        self.combo_cues_template.addItem("🥋 [실전 스파링 콤보] 백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 상단!, 사이드 스텝 후 뒤차기!", "백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
-        self.combo_cues_template.addItem("⚡ [스피드 연타] 1연타!, 2연타!, 3연타!, 앞발 나래차기!", "1연타!, 2연타!, 3연타!, 앞발 나래차기!")
-        self.combo_cues_template.addItem("🛡️ [받아차기 / 카운터] 백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!", "백스텝 받아차기!, 뒤차기 카운터!, 앞발 컷트!, 맞받아치기!")
-        self.combo_cues_template.addItem("🏃‍♂️ [기본기 순발력] 앞차기!, 돌려차기!, 내려찍기!, 옆차기!", "앞차기!, 돌려차기!, 내려찍기!, 옆차기!")
-        self.combo_cues_template.currentIndexChanged.connect(self._on_cues_template_changed)
-        h_tmpl.addWidget(self.combo_cues_template, stretch=1)
-        l_rcc.addLayout(h_tmpl)
-
-        h_input = QHBoxLayout()
-        h_input.addWidget(QLabel("✏️ 적용 구령 목록:"))
-        self.txt_reac_cues = QLineEdit("백스텝 후 받아차기 교차 상단!, 전진 몸통차기 후 사이드 왼발 상단!, 앞발 컷트 후 뒷발 돌려차기 상단!, 사이드 스텝 후 뒤차기 카운터!")
-        self.txt_reac_cues.setPlaceholderText("쉼표로 구분하여 자유롭게 기술명을 입력하세요")
-        h_input.addWidget(self.txt_reac_cues, stretch=1)
-        l_rcc.addLayout(h_input)
-
-        lbl_hint = QLabel("※ 스텝 중 위 기술명이 먼저 제시되고, 무작위 대기 시간 후 신호음(삑!)에 즉시 반응 타격합니다. ('출발' 단어 없음)")
-        lbl_hint.setStyleSheet("color: #64748b; font-size: 11px;")
-        l_rcc.addWidget(lbl_hint)
-        l_reac.addWidget(g_reac_cues)
+        l_reac.addWidget(g_reac_t)
         l_reac.addStretch()
         self.tabs.addTab(tab_reaction, "⚡ 스텝 & 실전 반응")
 
-        # ── 탭 3: 스텝 + 콤비 연타 인터벌 ──
+        # ══════════════════════════════════════════════════════════════════
+        # ── 탭 3: 🔥 스텝 + 콤비네이션 연타 ──
+        # ══════════════════════════════════════════════════════════════════
         tab_combo = QWidget()
         l_combo = QVBoxLayout(tab_combo)
-        
-        # 1. 스텝 및 연타 시간 설정
-        g_combo_set = QGroupBox("1. 스텝 및 연타 시간 설정")
-        l_cbs = QVBoxLayout(g_combo_set)
-        h_cbs1 = QHBoxLayout()
-        h_cbs1.addWidget(QLabel("스텝 유지 시간:"))
-        self.sp_combo_step = QSpinBox()
-        self.sp_combo_step.setRange(3, 60)
-        self.sp_combo_step.setValue(8)
-        self.sp_combo_step.setSuffix(" 초")
-        h_cbs1.addWidget(self.sp_combo_step)
+        l_combo.setSpacing(6)
 
-        h_cbs1.addWidget(QLabel("전력 연타 시간:"))
-        self.sp_combo_strike = QSpinBox()
-        self.sp_combo_strike.setRange(2, 30)
-        self.sp_combo_strike.setValue(4)
-        self.sp_combo_strike.setSuffix(" 초")
-        h_cbs1.addWidget(self.sp_combo_strike)
+        # [탭3 - 1번 (맨 위!)] 제공된 스텝 & 집중 공격 기술 템플릿 확인 및 대본 수정 (넓은 편집창)
+        g_combo_kicks = QGroupBox("1. [2단계] 제공된 스텝 & 집중 공격 기술 템플릿 확인 및 자유 수정 (넓은 편집창)")
+        l_ckk = QVBoxLayout(g_combo_kicks)
+        l_ckk.setSpacing(6)
 
-        h_cbs1.addWidget(QLabel("총 세트 수:"))
-        self.sp_combo_sets = QSpinBox()
-        self.sp_combo_sets.setRange(1, 30)
-        self.sp_combo_sets.setValue(6)
-        self.sp_combo_sets.setSuffix(" 세트")
-        h_cbs1.addWidget(self.sp_combo_sets)
-        l_cbs.addLayout(h_cbs1)
-        l_combo.addWidget(g_combo_set)
-
-        # 2. 신호음 설정 (타격 시작음 및 연타 종료 구령/신호 선택)
-        g_combo_signals = QGroupBox("2. 타격 시작 신호 및 연타 종료 신호 (선택)")
-        l_csig = QVBoxLayout(g_combo_signals)
-        
-        h_cs1 = QHBoxLayout()
-        h_cs1.addWidget(QLabel("타격 시작 신호음:"))
-        self.combo_start_signal = NoScrollComboBox()
-        self.combo_start_signal.addItem("📢 경기용 심판 휘슬 (호각 삐익~!)", "whistle")
-        self.combo_start_signal.addItem("🔔 전자 비프음 (880Hz 삑~익!)", "beep")
-        self.combo_start_signal.addItem("🥁 웅장한 대북 타격음 (쿵!)", "drum")
-        h_cs1.addWidget(self.combo_start_signal, stretch=1)
-        l_csig.addLayout(h_cs1)
-
-        h_cs2 = QHBoxLayout()
-        h_cs2.addWidget(QLabel("연타 종료 신호:"))
-        self.combo_stop_signal = NoScrollComboBox()
-        self.combo_stop_signal.addItem("🥋 음성: '갈려!' (태권도 경기 공식 구령 - 강력 추천)", "voice_kalyeo")
-        self.combo_stop_signal.addItem("🛑 음성: '중지!' (전통 태권도/격투기 구령)", "voice_stop")
-        self.combo_stop_signal.addItem("✋ 음성: '그만!' (명확한 정지 구령)", "voice_end")
-        self.combo_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        self.combo_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
-        h_cs2.addWidget(self.combo_stop_signal, stretch=1)
-        l_csig.addLayout(h_cs2)
-        l_combo.addWidget(g_combo_signals)
-
-        # 3. 스텝 지시 구령 목록 (세트마다 순서대로 지시)
-        g_combo_steps = QGroupBox("3. 스텝 지시 구령 (세트마다 순환 지시)")
-        l_cst = QVBoxLayout(g_combo_steps)
-        
         h_tmpl_step = QHBoxLayout()
         h_tmpl_step.addWidget(QLabel("📋 스텝 템플릿:"))
         self.combo_step_tmpl = NoScrollComboBox()
-        self.combo_step_tmpl.addItem("🥋 [실전 스파링 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔", 
+        self.combo_step_tmpl.addItem("🥋 [실전 스파링 6스텝] 제자리 ➔ 앞뒤 ➔ 업다운 ➔ 앞발 ➔ 뒷발 ➔ 앞발 발바꿔",
             "제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
         self.combo_step_tmpl.addItem("⚡ [스피드 순발력] 제자리 ➔ 사이드 ➔ 지그재그 ➔ 앞발 발바꿔 ➔ 페이크",
             "제자리 스텝, 사이드 스텝, 지그재그 스텝, 앞발 스텝 발바꿔, 페이크 스텝")
@@ -1398,20 +1353,15 @@ class SparringDialog(QDialog):
             "앞뒤 스텝, 제자리 스텝, 백스텝 후 전진, 사이드 스텝")
         self.combo_step_tmpl.currentIndexChanged.connect(self._on_step_tmpl_changed)
         h_tmpl_step.addWidget(self.combo_step_tmpl, stretch=1)
-        l_cst.addLayout(h_tmpl_step)
+        h_tmpl_step.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
+        l_ckk.addLayout(h_tmpl_step)
 
-        h_step_txt = QHBoxLayout()
-        h_step_txt.addWidget(QLabel("✏️ 적용 스텝 목록:"))
-        self.txt_combo_steps = QLineEdit("제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
-        self.txt_combo_steps.setPlaceholderText("쉼표로 구분하여 자유롭게 스텝 종류를 입력하세요")
-        h_step_txt.addWidget(self.txt_combo_steps, stretch=1)
-        l_cst.addLayout(h_step_txt)
-        l_combo.addWidget(g_combo_steps)
+        l_ckk.addWidget(QLabel("✏️ 세트별 스텝 지시 구령 (쉼표 또는 줄바꿈으로 구분 - 넓은 편집창):"))
+        self.txt_combo_steps = CompatibleTextEdit("제자리 스텝, 앞뒤 스텝, 업다운 스텝, 앞발 스텝, 뒷발 스텝, 앞발 스텝 발바꿔")
+        self.txt_combo_steps.setFixedHeight(72)
+        self.txt_combo_steps.setPlaceholderText("쉼표 또는 줄바꿈으로 구분하여 스텝 종류를 입력하세요")
+        l_ckk.addWidget(self.txt_combo_steps)
 
-        # 4. 집중 훈련 발차기/공격 기술 설정 (사전 안내 방송 및 훈련 목표)
-        g_combo_kicks = QGroupBox("4. 집중 훈련 발차기/공격 기술 (사전 안내 및 타격 목표)")
-        l_ckk = QVBoxLayout(g_combo_kicks)
-        
         h_tmpl_kick = QHBoxLayout()
         h_tmpl_kick.addWidget(QLabel("📋 공격 기술 템플릿:"))
         self.combo_kick_tmpl = NoScrollComboBox()
@@ -1427,37 +1377,84 @@ class SparringDialog(QDialog):
         h_tmpl_kick.addWidget(self.combo_kick_tmpl, stretch=1)
         l_ckk.addLayout(h_tmpl_kick)
 
-        h_kick_txt = QHBoxLayout()
-        h_kick_txt.addWidget(QLabel("✏️ 집중 훈련 기술:"))
-        self.txt_combo_kicks = QLineEdit("전진 몸통공격 후 사이드 스텝 상단, 백스텝 후 뒷발 받아차기 공격과 교차 상단 공격, 전진 몸통 3연타")
-        self.txt_combo_kicks.setPlaceholderText("쉼표로 구분하여 자유롭게 집중 공격 기술을 입력하세요")
-        h_kick_txt.addWidget(self.txt_combo_kicks, stretch=1)
-        l_ckk.addLayout(h_kick_txt)
+        l_ckk.addWidget(QLabel("✏️ 집중 훈련 발차기/공격 기술 대본 (쉼표 또는 줄바꿈 구분 - 넓은 편집창):"))
+        self.txt_combo_kicks = CompatibleTextEdit("전진 몸통공격 후 사이드 스텝 상단, 백스텝 후 뒷발 받아차기 공격과 교차 상단 공격, 전진 몸통 3연타")
+        self.txt_combo_kicks.setMinimumHeight(105)
+        self.txt_combo_kicks.setMaximumHeight(165)
+        self.txt_combo_kicks.setPlaceholderText("쉼표 또는 줄바꿈으로 구분하여 집중 공격 기술을 입력하세요")
+        l_ckk.addWidget(self.txt_combo_kicks)
 
         h_kick_mode = QHBoxLayout()
         h_kick_mode.addWidget(QLabel("📢 기술 안내 방식:"))
         self.combo_kick_mode = NoScrollComboBox()
-        self.combo_kick_mode.addItem("🗣️ 매 세트 [스텝 + 집중 기술] 함께 호명 (실전 도장 훈련 - 강력 추천)", "each_set")
-        self.combo_kick_mode.addItem("🎯 1세트에서만 기술 설명 후 2세트부터는 스텝만 호명 (스피디 진행)", "first_set_only")
-        self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명 (본 훈련은 스텝 지시에만 집중)", "intro_only")
+        self.combo_kick_mode.addItem("🗣️ 매 세트 [스텝 + 집중 기술] 함께 호명 (실전 훈련 - 강력 추천)", "each_set")
+        self.combo_kick_mode.addItem("🎯 1세트에서만 기술 설명 후 2세트부터는 스텝만 호명", "first_set_only")
+        self.combo_kick_mode.addItem("📢 시작 전 사전 안내에서만 종합 설명", "intro_only")
         self.combo_kick_mode.setCurrentIndex(0)
         h_kick_mode.addWidget(self.combo_kick_mode, stretch=1)
         l_ckk.addLayout(h_kick_mode)
-
-        lbl_step_hint = QLabel("※ 집중 훈련 기술을 입력하면 매 세트 스텝 지시와 함께 해당 발차기 공격이 호명되어 실전 타격 목표를 명확히 지도합니다. '1세트만 설명'을 선택하면 1세트에서만 기술을 설명하고 2세트부터는 스텝만 빠르게 호명됩니다.")
-        lbl_step_hint.setStyleSheet("color: #64748b; font-size: 11px;")
-        l_ckk.addWidget(lbl_step_hint)
         l_combo.addWidget(g_combo_kicks)
+
+        # [탭3 - 2번] 스텝 및 연타 시간·신호음 설정
+        g_combo_set = QGroupBox("2. 스텝·연타 시간 및 신호음 설정")
+        l_cbs = QVBoxLayout(g_combo_set)
+        h_cbs1 = QHBoxLayout()
+        h_cbs1.addWidget(QLabel("⏱️ 스텝 유지 시간:"))
+        self.sp_combo_step = QSpinBox()
+        self.sp_combo_step.setRange(3, 60)
+        self.sp_combo_step.setValue(8)
+        self.sp_combo_step.setSuffix(" 초")
+        h_cbs1.addWidget(self.sp_combo_step)
+
+        h_cbs1.addWidget(QLabel("🔥 전력 연타 시간:"))
+        self.sp_combo_strike = QSpinBox()
+        self.sp_combo_strike.setRange(2, 30)
+        self.sp_combo_strike.setValue(4)
+        self.sp_combo_strike.setSuffix(" 초")
+        h_cbs1.addWidget(self.sp_combo_strike)
+
+        h_cbs1.addWidget(QLabel("🔁 총 세트 수:"))
+        self.sp_combo_sets = QSpinBox()
+        self.sp_combo_sets.setRange(1, 30)
+        self.sp_combo_sets.setValue(6)
+        self.sp_combo_sets.setSuffix(" 세트")
+        h_cbs1.addWidget(self.sp_combo_sets)
+        h_cbs1.addStretch()
+        l_cbs.addLayout(h_cbs1)
+
+        h_cs1 = QHBoxLayout()
+        h_cs1.addWidget(QLabel("📢 타격 시작 신호음:"))
+        self.combo_start_signal = NoScrollComboBox()
+        self.combo_start_signal.addItem("📢 경기용 심판 휘슬 (호각 삐익~!)", "whistle")
+        self.combo_start_signal.addItem("🔔 전자 비프음 (880Hz 삑~익!)", "beep")
+        self.combo_start_signal.addItem("🥁 웅장한 대북 타격음 (쿵!)", "drum")
+        h_cs1.addWidget(self.combo_start_signal, stretch=1)
+
+        h_cs1.addWidget(QLabel("🛑 연타 종료 신호:"))
+        self.combo_stop_signal = NoScrollComboBox()
+        self.combo_stop_signal.addItem("🥋 음성: '갈려!' (강력 추천)", "voice_kalyeo")
+        self.combo_stop_signal.addItem("🛑 음성: '중지!'", "voice_stop")
+        self.combo_stop_signal.addItem("✋ 음성: '그만!'", "voice_end")
+        self.combo_stop_signal.addItem("🔔 전자 비프음", "beep")
+        self.combo_stop_signal.addItem("📢 심판 호각", "whistle")
+        h_cs1.addWidget(self.combo_stop_signal, stretch=1)
+        l_cbs.addLayout(h_cs1)
+
+        l_combo.addWidget(g_combo_set)
         l_combo.addStretch()
         self.tabs.addTab(tab_combo, "🔥 스텝 + 콤비네이션 연타")
 
-        # ── 탭 4: 정규 스파링 라운드 ──
+        # ══════════════════════════════════════════════════════════════════
+        # ── 탭 4: 🥊 정규 스파링 라운드 ──
+        # ══════════════════════════════════════════════════════════════════
         tab_round = QWidget()
         l_rnd = QVBoxLayout(tab_round)
+        l_rnd.setSpacing(6)
 
-        # 1. 스파링 훈련 유형 선택
-        g_rnd_type = QGroupBox("1. 스파링 훈련 유형 선택")
+        # [탭4 - 1번 (맨 위!)] 스파링 유형 및 전술/안전 대본 자유 수정 (넓은 편집창)
+        g_rnd_type = QGroupBox("1. [2단계] 스파링 유형 선택 및 전술·안전 대본 자유 수정 (넓은 편집창)")
         l_rtype = QVBoxLayout(g_rnd_type)
+        l_rtype.setSpacing(6)
 
         h_rtype_sel = QHBoxLayout()
         h_rtype_sel.addWidget(QLabel("🥊 훈련 유형:"))
@@ -1467,6 +1464,7 @@ class SparringDialog(QDialog):
         self.combo_rnd_type.addItem("🤝 약속 스파링 (사전 합의된 공격/방어 기술 집중 훈련)", "promise")
         self.combo_rnd_type.addItem("⚔️ A선수 공격 / B선수 방어 (공수 분리 역할 훈련)", "attack_defense")
         h_rtype_sel.addWidget(self.combo_rnd_type, stretch=1)
+        h_rtype_sel.addWidget(self._make_refine_btn("🔄 수정한 한글로 영어·설명 다시 생성"))
         l_rtype.addLayout(h_rtype_sel)
 
         self.lbl_rnd_type_desc = QLabel()
@@ -1474,20 +1472,21 @@ class SparringDialog(QDialog):
         self.lbl_rnd_type_desc.setWordWrap(True)
         l_rtype.addWidget(self.lbl_rnd_type_desc)
 
-        # 1-1. 약속 스파링 세부 옵션 위젯
+        # 약속/전술 스파링 대본 (항상 보이도록 하되 유형에 따라 안내 레이블 지원)
         self.widget_promise_opt = QWidget()
-        l_prom = QHBoxLayout(self.widget_promise_opt)
-        l_prom.setContentsMargins(0, 4, 0, 0)
-        l_prom.addWidget(QLabel("🎯 약속 기술 내용:"))
-        self.txt_promise_detail = QLineEdit()
-        self.txt_promise_detail.setPlaceholderText("예: 앞발 찍기 후 돌려차기, 빠른 원투 후 백스텝 카운터")
-        l_prom.addWidget(self.txt_promise_detail, stretch=1)
+        l_prom = QVBoxLayout(self.widget_promise_opt)
+        l_prom.setContentsMargins(0, 2, 0, 0)
+        l_prom.addWidget(QLabel("🎯 라운드별 집중 약속 기술 / 전술 지시 대본 (넓은 편집창 - 자유 수정):"))
+        self.txt_promise_detail = CompatibleTextEdit()
+        self.txt_promise_detail.setFixedHeight(80)
+        self.txt_promise_detail.setPlaceholderText("예: 앞발 찍기 후 돌려차기, 빠른 원투 후 백스텝 카운터 (위 AI 입력창으로 생성하거나 한글로 수정 후 [🔄 다시 생성] 가능)")
+        l_prom.addWidget(self.txt_promise_detail)
         l_rtype.addWidget(self.widget_promise_opt)
 
-        # 1-2. A공격 / B방어 공수 스파링 세부 옵션 위젯
+        # 공수 진행 방식 및 사전 설명/안전 주의사항 대본
         self.widget_atk_def_opt = QWidget()
         l_atk_def = QVBoxLayout(self.widget_atk_def_opt)
-        l_atk_def.setContentsMargins(0, 4, 0, 0)
+        l_atk_def.setContentsMargins(0, 2, 0, 0)
 
         h_atk_mode = QHBoxLayout()
         h_atk_mode.addWidget(QLabel("🔄 공수 진행 방식:"))
@@ -1497,23 +1496,23 @@ class SparringDialog(QDialog):
         self.combo_atk_def_mode.addItem("🅱️ B선수 공격 / A선수 방어 (전 라운드 고정)", "b_attack_only")
         h_atk_mode.addWidget(self.combo_atk_def_mode, stretch=1)
         l_atk_def.addLayout(h_atk_mode)
-
-        h_caution = QHBoxLayout()
-        h_caution.addWidget(QLabel("⚠️ 안전 주의사항:"))
-        self.txt_atk_def_caution = QLineEdit()
-        self.txt_atk_def_caution.setText("스파링 시 안전에 유의하세요. 방어 선수는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격 선수는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!")
-        self.txt_atk_def_caution.setPlaceholderText("공수 스파링 시작 전 송출될 안전 수칙 및 주의사항을 입력하세요")
-        h_caution.addWidget(self.txt_atk_def_caution, stretch=1)
-        l_atk_def.addLayout(h_caution)
         l_rtype.addWidget(self.widget_atk_def_opt)
+
+        l_rtype.addWidget(QLabel("📢 스파링 사전 설명 및 안전 주의사항 방송 대본 (넓은 편집창 - 자유 수정):"))
+        self.txt_atk_def_caution = CompatibleTextEdit(
+            "스파링 시 안전에 유의하세요. 방어 선수는 가드를 바짝 올리고 무리한 반격을 삼가며, 공격 선수는 과도한 흥분을 자제하고 정확한 타격에 집중하세요. 상호 부상에 절대 주의합니다!"
+        )
+        self.txt_atk_def_caution.setFixedHeight(85)
+        self.txt_atk_def_caution.setPlaceholderText("스파링 시작 전 송출될 전술 설명 및 안전 주의사항을 자유롭게 입력하세요")
+        l_rtype.addWidget(self.txt_atk_def_caution)
 
         self.combo_rnd_type.currentIndexChanged.connect(self._on_rnd_type_changed)
         l_rnd.addWidget(g_rnd_type)
 
-        # 2. 스파링 라운드 시간 설정
-        g_rnd_set = QGroupBox("2. 스파링 라운드 시간 설정")
-        l_rnds = QHBoxLayout(g_rnd_set)
-        
+        # [탭4 - 2번] 스파링 라운드 시간 및 종료 신호 설정
+        g_rnd_set = QGroupBox("2. 스파링 라운드 시간 및 종료 신호 설정")
+        l_rnds_vbox = QVBoxLayout(g_rnd_set)
+        l_rnds = QHBoxLayout()
         l_rnds.addWidget(QLabel("⏱️ 1라운드 경기 시간:"))
         self.sp_rnd_time = QSpinBox()
         self.sp_rnd_time.setRange(30, 300)
@@ -1538,41 +1537,31 @@ class SparringDialog(QDialog):
         self.sp_rnd_count.setFixedWidth(90)
         l_rnds.addWidget(self.sp_rnd_count)
         l_rnds.addStretch()
-        l_rnd.addWidget(g_rnd_set)
-
-        # 3. 라운드 종료 신호 설정 (일반 라운드 및 최종 라운드 분리 선택)
-        g_rnd_sig = QGroupBox("3. 라운드 종료 신호 (선택)")
-        l_rsig = QVBoxLayout(g_rnd_sig)
+        l_rnds_vbox.addLayout(l_rnds)
 
         h_rsig1 = QHBoxLayout()
-        h_rsig1.addWidget(QLabel("🔔 일반 라운드 종료 구령 (1R ~):"))
+        h_rsig1.addWidget(QLabel("🔔 일반 라운드 종료:"))
         self.combo_rnd_stop_signal = NoScrollComboBox()
-        self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (중간 라운드 공식 구령 - 강력 추천)", "voice_kalyeo")
+        self.combo_rnd_stop_signal.addItem("🥋 음성: '갈려! 타임!' (강력 추천)", "voice_kalyeo")
         self.combo_rnd_stop_signal.addItem("🛑 음성: '중지! 타임!'", "voice_stop")
         self.combo_rnd_stop_signal.addItem("✋ 음성: '그만! 타임!'", "voice_end")
-        self.combo_rnd_stop_signal.addItem("🔔 경기장 공/벨 (딩~동 라운드 종료)", "bell")
-        self.combo_rnd_stop_signal.addItem("📢 심판 호각 (짧은 종료 휘슬)", "whistle")
-        self.combo_rnd_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
+        self.combo_rnd_stop_signal.addItem("🔔 경기장 공/벨 (딩~동)", "bell")
+        self.combo_rnd_stop_signal.addItem("📢 심판 호각", "whistle")
+        self.combo_rnd_stop_signal.addItem("🔔 전자 비프음", "beep")
         h_rsig1.addWidget(self.combo_rnd_stop_signal, stretch=1)
-        l_rsig.addLayout(h_rsig1)
 
-        h_rsig2 = QHBoxLayout()
-        h_rsig2.addWidget(QLabel("🏁 최종(마지막) 라운드 종료 구령:"))
+        h_rsig1.addWidget(QLabel("🏁 최종 라운드 종료:"))
         self.combo_rnd_final_stop_signal = NoScrollComboBox()
-        self.combo_rnd_final_stop_signal.addItem("✋ 음성: '그만! 타임!' (마지막 라운드 경기 종료 공식 구령 - 강력 추천)", "voice_end")
-        self.combo_rnd_final_stop_signal.addItem("🛑 음성: '중지! 타임!' (경기 종료 구령)", "voice_stop")
+        self.combo_rnd_final_stop_signal.addItem("✋ 음성: '그만! 타임!' (강력 추천)", "voice_end")
+        self.combo_rnd_final_stop_signal.addItem("🛑 음성: '중지! 타임!'", "voice_stop")
         self.combo_rnd_final_stop_signal.addItem("🥋 음성: '갈려! 타임!'", "voice_kalyeo")
-        self.combo_rnd_final_stop_signal.addItem("🔔 경기장 공/벨 (딩~동 최종 종료)", "bell")
-        self.combo_rnd_final_stop_signal.addItem("📢 심판 호각 (종료 휘슬)", "whistle")
-        self.combo_rnd_final_stop_signal.addItem("🔔 전자 비프음 (종료 알림 비프)", "beep")
-        h_rsig2.addWidget(self.combo_rnd_final_stop_signal, stretch=1)
-        l_rsig.addLayout(h_rsig2)
+        self.combo_rnd_final_stop_signal.addItem("🔔 경기장 공/벨", "bell")
+        self.combo_rnd_final_stop_signal.addItem("📢 심판 호각", "whistle")
+        self.combo_rnd_final_stop_signal.addItem("🔔 전자 비프음", "beep")
+        h_rsig1.addWidget(self.combo_rnd_final_stop_signal, stretch=1)
+        l_rnds_vbox.addLayout(h_rsig1)
 
-        lbl_rnd_sig_tip = QLabel("💡 1, 2라운드 등 중간 라운드는 '갈려!'로 잠시 끊고, 마지막 라운드는 '그만!' 또는 '중지!'로 스파링을 완벽하게 끝냅니다.")
-        lbl_rnd_sig_tip.setStyleSheet("color: #0369a1; font-size: 11px; padding-left: 2px;")
-        l_rsig.addWidget(lbl_rnd_sig_tip)
-
-        l_rnd.addWidget(g_rnd_sig)
+        l_rnd.addWidget(g_rnd_set)
         l_rnd.addStretch()
         self.tabs.addTab(tab_round, "🥊 정규 스파링 라운드")
 
@@ -1900,8 +1889,49 @@ class SparringDialog(QDialog):
 
         self._on_ai_generate_circuit()
 
+    def _get_active_tab_mode(self) -> str:
+        idx = self.tabs.currentIndex() if hasattr(self, 'tabs') else 0
+        return {0: "circuit", 1: "relay", 2: "reaction", 3: "combo", 4: "round"}.get(idx, "circuit")
+
+    def _collect_active_tab_fields(self, tab_mode: str) -> dict:
+        if tab_mode == "circuit":
+            return {
+                "theme_title": self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else "",
+                "intro_text": self.txt_circuit_intro.text().strip() if hasattr(self, 'txt_circuit_intro') else "",
+                "formatted_moves": self.txt_circuit_moves.toPlainText().strip() if hasattr(self, 'txt_circuit_moves') else "",
+            }
+        elif tab_mode == "relay":
+            return {
+                "intro_text": self.txt_relay_intro.toPlainText().strip() if hasattr(self, 'txt_relay_intro') else "",
+                "cue_text": self.txt_relay_cue.toPlainText().strip() if hasattr(self, 'txt_relay_cue') else "",
+            }
+        elif tab_mode == "reaction":
+            return {
+                "cues": self.txt_reac_cues.text().strip() if hasattr(self, 'txt_reac_cues') else "",
+            }
+        elif tab_mode == "combo":
+            return {
+                "step_types": self.txt_combo_steps.text().strip() if hasattr(self, 'txt_combo_steps') else "",
+                "kick_types": self.txt_combo_kicks.text().strip() if hasattr(self, 'txt_combo_kicks') else "",
+            }
+        elif tab_mode == "round":
+            return {
+                "round_type": self.combo_rnd_type.currentData() if hasattr(self, 'combo_rnd_type') else "real",
+                "promise_detail": self.txt_promise_detail.text().strip() if hasattr(self, 'txt_promise_detail') else "",
+                "caution_text": self.txt_atk_def_caution.text().strip() if hasattr(self, 'txt_atk_def_caution') else "",
+            }
+        return {}
+
+    def _set_refine_buttons_state(self, enabled: bool, busy_text: Optional[str] = None):
+        for btn in getattr(self, '_refine_buttons', []):
+            btn.setEnabled(enabled)
+            if busy_text:
+                btn.setText(busy_text)
+            else:
+                btn.setText("🔄 수정한 한글로 영어·설명 다시 생성")
+
     def _on_ai_generate_circuit(self):
-        """요구사항 타이핑 또는 첨부된 계획표/링크를 기반으로 즉석 템플릿(사전설명+콤보대본) 생성"""
+        """현재 선택된 탭에 맞춰 요구사항 타이핑 또는 첨부된 계획표/링크를 기반으로 즉석 템플릿 생성"""
         user_prompt = self.txt_ai_circuit_prompt.text().strip() if hasattr(self, 'txt_ai_circuit_prompt') else ""
         doc_text = getattr(self, '_ai_loaded_doc_text', '')
         if not doc_text:
@@ -1912,33 +1942,37 @@ class SparringDialog(QDialog):
             QMessageBox.information(
                 self,
                 "운동 요구사항 입력 안내",
-                "원하는 서킷 운동 요구사항을 입력하거나 [🔗 구글드라이브 링크] / [📂 내 컴퓨터 파일]을 선택해 주세요.\n\n"
+                "상단 입력창에 원하는 운동 요구사항을 입력하거나 [🔗 구글드라이브] / [📂 내 파일]을 선택해 주세요.\n\n"
                 "💡 입력 예시:\n"
                 "• 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야\n"
-                "• 스쿼트 점프 3회 후 나래차기와 전방회전낙법\n"
-                "• 초등부 순발력 강화 점프 발차기 서킷"
+                "• 릴레이 미트: 1세트는 원투 펀치 후 돌려차기, 2세트는 백스텝 받아차기\n"
+                "• 반응 훈련: 원투, 더킹, 나래차기, 뒤차기 구령으로 구성\n"
+                "• 스텝 연타: 빠른발 스텝 뛰다가 신호 울리면 3연타와 나래차기"
             )
             if hasattr(self, 'txt_ai_circuit_prompt'):
                 self.txt_ai_circuit_prompt.setFocus()
             return
 
-        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+        tab_mode = self._get_active_tab_mode()
+        lang_mode = self.combo_circuit_lang.currentData() if hasattr(self, 'combo_circuit_lang') else "mix_kids"
+        lang_mode = lang_mode or "mix_kids"
         mode_type = "single" if (hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked()) else "cycle"
 
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(False)
             self.btn_ai_circuit_gen.setText("⏳ 즉석 템플릿 생성 중...")
-        if hasattr(self, 'btn_ai_refine_circuit'):
-            self.btn_ai_refine_circuit.setEnabled(False)
+        self._set_refine_buttons_state(False)
         if hasattr(self, 'status_lbl'):
-            self.status_lbl.setText("🤖 요구사항에 맞는 즉석 템플릿(사전 설명 + 세트별 현장 영어/한글 대본)을 생성하고 있습니다...")
+            self.status_lbl.setText("🤖 현재 탭에 맞는 즉석 템플릿(사전 설명 + 현장 구령 대본)을 생성하고 있습니다...")
 
         self._ai_circuit_worker = AICircuitWorker(
             prompt=user_prompt,
+            tab_mode=tab_mode,
             lang_mode=lang_mode,
             mode_type=mode_type,
             doc_text=doc_text,
             refine_mode=False,
+            current_fields=self._collect_active_tab_fields(tab_mode),
             parent=self
         )
         self._ai_circuit_worker.finished_ok.connect(self._on_ai_circuit_finished)
@@ -1946,38 +1980,39 @@ class SparringDialog(QDialog):
         self._ai_circuit_worker.start()
 
     def _on_ai_refine_circuit(self):
-        """사용자가 한국어로 수정한 템플릿 내용을 바탕으로 현장감 있는 쉬운 영어 구령과 사전 설명을 AI가 다시 맞춰줌"""
-        edited_moves = self.txt_circuit_moves.toPlainText().strip() if hasattr(self, 'txt_circuit_moves') else ""
-        if not edited_moves:
+        """현재 탭에서 사용자가 한국어로 수정한 템플릿 내용을 바탕으로 현장감 있는 영어 구령과 설명을 AI가 다시 맞춰줌"""
+        tab_mode = self._get_active_tab_mode()
+        current_fields = self._collect_active_tab_fields(tab_mode)
+        has_any_text = any(bool(str(v).strip()) for k, v in current_fields.items() if k != "round_type")
+        if not has_any_text:
             QMessageBox.information(
                 self,
                 "수정할 템플릿 없음",
-                "아래 템플릿 편집창에 동작이나 한글 설명을 먼저 입력하거나 수정해 주세요."
+                "현재 탭의 템플릿 편집창에 동작이나 한글 설명을 먼저 입력하거나 수정해 주세요."
             )
             return
 
-        cur_theme_title = self.txt_circuit_theme_title.text().strip() if hasattr(self, 'txt_circuit_theme_title') else ""
-        cur_intro_text = self.txt_circuit_intro.text().strip() if hasattr(self, 'txt_circuit_intro') else ""
         user_prompt = self.txt_ai_circuit_prompt.text().strip() if hasattr(self, 'txt_ai_circuit_prompt') else ""
-        lang_mode = self.combo_circuit_lang.currentData() or "mix_kids"
+        lang_mode = self.combo_circuit_lang.currentData() if hasattr(self, 'combo_circuit_lang') else "mix_kids"
+        lang_mode = lang_mode or "mix_kids"
         mode_type = "single" if (hasattr(self, 'rb_circuit_single') and self.rb_circuit_single.isChecked()) else "cycle"
 
-        if hasattr(self, 'btn_ai_refine_circuit'):
-            self.btn_ai_refine_circuit.setEnabled(False)
-            self.btn_ai_refine_circuit.setText("⏳ 한글 수정본 맞춰 영어·설명 재작성 중...")
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(False)
+        self._set_refine_buttons_state(False, "⏳ 한글 수정본 재작성 중...")
         if hasattr(self, 'status_lbl'):
             self.status_lbl.setText("🔄 수정하신 한국어 동작에 맞춰 쉽고 자연스러운 현장 영어 구령과 사전 설명을 다시 생성하고 있습니다...")
 
         self._ai_circuit_worker = AICircuitWorker(
             prompt=user_prompt,
+            tab_mode=tab_mode,
             lang_mode=lang_mode,
             mode_type=mode_type,
             refine_mode=True,
-            edited_moves_text=edited_moves,
-            current_theme_title=cur_theme_title,
-            current_intro_text=cur_intro_text,
+            edited_moves_text=current_fields.get("formatted_moves", ""),
+            current_theme_title=current_fields.get("theme_title", ""),
+            current_intro_text=current_fields.get("intro_text", ""),
+            current_fields=current_fields,
             parent=self
         )
         self._ai_circuit_worker.finished_ok.connect(self._on_ai_circuit_finished)
@@ -1987,38 +2022,73 @@ class SparringDialog(QDialog):
     def _on_ai_circuit_finished(self, res: dict):
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(True)
-            self.btn_ai_circuit_gen.setText("✨ 요구사항으로 즉석 템플릿 생성")
-        if hasattr(self, 'btn_ai_refine_circuit'):
-            self.btn_ai_refine_circuit.setEnabled(True)
-            self.btn_ai_refine_circuit.setText("🔄 수정한 한글로 영어·설명 다시 생성하기")
+            self.btn_ai_circuit_gen.setText("✨ 현재 탭에 즉석 템플릿 생성")
+        self._set_refine_buttons_state(True)
 
+        tab_mode = res.get("tab_mode", self._get_active_tab_mode())
         self._programmatic_circuit_text_update = True
         try:
-            theme_title = res.get("theme_title", "").strip()
-            intro_text = res.get("intro_text", "").strip()
-            formatted_moves = res.get("formatted_moves", "").strip()
+            if tab_mode == "circuit":
+                theme_title = res.get("theme_title", "").strip()
+                intro_text = res.get("intro_text", "").strip()
+                formatted_moves = res.get("formatted_moves", "").strip()
 
-            if hasattr(self, 'combo_circuit_theme'):
-                self.combo_circuit_theme.blockSignals(True)
-                for i in range(self.combo_circuit_theme.count()):
-                    if self.combo_circuit_theme.itemData(i) == "custom":
-                        self.combo_circuit_theme.setCurrentIndex(i)
-                        break
-                self.combo_circuit_theme.blockSignals(False)
+                if hasattr(self, 'combo_circuit_theme'):
+                    self.combo_circuit_theme.blockSignals(True)
+                    for i in range(self.combo_circuit_theme.count()):
+                        if self.combo_circuit_theme.itemData(i) == "custom":
+                            self.combo_circuit_theme.setCurrentIndex(i)
+                            break
+                    self.combo_circuit_theme.blockSignals(False)
 
-            if theme_title and hasattr(self, 'txt_circuit_theme_title'):
-                self.txt_circuit_theme_title.setText(theme_title)
-            if intro_text and hasattr(self, 'txt_circuit_intro'):
-                self.txt_circuit_intro.setText(intro_text)
-            if formatted_moves and hasattr(self, 'txt_circuit_moves'):
-                self.txt_circuit_moves.setPlainText(formatted_moves)
+                if theme_title and hasattr(self, 'txt_circuit_theme_title'):
+                    self.txt_circuit_theme_title.setText(theme_title)
+                if intro_text and hasattr(self, 'txt_circuit_intro'):
+                    self.txt_circuit_intro.setText(intro_text)
+                if formatted_moves and hasattr(self, 'txt_circuit_moves'):
+                    self.txt_circuit_moves.setPlainText(formatted_moves)
 
-            self._circuit_moves_user_modified = True
-            self._ai_generated_active = True
+                self._circuit_moves_user_modified = True
+                self._ai_generated_active = True
+
+            elif tab_mode == "relay":
+                intro_text = res.get("intro_text", "").strip()
+                cue_text = res.get("cue_text", "").strip()
+                if intro_text and hasattr(self, 'txt_relay_intro'):
+                    self.txt_relay_intro.setPlainText(intro_text)
+                if cue_text and hasattr(self, 'txt_relay_cue'):
+                    self.txt_relay_cue.setPlainText(cue_text)
+
+            elif tab_mode == "reaction":
+                cues = res.get("cues", "").strip()
+                if cues and hasattr(self, 'txt_reac_cues'):
+                    self.txt_reac_cues.setText(cues)
+
+            elif tab_mode == "combo":
+                step_types = res.get("step_types", "").strip()
+                kick_types = res.get("kick_types", "").strip()
+                if step_types and hasattr(self, 'txt_combo_steps'):
+                    self.txt_combo_steps.setText(step_types)
+                if kick_types and hasattr(self, 'txt_combo_kicks'):
+                    self.txt_combo_kicks.setText(kick_types)
+
+            elif tab_mode == "round":
+                rnd_type = res.get("round_type", "").strip()
+                promise_detail = res.get("promise_detail", "").strip()
+                caution_text = res.get("caution_text", "").strip()
+                if rnd_type and hasattr(self, 'combo_rnd_type'):
+                    for i in range(self.combo_rnd_type.count()):
+                        if self.combo_rnd_type.itemData(i) == rnd_type:
+                            self.combo_rnd_type.setCurrentIndex(i)
+                            break
+                if promise_detail and hasattr(self, 'txt_promise_detail'):
+                    self.txt_promise_detail.setText(promise_detail)
+                if caution_text and hasattr(self, 'txt_atk_def_caution'):
+                    self.txt_atk_def_caution.setText(caution_text)
 
             if hasattr(self, 'status_lbl'):
                 self.status_lbl.setText(
-                    "✨ 템플릿과 현장 영어 구령이 완성되었습니다! 내용을 확인·수정한 뒤 아래 [🚀 맞춤 훈련 음원 생성하기]를 누르세요."
+                    "✨ 즉석 템플릿이 완성되었습니다! 편집창에서 확인·수정한 뒤 아래 [🚀 맞춤 훈련 음원 생성하기]를 누르세요."
                 )
         finally:
             self._programmatic_circuit_text_update = False
@@ -2026,10 +2096,8 @@ class SparringDialog(QDialog):
     def _on_ai_circuit_failed(self, err_msg: str):
         if hasattr(self, 'btn_ai_circuit_gen'):
             self.btn_ai_circuit_gen.setEnabled(True)
-            self.btn_ai_circuit_gen.setText("✨ 요구사항으로 즉석 템플릿 생성")
-        if hasattr(self, 'btn_ai_refine_circuit'):
-            self.btn_ai_refine_circuit.setEnabled(True)
-            self.btn_ai_refine_circuit.setText("🔄 수정한 한글로 영어·설명 다시 생성하기")
+            self.btn_ai_circuit_gen.setText("✨ 현재 탭에 즉석 템플릿 생성")
+        self._set_refine_buttons_state(True)
         if hasattr(self, 'status_lbl'):
             self.status_lbl.setText(f"⚠️ AI 대본 생성 오류: {err_msg}")
         QMessageBox.warning(self, "AI 자동완성 오류", f"AI 대본 생성 중 오류가 발생했습니다:\n{err_msg}")
@@ -2041,7 +2109,7 @@ class SparringDialog(QDialog):
             if hasattr(self, 'txt_ai_circuit_prompt') and self.txt_ai_circuit_prompt.text().strip():
                 self._on_ai_generate_circuit()
                 return
-            QMessageBox.information(self, "커스텀 모드", "직접 입력 모드에서는 AI 자동완성 칸에 원하는 동작을 입력하거나 직접 편집하실 수 있습니다.")
+            QMessageBox.information(self, "커스텀 모드", "직접 입력 모드에서는 상단 AI 자동완성 칸에 원하는 동작을 입력하거나 직접 편집하실 수 있습니다.")
             return
 
         lang_mode = self.combo_circuit_lang.currentData() or "kr"
@@ -2198,14 +2266,14 @@ class SparringDialog(QDialog):
         if rnd_type == "shadow":
             self.lbl_rnd_type_desc.setText(
                 "💡 가상 상대를 이미지 트레이닝하며 전신 풋워크와 연속기를 구사합니다. "
-                "라운드 시작 '제 n라운드 섀도우 스파링 시작!' 및 종료 10초 전 '전력 스퍼트!' 구령이 송출됩니다."
+                "라운드 시작 '제 n라운드! 준비!' 및 종료 10초 전 '전력 스퍼트!' 구령이 송출됩니다."
             )
-            self.widget_promise_opt.setVisible(False)
+            self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(False)
         elif rnd_type == "promise":
             self.lbl_rnd_type_desc.setText(
                 "💡 사전에 합의된 공격/방어 기술을 집중 훈련합니다. "
-                "약속 기술을 입력하시면 매 라운드 시작 시 해당 기술명이 함께 호명되어 선수들의 집중도를 극대화합니다."
+                "약속 기술을 입력하시면 사전 안내 방송에 함께 호명되어 선수들의 집중도를 극대화합니다."
             )
             self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(False)
@@ -2214,14 +2282,14 @@ class SparringDialog(QDialog):
                 "💡 한 선수는 공격, 한 선수는 방어만 수행하는 공수 특화 훈련입니다. "
                 "라운드별로 공수를 자동 교대하거나 특정 선수의 역할을 고정하여 진행할 수 있습니다."
             )
-            self.widget_promise_opt.setVisible(False)
+            self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(True)
         else:  # real
             self.lbl_rnd_type_desc.setText(
                 "💡 실전 경기와 동일한 환경으로 양 선수가 마주보고 자유 대련을 펼칩니다. "
-                "경기 시작 휘슬, 10초 전 '공격!' 구령, 종료 시 '갈려!' 및 최종 경기 종료 시 '차렷, 경례' 멘트가 지원됩니다."
+                "경기 시작 휘슬, 10초 전 '공격!' 구령, 종료 시 '갈려!' 및 최종 경기 종료 멘트가 지원됩니다."
             )
-            self.widget_promise_opt.setVisible(False)
+            self.widget_promise_opt.setVisible(True)
             self.widget_atk_def_opt.setVisible(False)
 
 
@@ -2320,8 +2388,8 @@ class SparringDialog(QDialog):
             params["min_interval"] = float(self.sp_reac_min.value())
             params["max_interval"] = float(self.sp_reac_max.value())
             params["recovery_sec"] = float(self.sp_reac_recovery.value())
-            raw_cues = self.txt_reac_cues.text().split(",")
-            params["cues"] = [c.strip() for c in raw_cues if c.strip()]
+            raw_cues = [c.strip() for line in self.txt_reac_cues.text().splitlines() for c in line.split(",") if c.strip()]
+            params["cues"] = raw_cues or ["1연타!", "2연타!", "받아차기!", "카운터!"]
             params["signal_sound"] = self.combo_reac_signal.currentData()
             params["stop_signal"] = self.combo_reac_stop_signal.currentData() if hasattr(self, 'combo_reac_stop_signal') else "voice_kalyeo"
 

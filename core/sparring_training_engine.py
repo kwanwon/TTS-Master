@@ -959,29 +959,44 @@ class SparringTrainingEngine:
                         )
                 elif mode == "rounds":
                     round_type = params.get("round_type", "real")
-                    if round_type == "shadow":
-                        intro_text = "지금부터 섀도우 스파링 훈련을 시작합니다. 가상의 상대를 상상하며 실전처럼 스텝을 뛰고 공방 기술을 구사하세요. 준비해 주세요!"
+                    promise_note = params.get("promise_detail", "").strip()
+                    clean_note = promise_note.rstrip(".!? ").strip()
+                    import re
+                    is_full_sentence = bool(re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_note))
+
+                    if clean_note and (clean_note.startswith("지금부터") or "훈련을 시작" in clean_note):
+                        intro_text = promise_note
+                    elif round_type == "shadow":
+                        if clean_note:
+                            mid = f"이번 집중 미션은 {clean_note}." if is_full_sentence else f"이번 집중 미션은 {clean_note}입니다."
+                            intro_text = f"지금부터 섀도우 스파링 훈련을 시작합니다. {mid} 가상의 상대를 상상하며 실전처럼 스텝을 뛰고 공방 기술을 구사하세요. 준비해 주세요!"
+                        else:
+                            intro_text = "지금부터 섀도우 스파링 훈련을 시작합니다. 가상의 상대를 상상하며 실전처럼 스텝을 뛰고 공방 기술을 구사하세요. 준비해 주세요!"
                     elif round_type == "promise":
-                        promise_note = params.get("promise_detail", "").strip()
-                        if promise_note:
-                            clean_note = promise_note.rstrip(".!? ").strip()
-                            import re
-                            if re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_note):
-                                intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 {clean_note}. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
-                            else:
-                                intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. 이번 약속 기술은 {clean_note}입니다. 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
+                        if clean_note:
+                            mid = f"이번 약속 기술은 {clean_note}." if is_full_sentence else f"이번 약속 기술은 {clean_note}입니다."
+                            intro_text = f"지금부터 약속 스파링 훈련을 시작합니다. {mid} 상호 원칙을 지키며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
                         else:
                             intro_text = "지금부터 약속 스파링 훈련을 시작합니다. 약속된 기술과 공방 원칙을 준수하며 침착하게 공방을 이어가세요. 양 선수 준비해 주세요!"
                     elif round_type == "attack_defense":
                         atk_def_mode = params.get("atk_def_mode", "alternate")
                         if atk_def_mode == "a_attack_only":
-                            intro_text = "지금부터 A선수 공격, B선수 방어 공수 특화 스파링 훈련을 시작합니다."
+                            base_ad = "지금부터 A선수 공격, B선수 방어 공수 특화 스파링 훈련을 시작합니다."
                         elif atk_def_mode == "b_attack_only":
-                            intro_text = "지금부터 B선수 공격, A선수 방어 공수 특화 스파링 훈련을 시작합니다."
+                            base_ad = "지금부터 B선수 공격, A선수 방어 공수 특화 스파링 훈련을 시작합니다."
                         else:
-                            intro_text = "지금부터 A선수와 B선수 공수 교대 스파링 훈련을 시작합니다."
+                            base_ad = "지금부터 A선수와 B선수 공수 교대 스파링 훈련을 시작합니다."
+                        if clean_note:
+                            mid = f" 집중 미션은 {clean_note}." if is_full_sentence else f" 집중 미션은 {clean_note}입니다."
+                            intro_text = base_ad + mid
+                        else:
+                            intro_text = base_ad
                     else:
-                        intro_text = "지금부터 정규 실전 스파링 라운드 훈련을 시작합니다. 양 선수 마주보고 차렷, 경례! 준비해 주세요!"
+                        if clean_note:
+                            mid = f"이번 라운드 집중 과제는 {clean_note}." if is_full_sentence else f"이번 라운드 집중 과제는 {clean_note}입니다."
+                            intro_text = f"지금부터 정규 실전 스파링 라운드 훈련을 시작합니다. {mid} 양 선수 마주보고 차렷, 경례! 준비해 주세요!"
+                        else:
+                            intro_text = "지금부터 정규 실전 스파링 라운드 훈련을 시작합니다. 양 선수 마주보고 차렷, 경례! 준비해 주세요!"
                 else:
                     intro_text = "지금부터 스파링 훈련을 시작합니다. 준비해 주세요!"
 

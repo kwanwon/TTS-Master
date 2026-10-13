@@ -865,6 +865,9 @@ class AudioEditorTab(QWidget):
                 if not clips:
                     return
 
+                if self.main_window and hasattr(self.main_window, 'tabs'):
+                    self.main_window.tabs.setCurrentWidget(self)
+
                 # 기존 타임라인 정리 여부 확인
                 if self.timeline_view.get_timeline_data():
                     r = QMessageBox.question(
@@ -917,16 +920,28 @@ class AudioEditorTab(QWidget):
             traceback.print_exc()
             QMessageBox.critical(self, "마법사 실행 오류", f"셔틀런 마법사 실행 중 오류가 발생했습니다:\n{e}")
 
-    def open_sparring_wizard(self):
+    def open_sparring_wizard(self, initial_tab: int = 0, initial_prompt: str = "", initial_doc_text: str = ""):
         """🥋 스파링 훈련 마법사 열기 및 타임라인 로드"""
         try:
             tts_eng = self.main_window.tts_engine if self.main_window else None
-            dlg = SparringDialog(parent=self, tts_engine=tts_eng)
+            tab_idx = initial_tab if isinstance(initial_tab, int) else 0
+            prompt_str = initial_prompt if isinstance(initial_prompt, str) else ""
+            doc_str = initial_doc_text if isinstance(initial_doc_text, str) else ""
+            dlg = SparringDialog(
+                parent=self,
+                tts_engine=tts_eng,
+                initial_tab=tab_idx,
+                initial_prompt=prompt_str,
+                initial_doc_text=doc_str
+            )
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
                 res = dlg.generated_result
                 clips = res.get("timeline_clips", [])
                 if not clips:
                     return
+
+                if self.main_window and hasattr(self.main_window, 'tabs'):
+                    self.main_window.tabs.setCurrentWidget(self)
 
                 # 기존 타임라인 정리 여부 확인
                 if self.timeline_view.get_timeline_data():
@@ -982,16 +997,26 @@ class AudioEditorTab(QWidget):
             traceback.print_exc()
             QMessageBox.critical(self, "마법사 실행 오류", f"스파링 마법사 실행 중 오류가 발생했습니다:\n{e}")
 
-    def open_warmup_wizard(self):
+    def open_warmup_wizard(self, initial_prompt: str = "", initial_doc_text: str = ""):
         """🧘‍♂️ 준비운동·스트레칭·요가 마법사 열기 및 타임라인 로드"""
         try:
             tts_eng = self.main_window.tts_engine if self.main_window else None
-            dlg = WarmupDialog(parent=self, tts_engine=tts_eng)
+            prompt_str = initial_prompt if isinstance(initial_prompt, str) else ""
+            doc_str = initial_doc_text if isinstance(initial_doc_text, str) else ""
+            dlg = WarmupDialog(
+                parent=self,
+                tts_engine=tts_eng,
+                initial_prompt=prompt_str,
+                initial_doc_text=doc_str
+            )
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_result:
                 res = dlg.generated_result
                 clips = res.get("timeline_clips", [])
                 if not clips:
                     return
+
+                if self.main_window and hasattr(self.main_window, 'tabs'):
+                    self.main_window.tabs.setCurrentWidget(self)
 
                 # 기존 타임라인 정리 여부 확인
                 if self.timeline_view.get_timeline_data():

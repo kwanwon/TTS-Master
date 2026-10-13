@@ -544,3 +544,213 @@ class AIGenerator:
         except Exception as e:
             print(traceback.format_exc())
             return f"오류: {str(e)}"
+
+    def generate_or_refine_sparring_tab(
+        self,
+        tab_mode: str,
+        user_prompt: str,
+        lang_mode: str = "mix_kids",
+        document_text: str = "",
+        refine_mode: bool = False,
+        current_fields: dict = None
+    ) -> dict:
+        """
+        Universal AI instant-template generator & Korean-to-English refiner for ALL 5 tabs
+        of SparringDialog:
+        - 'circuit': 기능성 서킷 인터벌 (HIIT)
+        - 'relay': 1:1 / 1:2 / 1:3 릴레이 미트
+        - 'reaction': 스텝 & 실전 반응
+        - 'combo': 스텝 + 콤비네이션 연타
+        - 'round': 정규 스파링 라운드
+        """
+        current_fields = current_fields or {}
+        if tab_mode == "circuit":
+            if refine_mode:
+                return self.refine_edited_circuit_routine(
+                    edited_moves_text=current_fields.get("moves_text", ""),
+                    current_intro_text=current_fields.get("intro_text", ""),
+                    user_prompt=user_prompt,
+                    lang_mode=lang_mode,
+                    current_theme_title=current_fields.get("theme_title", ""),
+                    mode_type=current_fields.get("mode_type", "cycle"),
+                )
+            else:
+                return self.generate_circuit_routine(
+                    user_prompt=user_prompt,
+                    lang_mode=lang_mode,
+                    mode_type=current_fields.get("mode_type", "cycle"),
+                    document_text=document_text,
+                )
+
+        common_cfg = load_common_settings()
+        common_info = common_cfg.get("common_info", "").strip()
+        english_guide = self._get_easy_conversational_english_guide(lang_mode)
+
+        if tab_mode == "relay":
+            schema_desc = """{
+  "relay_intro": "시작 전 선수와 받기자들에게 송출할 종합 훈련 설명 및 미트 착용 행동요령 (정중한 사범님 존댓말, '도장'/'기립' 단어 금지)",
+  "relay_cues": "1번 선수 기술 구령\\n2번 선수 기술 구령\\n3번 선수 기술 구령 (줄바꿈으로 구분, 선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함)"
+}"""
+            current_context = (
+                f"[현재 화면의 훈련 종합 설명]:\n{current_fields.get('relay_intro', '')}\n\n"
+                f"[현재 화면의 선수별 지시 기술 대본]:\n{current_fields.get('relay_cues', '')}\n"
+            )
+            role_desc = "1:1 / 1:2 / 1:3 다자간 릴레이 미트 순환 훈련"
+        elif tab_mode == "reaction":
+            schema_desc = """{
+  "reac_cues": "쉼표(,)로 구분된 4~6개의 실전 반응 타격 기술 구령 (선택된 언어 모드에 맞춰 한국어 동작 및 쉬운 현장 영어 구령 포함. 예: 백스텝 받아차기 상단! - Step back counter kick!, 전진 몸통 2연타! - Double body kicks!)"
+}"""
+            current_context = f"[현재 화면의 반응 타격 구령 목록]:\n{current_fields.get('reac_cues', '')}\n"
+            role_desc = "스텝 & 실전 반사 반응 발차기 훈련"
+        elif tab_mode == "combo":
+            schema_desc = """{
+  "combo_steps": "쉼표(,)로 구분된 4~6개의 세트별 스텝 지시 구령 (예: 제자리 스텝, 앞뒤 스텝, 업다운 스텝, 사이드 스텝, 앞발 발바꿔 스텝)",
+  "combo_kicks": "쉼표(,)로 구분된 3~4개의 집중 공격/발차기 콤비네이션 구령 (선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함 가능)"
+}"""
+            current_context = (
+                f"[현재 화면의 스텝 목록]:\n{current_fields.get('combo_steps', '')}\n\n"
+                f"[현재 화면의 집중 훈련 공격 기술]:\n{current_fields.get('combo_kicks', '')}\n"
+            )
+            role_desc = "스텝 유지 후 신호음에 폭발적인 콤비네이션 연타를 치는 인터벌 훈련"
+        else:  # "round"
+            schema_desc = """{
+  "promise_detail": "라운드 중 집중 수행할 약속 스파링/실전 전술 핵심 동작 요약 (한글 및 쉬운 현장 코칭 영어 구령)",
+  "caution_text": "스파링 시작 전 사범님이 안내하는 라운드 전술 목표 및 부상 방지 안전 수칙 방송 멘트 (정중한 존댓말)"
+}"""
+            current_context = (
+                f"[현재 화면의 약속/전술 기술 내용]:\n{current_fields.get('promise_detail', '')}\n\n"
+                f"[현재 화면의 사전 설명 및 안전 주의사항]:\n{current_fields.get('caution_text', '')}\n"
+            )
+            role_desc = "정규 스파링 라운드 (자유/섀도우/약속/공수분리 대련) 훈련"
+
+        action_instruction = (
+            "사범님이 화면의 입력칸에서 한국어 동작이나 내용을 직접 수정했습니다. 수정된 한국어 내용을 100% 최우선 기준으로 삼아, 그에 맞는 쉽고 자연스러운 현장 생활 영어 구령과 사전 설명 멘트를 다시 맞춰주세요!"
+            if refine_mode else
+            "사범님이 입력한 운동 요구사항(또는 수련계획표)에 딱 맞는 즉석 훈련 템플릿을 생성하세요."
+        )
+
+        system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 [{role_desc}] 코칭 대본 전문가입니다.
+{action_instruction}
+
+[필수 준수 규칙]
+1. '도장', '기립', '출발' 같은 어색한 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서' 사용).
+2. 반말 금지! 사범님의 절도 있고 정중한 존댓말("~하세요", "~해 주세요")을 사용하세요.
+3. 특수기호(&, · 등)는 사용하지 마세요.
+4. {english_guide}
+
+[반드시 아래 JSON 포맷으로만 응답하세요]
+{schema_desc}"""
+
+        user_msg = f"[사범님 요구사항]: {user_prompt.strip() if user_prompt else '아래 내용 기반 자동 완성'}\n\n"
+        if refine_mode or not user_prompt.strip():
+            user_msg += f"{current_context}\n"
+        if document_text.strip():
+            user_msg += f"\n[참고 수련계획표/링크 문서]:\n{document_text[:3500]}\n"
+        elif common_info:
+            user_msg += f"\n[공통 설정 수련계획표]:\n{common_info[:2500]}\n"
+
+        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1500, temperature=0.45)
+        cleaned = re.sub(r"^```(?:json)?\s*", "", raw_resp.strip(), flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+        s_idx, e_idx = cleaned.find("{"), cleaned.rfind("}")
+        if s_idx != -1 and e_idx != -1:
+            cleaned = cleaned[s_idx:e_idx + 1]
+        data = json.loads(cleaned)
+        data["tab_mode"] = tab_mode
+        return data
+
+    def generate_or_refine_warmup_routine(
+        self,
+        user_prompt: str,
+        lang_mode: str = "mix_kids",
+        document_text: str = "",
+        refine_mode: bool = False,
+        existing_movements: list = None
+    ) -> list:
+        """
+        Generates or refines a customizable warmup/stretching movement list for WarmupDialog.
+        """
+        common_cfg = load_common_settings()
+        common_info = common_cfg.get("common_info", "").strip()
+        english_guide = self._get_easy_conversational_english_guide(lang_mode)
+
+        system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 준비운동·스트레칭·체력 코칭 전문가입니다.
+사범님의 요구사항(또는 현재 표에서 수정한 한글 동작 목록)을 바탕으로 준비운동·스트레칭 동작 리스트를 JSON 배열로 생성하세요.
+
+[필수 규칙]
+1. 각 동작은 사범님이 현장에서 바로 지도할 수 있도록 자연스러운 한국어 설명(desc_kr)과 **쉽고 자연스러운 현장 생활/운동 영어 설명(desc_en)**을 포함해야 합니다.
+2. '도장', '기립' 단어는 절대 쓰지 마세요.
+3. {english_guide}
+4. 사범님이 기존 표의 한글 동작명(name_kr)이나 한글 설명(desc_kr)을 수정한 뒤 다시 생성(refine_mode)을 요청한 경우, 사범님이 수정한 한글 동작 순서와 구성을 그대로 유지하면서 영어 명칭(name_en)과 한/영 코칭 멘트(desc_kr, desc_en)를 완벽하게 맞춰주세요.
+
+[반드시 아래 JSON 배열 포맷으로만 응답하세요]
+[
+  {{
+    "name_kr": "동작 한글 이름 (예: 목 돌리기 / 스쿼트 점프)",
+    "name_en": "쉬운 현장 영어 이름 (예: Neck Circles / Squat Jumps)",
+    "desc_kr": "사범님의 자연스러운 한글 동작 지도 멘트 (예: 양손 허리 짚고 목을 천천히 크게 돌려주세요)",
+    "desc_en": "쉽고 자연스러운 현장 생활 영어 코칭 멘트 (예: Hands on your hips! Roll your neck nice and slow!)",
+    "type": "8beat 또는 hold (구령에 맞춰 움직이면 8beat, 정지 스트레칭이면 hold)",
+    "sets": 2,
+    "hold_sec": 10
+  }}
+]"""
+
+        user_msg = f"[사범님 준비운동 요구사항]: {user_prompt.strip() if user_prompt else '아래 동작 목록 기반 완성'}\n"
+        if existing_movements:
+            user_msg += f"\n[현재 표에 입력/수정된 준비운동 동작 목록 (한글 수정사항 최우선 반영)]:\n{json.dumps(existing_movements, ensure_ascii=False, indent=2)}\n"
+        if document_text.strip():
+            user_msg += f"\n[참고 수련계획표/링크 문서]:\n{document_text[:3000]}\n"
+        elif common_info:
+            user_msg += f"\n[공통 설정 수련계획표]:\n{common_info[:2000]}\n"
+
+        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1800, temperature=0.45)
+        cleaned = re.sub(r"^```(?:json)?\s*", "", raw_resp.strip(), flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+        s_idx, e_idx = cleaned.find("["), cleaned.rfind("]")
+        if s_idx != -1 and e_idx != -1:
+            cleaned = cleaned[s_idx:e_idx + 1]
+        items = json.loads(cleaned)
+        result = []
+        for idx, it in enumerate(items, 1):
+            t_val = it.get("type", "8beat")
+            if t_val not in ("8beat", "hold"):
+                t_val = "8beat"
+            result.append({
+                "id": f"ai_warmup_{idx}",
+                "enabled": True,
+                "name_kr": str(it.get("name_kr", f"동작 {idx}")).strip(),
+                "name_en": str(it.get("name_en", f"Exercise {idx}")).strip(),
+                "desc_kr": str(it.get("desc_kr", "")).strip(),
+                "desc_en": str(it.get("desc_en", "")).strip(),
+                "type": t_val,
+                "sets": int(it.get("sets", 2) or 2),
+                "hold_sec": int(it.get("hold_sec", 10) or 10),
+            })
+        return result
+
+    @staticmethod
+    def detect_target_platform(prompt_text: str) -> str:
+        """
+        사용자가 1번 탭에서 입력한 텍스트를 분석하여 어떤 플랫폼 창을 열어야 할지 자동 판별합니다.
+        반환값: 'circuit' | 'relay' | 'reaction' | 'combo' | 'round' | 'warmup' | 'shuttle' | 'general_tts'
+        """
+        t = (prompt_text or "").strip().lower()
+        if not t:
+            return "circuit"
+        if any(k in t for k in ["셔틀런", "왕복달리기", "오래달리기", "페이서", "shuttle", "beep test"]):
+            return "shuttle"
+        if any(k in t for k in ["준비운동", "스트레칭", "체조", "요가", "필라테스", "관절", "몸풀기", "워밍업", "warmup", "stretch"]):
+            return "warmup"
+        if any(k in t for k in ["릴레이", "암미트", "손미트", "1:1", "1:2", "1:3", "방족술", "선수 교대", "미트 순환"]):
+            return "relay"
+        if any(k in t for k in ["반응", "받아차기", "랜덤 대기", "반사신경"]):
+            return "reaction"
+        if any(k in t for k in ["스텝", "콤비네이션 연타", "스텝 유지"]):
+            return "combo"
+        if any(k in t for k in ["라운드", "자유 대련", "약속 스파링", "섀도우 스파링", "공수 분리", "스파링 라운드", "스파링"]):
+            return "round"
+        if any(k in t for k in ["서킷", "인터벌", "타바타", "버피", "푸시업", "팔굽혀", "점프", "낙법", "콤보", "세트", "회"]):
+            return "circuit"
+        return "general_tts"
+

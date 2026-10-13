@@ -472,27 +472,74 @@ class MainWindow(QMainWindow):
 
         guide_box = QTextEdit()
         guide_box.setReadOnly(True)
-        guide_box.setMaximumHeight(105)
+        guide_box.setMaximumHeight(92)
         guide_box.setStyleSheet(
             "background-color: #fef9e7; color: #784212; "
             "border: 1px solid #f0b429; border-radius: 5px; "
-            "padding: 6px; font-size: 12px;"
+            "padding: 5px; font-size: 12px;"
         )
         guide_box.setPlainText(
-            "💡 [즉석 템플릿 생성 ➔ 한글 수정 ➔ 다시 생성 ➔ 오디오 생성 가이드] (스크롤 가능)\n"
-            "• 1단계: 아래 요구사항 입력칸에 원하는 운동을 적거나 [🔗 구글링크] / [📂 파일]로 불러와 [✨ 즉석 대본 생성]을 누르세요.\n"
-            "• 2단계: 아래 대본 편집창에서 한국어 동작이나 횟수를 편하게 수정한 뒤 [🔄 수정한 한글로 다시 생성]을 누르면 현장 영어 구령이 자동 완성됩니다!\n"
-            "• 팁: 쉼표(,)는 0.25초 호흡, [딜레이 2초]는 2초 무음, $Let's go!$는 미국 원어민 음성으로 자동 전환됩니다."
+            "💡 [1번 탭 ➔ 각 운동 플랫폼 마법사 창 직통 연동 안내]\n"
+            "• 아래 입력칸에 운동 요구사항(예: 서킷 팔굽혀펴기 2회, 빠른발차기 5회)을 적고 [🚀 플랫폼 창 열기 & 템플릿 생성]을 누르면,\n"
+            "  해당 플랫폼 마법사 창(서킷·릴레이·반응·콤비·스파링·준비운동·셔틀런)이 자동으로 열리며 즉석 템플릿이 세팅됩니다!\n"
+            "• 현재 창에서 일반 안내방송 대본을 만들려면 [🎙️ 현재 창 대본 생성]을 누른 뒤 한글 수정 후 [🔄 수정한 한글로 다시 생성]을 누르세요."
         )
         local_layout.addWidget(guide_box)
 
-        # 🤖 초간편 AI 수업 대본 즉석 템플릿 & 한글 수정 재작성 박스 (넓은 입력창)
+        # 🤖 초간편 AI 수업 대본 즉석 템플릿 & 플랫폼 창 자동 열기 박스
         ai_box_layout = QVBoxLayout()
-        ai_box_layout.setSpacing(4)
+        ai_box_layout.setSpacing(5)
 
+        # 1) 원클릭 플랫폼 마법사 바로 열기 버튼 행
+        h_quick_wizards = QHBoxLayout()
+        lbl_qw = QLabel("⚡ 플랫폼 바로 열기:")
+        lbl_qw.setStyleSheet("font-weight: bold; color: #475569; font-size: 12px;")
+        h_quick_wizards.addWidget(lbl_qw)
+
+        btn_qw_sparring = QPushButton("🥋 서킷·스파링 마법사 열기")
+        btn_qw_sparring.setToolTip("서킷 인터벌 / 릴레이 미트 / 반응 훈련 / 스텝 콤비 / 정규 스파링 마법사 창을 바로 엽니다.\n(아래 입력칸에 적은 요구사항이 있으면 함께 전달됩니다)")
+        btn_qw_sparring.setStyleSheet("background-color: #be185d; color: white; font-weight: bold; padding: 4px 8px; border-radius: 5px; font-size: 12px;")
+        btn_qw_sparring.clicked.connect(lambda: self._open_platform_from_tab1("circuit"))
+        h_quick_wizards.addWidget(btn_qw_sparring)
+
+        btn_qw_warmup = QPushButton("🧘‍♂️ 준비운동 마법사 열기")
+        btn_qw_warmup.setToolTip("준비운동·스트레칭·요가 음원 마법사 창을 바로 엽니다.\n(아래 입력칸에 적은 요구사항이 있으면 함께 전달됩니다)")
+        btn_qw_warmup.setStyleSheet("background-color: #16a34a; color: white; font-weight: bold; padding: 4px 8px; border-radius: 5px; font-size: 12px;")
+        btn_qw_warmup.clicked.connect(lambda: self._open_platform_from_tab1("warmup"))
+        h_quick_wizards.addWidget(btn_qw_warmup)
+
+        btn_qw_shuttle = QPushButton("🏃‍♂️ 셔틀런 마법사 열기")
+        btn_qw_shuttle.setToolTip("실내 셔틀런(오래달리기) 음원 생성 마법사 창을 바로 엽니다.")
+        btn_qw_shuttle.setStyleSheet("background-color: #d97706; color: white; font-weight: bold; padding: 4px 8px; border-radius: 5px; font-size: 12px;")
+        btn_qw_shuttle.clicked.connect(lambda: self._open_platform_from_tab1("shuttle"))
+        h_quick_wizards.addWidget(btn_qw_shuttle)
+        h_quick_wizards.addStretch()
+        ai_box_layout.addLayout(h_quick_wizards)
+
+        # 2) 요구사항 입력 시 전달할 대상 플랫폼 선택
+        h_target_row = QHBoxLayout()
+        lbl_target = QLabel("🎯 실행 대상 플랫폼:")
+        lbl_target.setStyleSheet("font-weight: bold; color: #5b21b6; font-size: 12px;")
+        h_target_row.addWidget(lbl_target)
+
+        self.combo_ai_target_platform = QComboBox()
+        self.combo_ai_target_platform.addItem("🎯 자동 감지 (입력 내용에 맞춰 해당 플랫폼 마법사 창 자동 열기 - 추천)", "auto")
+        self.combo_ai_target_platform.addItem("🔥 [마법사 창 열기] 기능성 서킷 인터벌 탭으로 전달", "circuit")
+        self.combo_ai_target_platform.addItem("🔄 [마법사 창 열기] 1:1/1:2/1:3 릴레이 미트 탭으로 전달", "relay")
+        self.combo_ai_target_platform.addItem("⚡ [마법사 창 열기] 스텝 & 실전 반응 탭으로 전달", "reaction")
+        self.combo_ai_target_platform.addItem("🔥 [마법사 창 열기] 스텝 + 콤비네이션 연타 탭으로 전달", "combo")
+        self.combo_ai_target_platform.addItem("🥊 [마법사 창 열기] 정규 스파링 라운드 탭으로 전달", "round")
+        self.combo_ai_target_platform.addItem("🧘‍♂️ [마법사 창 열기] 준비운동·스트레칭 마법사로 전달", "warmup")
+        self.combo_ai_target_platform.addItem("🏃‍♂️ [마법사 창 열기] 셔틀런 음원 마법사로 전달", "shuttle")
+        self.combo_ai_target_platform.addItem("🎙️ [현재 창] 아래 일반 TTS 대본 편집창에 바로 생성", "general_tts")
+        h_target_row.addWidget(self.combo_ai_target_platform, 1)
+        ai_box_layout.addLayout(h_target_row)
+
+        # 3) 넓은 요구사항 입력창 (macOS 한글 자모 분리 방지 내장)
         self.txt_ai_script_prompt = QTextEdit()
+        bind_hangul_composer(self.txt_ai_script_prompt)
         self.txt_ai_script_prompt.setPlaceholderText(
-            "🤖 요구사항 입력 (넓은 입력창): 예) 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야. 쉽고 자연스러운 현장 영어 구령 넣어줘."
+            "🤖 운동 요구사항 입력: 예) 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야 / 스텝 뛰다가 3연타 반응 훈련 등"
         )
         self.txt_ai_script_prompt.setMinimumHeight(56)
         self.txt_ai_script_prompt.setMaximumHeight(72)
@@ -503,26 +550,32 @@ class MainWindow(QMainWindow):
 
         h_ai_script = QHBoxLayout()
         self.btn_ai_script_link = QPushButton("🔗 구글링크")
-        self.btn_ai_script_link.setToolTip("구글 드라이브 / 문서 / 시트 공유 링크에서 수련계획표를 불러와 대본을 생성합니다.")
+        self.btn_ai_script_link.setToolTip("구글 드라이브 / 문서 / 시트 공유 링크에서 수련계획표를 불러옵니다.")
         self.btn_ai_script_link.setStyleSheet("background-color: #2563eb; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_link.clicked.connect(self._on_ai_load_script_gdrive)
         h_ai_script.addWidget(self.btn_ai_script_link)
 
         self.btn_ai_script_file = QPushButton("📂 파일")
-        self.btn_ai_script_file.setToolTip("내 컴퓨터의 수련계획표(.txt, .docx, .md, .csv)를 불러와 TTS 수업 대본을 자동 작성합니다.")
+        self.btn_ai_script_file.setToolTip("내 컴퓨터의 수련계획표(.txt, .docx, .md, .csv)를 불러옵니다.")
         self.btn_ai_script_file.setStyleSheet("background-color: #0284c7; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_file.clicked.connect(self._on_ai_load_script_file)
         h_ai_script.addWidget(self.btn_ai_script_file)
 
-        self.btn_ai_script_gen = QPushButton("✨ 즉석 대본 생성")
-        self.btn_ai_script_gen.setToolTip("입력한 요구사항이나 계획표를 바탕으로 즉석 수업 대본 템플릿을 자동 생성합니다.")
+        self.btn_ai_script_gen = QPushButton("🚀 플랫폼 창 열기 & 템플릿 생성")
+        self.btn_ai_script_gen.setToolTip("입력한 요구사항에 맞는 플랫폼 마법사 창(서킷/스파링/준비운동 등)을 자동으로 열고 즉석 템플릿을 생성합니다.")
         self.btn_ai_script_gen.setStyleSheet("background-color: #7c3aed; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_gen.clicked.connect(self._on_ai_generate_script)
         h_ai_script.addWidget(self.btn_ai_script_gen)
 
+        self.btn_ai_script_direct = QPushButton("🎙️ 현재 창 대본 생성")
+        self.btn_ai_script_direct.setToolTip("플랫폼 창을 열지 않고 바로 아래 일반 TTS 대본 편집창에 대본을 생성합니다.")
+        self.btn_ai_script_direct.setStyleSheet("background-color: #4f46e5; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
+        self.btn_ai_script_direct.clicked.connect(lambda: self._on_ai_generate_script(force_general_tts=True))
+        h_ai_script.addWidget(self.btn_ai_script_direct)
+
         self.btn_ai_script_refine = QPushButton("🔄 수정한 한글로 다시 생성")
         self.btn_ai_script_refine.setToolTip("아래 대본 편집창에서 한국어만 편하게 수정한 뒤 누르면, 수정한 한글에 맞춰 현장 영어 구령과 설명을 다시 맞춰줍니다!")
-        self.btn_ai_script_refine.setStyleSheet("background-color: #059669; color: white; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;")
+        self.btn_ai_script_refine.setStyleSheet("background-color: #059669; color: white; font-weight: bold; padding: 5px 8px; border-radius: 5px; font-size: 12px;")
         self.btn_ai_script_refine.clicked.connect(self._on_ai_refine_script)
         h_ai_script.addWidget(self.btn_ai_script_refine)
 
@@ -1332,29 +1385,77 @@ class MainWindow(QMainWindow):
 
         self._on_ai_generate_script()
 
-    def _on_ai_generate_script(self):
-        user_prompt = self.txt_ai_script_prompt.toPlainText().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
+    def _open_platform_from_tab1(self, target_platform: str):
+        """1번 탭에서 입력된 요구사항/첨부 문서를 가지고 해당 운동 플랫폼 마법사 창을 즉시 오픈"""
+        user_prompt = compose_hangul_jamo(self.txt_ai_script_prompt.toPlainText().strip()) if hasattr(self, 'txt_ai_script_prompt') else ""
         doc_text = getattr(self, '_ai_main_doc_text', '')
         if not doc_text:
             common = load_common_settings()
             doc_text = common.get("common_doc_text", "").strip()
 
+        if not hasattr(self, 'audio_editor_tab') or not self.audio_editor_tab:
+            return
+
+        tab_map = {"circuit": 0, "relay": 1, "reaction": 2, "combo": 3, "round": 4}
+        if target_platform in tab_map:
+            self.audio_editor_tab.open_sparring_wizard(
+                initial_tab=tab_map[target_platform],
+                initial_prompt=user_prompt,
+                initial_doc_text=doc_text
+            )
+        elif target_platform == "warmup":
+            self.audio_editor_tab.open_warmup_wizard(
+                initial_prompt=user_prompt,
+                initial_doc_text=doc_text
+            )
+        elif target_platform == "shuttle":
+            self.audio_editor_tab.open_shuttle_run_wizard()
+
+    def _on_ai_generate_script(self, force_general_tts: bool = False):
+        user_prompt = compose_hangul_jamo(self.txt_ai_script_prompt.toPlainText().strip()) if hasattr(self, 'txt_ai_script_prompt') else ""
+        doc_text = getattr(self, '_ai_main_doc_text', '')
+        if not doc_text:
+            common = load_common_settings()
+            doc_text = common.get("common_doc_text", "").strip()
+
+        selected_target = "general_tts" if force_general_tts else (
+            self.combo_ai_target_platform.currentData() if hasattr(self, 'combo_ai_target_platform') else "auto"
+        )
+
+        # 사용자가 특정 플랫폼 창을 선택했으면 입력값이 없어도 즉시 해당 플랫폼 창 오픈 가능
         if not user_prompt and not doc_text:
+            if selected_target in ("circuit", "relay", "reaction", "combo", "round", "warmup", "shuttle"):
+                self._open_platform_from_tab1(selected_target)
+                return
             QMessageBox.information(
                 self,
                 "운동 요구사항 입력 안내",
                 "원하는 수업 내용이나 운동 요구사항을 입력하거나 [🔗 구글링크] / [📂 파일]을 선택해 주세요.\n\n"
-                "💡 입력 예시:\n"
-                "• 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 수업 대본\n"
-                "• 초등부 앞차기, 돌려차기 10회씩 쉬운 현장 영어 구령 포함"
+                "💡 입력 예시 (입력 후 실행하면 해당 플랫폼 창이 자동으로 열립니다!):\n"
+                "• 서킷으로 팔굽혀펴기 2회, 빠른발차기 5회, 버피 2회 할거야\n"
+                "• 릴레이 미트로 원투 펀치 후 돌려차기, 백스텝 받아차기\n"
+                "• 발차기 전 고관절·햄스트링 집중 준비운동 스트레칭"
             )
             if hasattr(self, 'txt_ai_script_prompt'):
                 self.txt_ai_script_prompt.setFocus()
             return
 
+        # 대상 플랫폼 결정 (자동 감지 또는 수동 선택)
+        target_platform = selected_target
+        if target_platform == "auto":
+            target_platform = AIGenerator.detect_target_platform(f"{user_prompt} {doc_text[:300]}")
+
+        # 플랫폼 마법사 대상이면 즉시 해당 마법사 창을 열면서 요구사항 전달!
+        if target_platform in ("circuit", "relay", "reaction", "combo", "round", "warmup", "shuttle"):
+            self._open_platform_from_tab1(target_platform)
+            return
+
+        # 현재 창(일반 TTS 대본 편집창)에 바로 대본 생성
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(False)
             self.btn_ai_script_gen.setText("⏳ 생성 중...")
+        if hasattr(self, 'btn_ai_script_direct'):
+            self.btn_ai_script_direct.setEnabled(False)
         if hasattr(self, 'btn_ai_script_refine'):
             self.btn_ai_script_refine.setEnabled(False)
 
@@ -1365,7 +1466,7 @@ class MainWindow(QMainWindow):
 
     def _on_ai_refine_script(self):
         """사용자가 한국어로 수정한 대본 내용을 바탕으로 현장 영어 구령과 설명을 다시 맞춰줌"""
-        existing_draft = self.local_input_text.toPlainText().strip() if hasattr(self, 'local_input_text') else ""
+        existing_draft = compose_hangul_jamo(self.local_input_text.toPlainText().strip()) if hasattr(self, 'local_input_text') else ""
         if not existing_draft:
             QMessageBox.information(
                 self,
@@ -1374,7 +1475,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        user_prompt = self.txt_ai_script_prompt.toPlainText().strip() if hasattr(self, 'txt_ai_script_prompt') else ""
+        user_prompt = compose_hangul_jamo(self.txt_ai_script_prompt.toPlainText().strip()) if hasattr(self, 'txt_ai_script_prompt') else ""
         doc_text = getattr(self, '_ai_main_doc_text', '')
 
         if hasattr(self, 'btn_ai_script_refine'):
@@ -1382,6 +1483,8 @@ class MainWindow(QMainWindow):
             self.btn_ai_script_refine.setText("⏳ 다시 생성 중...")
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(False)
+        if hasattr(self, 'btn_ai_script_direct'):
+            self.btn_ai_script_direct.setEnabled(False)
 
         self._ai_script_worker = AIScriptWorker(
             prompt=user_prompt,
@@ -1396,7 +1499,9 @@ class MainWindow(QMainWindow):
     def _on_ai_script_finished(self, script_text: str):
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(True)
-            self.btn_ai_script_gen.setText("✨ 즉석 대본 생성")
+            self.btn_ai_script_gen.setText("🚀 플랫폼 창 열기 & 템플릿 생성")
+        if hasattr(self, 'btn_ai_script_direct'):
+            self.btn_ai_script_direct.setEnabled(True)
         if hasattr(self, 'btn_ai_script_refine'):
             self.btn_ai_script_refine.setEnabled(True)
             self.btn_ai_script_refine.setText("🔄 수정한 한글로 다시 생성")
@@ -1406,7 +1511,9 @@ class MainWindow(QMainWindow):
     def _on_ai_script_failed(self, err_msg: str):
         if hasattr(self, 'btn_ai_script_gen'):
             self.btn_ai_script_gen.setEnabled(True)
-            self.btn_ai_script_gen.setText("✨ 즉석 대본 생성")
+            self.btn_ai_script_gen.setText("🚀 플랫폼 창 열기 & 템플릿 생성")
+        if hasattr(self, 'btn_ai_script_direct'):
+            self.btn_ai_script_direct.setEnabled(True)
         if hasattr(self, 'btn_ai_script_refine'):
             self.btn_ai_script_refine.setEnabled(True)
             self.btn_ai_script_refine.setText("🔄 수정한 한글로 다시 생성")

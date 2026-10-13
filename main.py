@@ -166,6 +166,10 @@ def main():
     # (macOS 네이티브 아쿠아 테마 충돌 및 QComboBox 흰 글씨/흰 배경 가림 현상 원천 차단)
     setup_theme_listener(app)
 
+    # 앱 전체 모든 입력창(QTextEdit, QPlainTextEdit, QLineEdit) 한글 자모 분리 자동 보정 장착
+    from utils.hangul_composer import install_global_hangul_composer
+    install_global_hangul_composer(app)
+
     # 1. 시리얼 인증 사전 검사 (0.001초 로컬 캐시 즉시 신뢰하여 시작 렉/슬립 대기 완전 제거)
     serial_auth = SerialAuth()
     is_valid = serial_auth.has_valid_cache()

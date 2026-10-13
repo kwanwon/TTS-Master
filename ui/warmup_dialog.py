@@ -22,9 +22,9 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QSpinBox, QSlider, QCheckBox, QFileDialog, QMessageBox, QComboBox,
     QProgressBar, QGroupBox, QScrollArea, QWidget, QLineEdit, QTextEdit, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView, QApplication
+    QTableWidgetItem, QHeaderView, QAbstractItemView, QApplication, QInputDialog
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 
 import edge_tts
 from pydub import AudioSegment
@@ -34,7 +34,10 @@ from core.warmup_engine import (
     WarmupEngine, ROUTINE_PRESETS, MASTER_MOVEMENTS, START_CUES, END_CUES
 )
 from core.shuttle_run_engine import ShuttleRunEngine
+from core.ai_generator import AIGenerator, extract_text_from_file, fetch_text_from_url, load_common_settings
+from ui.ai_settings_dialog import GlobalAISettingsDialog
 from utils.effects_generator import ensure_default_effects
+from utils.hangul_composer import bind_hangul_composer, compose_hangul_jamo
 
 
 def vol_pct_to_db(pct: int) -> float:
@@ -270,24 +273,62 @@ class WarmupSynthThread(QThread):
             self.finished.emit(False, str(e), {})
 
 
+class AIWarmupWorker(QThread):
+    """백그라운드에서 AI 준비운동/스트레칭 즉석 템플릿 생성 및 한글 수정본 재작성 수행"""
+    finished_ok = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        prompt: str,
+        lang_mode: str,
+        doc_text: str = "",
+        refine_mode: bool = False,
+        current_movements: Optional[List[Dict[str, Any]]] = None,
+        parent=None
+    ):
+        super().__init__(parent)
+        self.prompt = prompt
+        self.lang_mode = lang_mode
+        self.doc_text = doc_text
+        self.refine_mode = refine_mode
+        self.current_movements = current_movements or []
+
+    def run(self):
+        try:
+            gen = AIGenerator()
+            res = gen.generate_or_refine_warmup_routine(
+                user_prompt=self.prompt,
+                language_mode=self.lang_mode,
+                doc_text=self.doc_text,
+                refine_mode=self.refine_mode,
+                current_movements=self.current_movements
+            )
+            self.finished_ok.emit(res)
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
 class WarmupDialog(QDialog):
     """
     준비운동 & 스트레칭 마법사 다이얼로그
+    - AI 요구사항 입력 즉석 템플릿 생성 & 한글 수정 후 다시 생성 지원
     - 5대 대표 루틴 원클릭 프리셋
     - 한국어 / 쉬운 영어 구령 전환
     - 상세 코칭 vs 명칭만 빠른 구령 모드
     - 동작 목록 체크박스 및 순서 변경 테이블
-    - 모든 주요 컨트롤에 친절한 '말풍선 도움말' 장착
     """
 
-    def __init__(self, parent=None, tts_engine=None):
+    def __init__(self, parent=None, tts_engine=None, initial_prompt: str = "", initial_doc_text: str = ""):
         super().__init__(parent)
         self.tts_engine = tts_engine
         self.synth_thread: Optional[WarmupSynthThread] = None
         self.generated_result: Optional[Dict[str, Any]] = None
+        self._initial_prompt = (initial_prompt or "").strip()
+        self._ai_loaded_doc_text = (initial_doc_text or "").strip()
 
         self.setWindowTitle("🧘‍♂️ 준비운동·스트레칭·요가 음원 생성 마법사")
-        self.resize(920, 780)
+        self.resize(980, 860)
 
         # 현재 편집 중인 동작 리스트 (MASTER_MOVEMENTS 복사본)
         self.current_movements: List[Dict[str, Any]] = [
@@ -302,39 +343,153 @@ class WarmupDialog(QDialog):
         self.init_ui()
         self.apply_preset("standard_full")
 
+        if self._initial_prompt and hasattr(self, 'txt_ai_warmup_prompt'):
+            self.txt_ai_warmup_prompt.setPlainText(self._initial_prompt)
+        if self._initial_prompt or self._ai_loaded_doc_text:
+            QTimer.singleShot(250, self._on_ai_generate_warmup)
+
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(12)
+        main_layout.setSpacing(10)
 
-        # 1. 상단 안내 헤더 & 말풍선 가이드 배너
-        header_box = QGroupBox("💡 준비운동 마법사 사용 가이드")
-        header_layout = QVBoxLayout(header_box)
-        lbl_guide = QLabel(
-            "<b>[원클릭 제작 순서]</b> ① 원하는 <b>코스 프리셋</b>을 선택하세요. ➔ "
-            "② <b>한국어/영어</b> 및 <b>상세/빠른 모드</b>를 고르세요. ➔ "
-            "③ 하단 <b>[오디오 생성]</b> 버튼을 누르면 8박자 구령과 사범 멘트가 BGM과 함께 완벽하게 완성됩니다!<br>"
-            "<span style='color: #4a90e2;'>※ 조작이 어려울 때는 마우스 커서를 올리시면 상세한 <b>말풍선 도움말</b>이 표시됩니다.</span>"
+        # 1. 최상단 고정: AI 즉석 준비운동 템플릿 생성 & 한글 수정 후 다시 생성 바
+        ai_top_box = QGroupBox("🤖 1단계: 준비운동·스트레칭 요구사항 입력 ➔ [✨ 즉석 템플릿 생성] & [🔄 수정한 한글로 다시 생성]")
+        ai_top_box.setStyleSheet("""
+            QGroupBox {
+                background-color: #f0fdf4;
+                border: 2px solid #16a34a;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 10px;
+                font-weight: bold;
+                color: #166534;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 6px;
+            }
+        """)
+        ai_top_layout = QVBoxLayout(ai_top_box)
+        ai_top_layout.setSpacing(6)
+
+        ai_input_row = QHBoxLayout()
+        self.txt_ai_warmup_prompt = QTextEdit()
+        bind_hangul_composer(self.txt_ai_warmup_prompt)
+        self.txt_ai_warmup_prompt.setPlaceholderText(
+            "원하는 준비운동·스트레칭 구성을 편하게 타이핑하세요!\n"
+            "(예: 발차기 전 고관절·햄스트링 집중 스트레칭 5가지 / 유치부 놀이형 점핑잭·목·어깨·무릎 체조)"
         )
-        lbl_guide.setWordWrap(True)
-        header_layout.addWidget(lbl_guide)
-        main_layout.addWidget(header_box)
+        self.txt_ai_warmup_prompt.setMinimumHeight(52)
+        self.txt_ai_warmup_prompt.setMaximumHeight(64)
+        self.txt_ai_warmup_prompt.setStyleSheet(
+            "background-color: #ffffff; color: #0f172a; font-weight: bold; font-size: 13px; "
+            "padding: 6px; border: 2px solid #4ade80; border-radius: 6px;"
+        )
+
+        self.btn_ai_warmup_gen = QPushButton("✨ 즉석 템플릿 생성")
+        self.btn_ai_warmup_gen.setStyleSheet(
+            "background-color: #16a34a; color: white; font-weight: bold; font-size: 12px; padding: 10px 14px; border-radius: 6px;"
+        )
+        self.btn_ai_warmup_gen.clicked.connect(self._on_ai_generate_warmup)
+
+        self.btn_ai_warmup_refine = QPushButton("🔄 표에서 수정한 한글로 영어·설명 다시 생성")
+        self.btn_ai_warmup_refine.setToolTip(
+            "아래 표에서 동작 명칭이나 사범 멘트를 한국어로 수정한 뒤 누르면,\n"
+            "AI가 현장감 있는 쉬운 영어 구령과 설명으로 다시 맞춰줍니다."
+        )
+        self.btn_ai_warmup_refine.setStyleSheet(
+            "background-color: #0284c7; color: white; font-weight: bold; font-size: 12px; padding: 10px 12px; border-radius: 6px;"
+        )
+        self.btn_ai_warmup_refine.clicked.connect(self._on_ai_refine_warmup)
+
+        btn_gdrive = QPushButton("🔗 구글드라이브")
+        btn_gdrive.setStyleSheet(
+            "background-color: #0f766e; color: white; font-weight: bold; font-size: 11px; padding: 9px 10px; border-radius: 6px;"
+        )
+        btn_gdrive.clicked.connect(self._on_ai_load_gdrive_warmup)
+
+        btn_file = QPushButton("📂 내 파일")
+        btn_file.setStyleSheet(
+            "background-color: #334155; color: white; font-weight: bold; font-size: 11px; padding: 9px 10px; border-radius: 6px;"
+        )
+        btn_file.clicked.connect(self._on_ai_load_file_warmup)
+
+        btn_settings = QPushButton("⚙️ AI 설정")
+        btn_settings.setStyleSheet(
+            "background-color: #475569; color: white; font-weight: bold; font-size: 11px; padding: 9px 10px; border-radius: 6px;"
+        )
+        btn_settings.clicked.connect(self._on_open_ai_settings_warmup)
+
+        ai_input_row.addWidget(self.txt_ai_warmup_prompt, 1)
+        ai_input_row.addWidget(self.btn_ai_warmup_gen)
+        ai_input_row.addWidget(self.btn_ai_warmup_refine)
+        ai_input_row.addWidget(btn_gdrive)
+        ai_input_row.addWidget(btn_file)
+        ai_input_row.addWidget(btn_settings)
+        ai_top_layout.addLayout(ai_input_row)
+        main_layout.addWidget(ai_top_box)
 
         # 2. 메인 스크롤 영역
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
-        content_layout.setSpacing(14)
+        content_layout.setSpacing(12)
 
-        # --- A. 코스 프리셋 선택 ---
-        grp_preset = QGroupBox("1. 🎯 코스 프리셋 선택 및 사용자 템플릿 관리 (매일 지루하지 않은 테마)")
+        # --- A (맨 위 배치). 동작 목록 및 순서 편집기 (즉석 템플릿 확인·수정) ---
+        grp_moves = QGroupBox("1. 📋 준비운동 템플릿 확인·수정 및 순서 편집 (사범 멘트 더블클릭 수정 가능)")
+        grp_moves.setStyleSheet("QGroupBox { font-weight: bold; border: 2px solid #22c55e; border-radius: 8px; margin-top: 6px; padding-top: 10px; }")
+        grp_moves.setToolTip("체크박스를 끄면 해당 동작을 건너뛰며, 사범 멘트 칸을 더블클릭하여 직접 수정한 뒤 [🔄 수정한 한글로 영어·설명 다시 생성]을 누를 수 있습니다.")
+        l_moves = QVBoxLayout(grp_moves)
+
+        self.table_moves = QTableWidget()
+        self.table_moves.setColumnCount(4)
+        self.table_moves.setHorizontalHeaderLabels(["선택", "동작 명칭 (더블클릭 수정)", "사범 지도/구령 멘트 (더블클릭하여 자유롭게 수정)", "구령 방식"])
+        self.table_moves.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_moves.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_moves.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table_moves.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_moves.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_moves.setMinimumHeight(230)
+        l_moves.addWidget(self.table_moves)
+
+        h_tbl_btn = QHBoxLayout()
+        btn_up = QPushButton("▲ 위로 이동")
+        btn_up.clicked.connect(self.move_item_up)
+        btn_down = QPushButton("▼ 아래로 이동")
+        btn_down.clicked.connect(self.move_item_down)
+        btn_check_all = QPushButton("전체 선택")
+        btn_check_all.clicked.connect(lambda: self.toggle_all_checks(True))
+        btn_uncheck_all = QPushButton("전체 해제")
+        btn_uncheck_all.clicked.connect(lambda: self.toggle_all_checks(False))
+
+        self.btn_ai_warmup_refine_bottom = QPushButton("🔄 표에서 수정한 한글로 영어·설명 다시 생성")
+        self.btn_ai_warmup_refine_bottom.setStyleSheet(
+            "background-color: #0284c7; color: white; font-weight: bold; padding: 6px 12px; border-radius: 5px;"
+        )
+        self.btn_ai_warmup_refine_bottom.clicked.connect(self._on_ai_refine_warmup)
+
+        h_tbl_btn.addWidget(btn_up)
+        h_tbl_btn.addWidget(btn_down)
+        h_tbl_btn.addSpacing(10)
+        h_tbl_btn.addWidget(btn_check_all)
+        h_tbl_btn.addWidget(btn_uncheck_all)
+        h_tbl_btn.addStretch()
+        h_tbl_btn.addWidget(self.btn_ai_warmup_refine_bottom)
+        l_moves.addLayout(h_tbl_btn)
+
+        content_layout.addWidget(grp_moves)
+
+        # --- B. 코스 프리셋 선택 ---
+        grp_preset = QGroupBox("2. 🎯 기본 코스 프리셋 선택 및 나만의 템플릿 저장/불러오기")
         grp_preset.setToolTip("수업 목적이나 요일별 테마에 맞는 준비운동 루틴을 원클릭으로 불러오거나, 나만의 템플릿을 저장/불러오기 합니다.")
         l_preset = QVBoxLayout(grp_preset)
 
         h_pre = QHBoxLayout()
         h_pre.addWidget(QLabel("<b>테마 프리셋:</b>"))
         self.combo_preset = QComboBox()
-        self.combo_preset.setToolTip("원하는 훈련 코스를 선택하면 아래 동작 목록이 자동으로 구성됩니다.")
+        self.combo_preset.setToolTip("원하는 훈련 코스를 선택하면 위 동작 목록이 자동으로 구성됩니다.")
         for k, p in ROUTINE_PRESETS.items():
             self.combo_preset.addItem(p["name_kr"], k)
         self.combo_preset.addItem("✏️ [사용자 정의] 내 마음대로 직접 구성 (Custom)", "custom")
@@ -358,8 +513,8 @@ class WarmupDialog(QDialog):
         l_preset.addWidget(self.lbl_preset_desc)
         content_layout.addWidget(grp_preset)
 
-        # --- B. 언어 및 멘트 진행 스타일 ---
-        grp_style = QGroupBox("2. 🎙️ 구령 언어 & 멘트 진행 스타일")
+        # --- C. 언어 및 멘트 진행 스타일 ---
+        grp_style = QGroupBox("3. 🎙️ 구령 언어 & 멘트 진행 스타일")
         grp_style.setToolTip("사범님의 지도 방식과 언어를 설정합니다.")
         l_style = QVBoxLayout(grp_style)
 
@@ -441,8 +596,8 @@ class WarmupDialog(QDialog):
 
         content_layout.addWidget(grp_style)
 
-        # --- C. 시작 & 종료 멘트 셀렉터 ---
-        grp_cues = QGroupBox("3. 📣 시작 & 종료 안내 멘트 (다양한 선택형)")
+        # --- D. 시작 & 종료 멘트 셀렉터 ---
+        grp_cues = QGroupBox("4. 📣 시작 & 종료 안내 멘트 (다양한 선택형)")
         grp_cues.setToolTip("매일 같은 멘트 대신 상황에 맞게 시작 및 마무리 멘트를 자유롭게 고르거나 직접 수정할 수 있습니다.")
         l_cues = QVBoxLayout(grp_cues)
 
@@ -455,6 +610,7 @@ class WarmupDialog(QDialog):
         l_cues.addLayout(h_c1)
 
         self.txt_start_cue = QLineEdit()
+        bind_hangul_composer(self.txt_start_cue)
         self.txt_start_cue.setToolTip("선택한 시작 멘트를 필요에 따라 직접 수정할 수 있습니다.")
         l_cues.addWidget(self.txt_start_cue)
 
@@ -467,50 +623,12 @@ class WarmupDialog(QDialog):
         l_cues.addLayout(h_c2)
 
         self.txt_end_cue = QLineEdit()
+        bind_hangul_composer(self.txt_end_cue)
         self.txt_end_cue.setToolTip("선택한 종료 멘트를 필요에 따라 직접 수정할 수 있습니다.")
         l_cues.addWidget(self.txt_end_cue)
 
         self.update_cue_combos()
         content_layout.addWidget(grp_cues)
-
-        # --- D. 동작 목록 및 순서 편집기 ---
-        grp_moves = QGroupBox("4. 📋 세부 동작 목록 및 순서 편집 (체크박스로 ON/OFF 가능)")
-        grp_moves.setToolTip("체크박스를 끄면 해당 동작을 건너뛰며, 위/아래 버튼으로 순서를 바꿀 수 있습니다.")
-        l_moves = QVBoxLayout(grp_moves)
-
-        self.table_moves = QTableWidget()
-        self.table_moves.setColumnCount(4)
-        self.table_moves.setHorizontalHeaderLabels(["선택", "동작 명칭", "사범 지도/구령 멘트 (더블클릭 수정)", "구령 방식"])
-        self.table_moves.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_moves.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_moves.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.table_moves.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_moves.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table_moves.setMinimumHeight(240)
-        self.table_moves.setToolTip("목록에서 동작을 클릭하고 아래 [▲ 위로] / [▼ 아래로] 버튼을 눌러 순서를 변경하세요.")
-        l_moves.addWidget(self.table_moves)
-
-        h_tbl_btn = QHBoxLayout()
-        btn_up = QPushButton("▲ 위로 이동")
-        btn_up.setToolTip("선택한 동작을 한 칸 위로 올립니다.")
-        btn_up.clicked.connect(self.move_item_up)
-        btn_down = QPushButton("▼ 아래로 이동")
-        btn_down.setToolTip("선택한 동작을 한 칸 아래로 내립니다.")
-        btn_down.clicked.connect(self.move_item_down)
-        btn_check_all = QPushButton("전체 선택")
-        btn_check_all.clicked.connect(lambda: self.toggle_all_checks(True))
-        btn_uncheck_all = QPushButton("전체 해제")
-        btn_uncheck_all.clicked.connect(lambda: self.toggle_all_checks(False))
-
-        h_tbl_btn.addWidget(btn_up)
-        h_tbl_btn.addWidget(btn_down)
-        h_tbl_btn.addSpacing(15)
-        h_tbl_btn.addWidget(btn_check_all)
-        h_tbl_btn.addWidget(btn_uncheck_all)
-        h_tbl_btn.addStretch()
-        l_moves.addLayout(h_tbl_btn)
-
-        content_layout.addWidget(grp_moves)
 
         # --- E. 배경음악(BGM) 및 오토 더킹 ---
         grp_bgm = QGroupBox("5. 🎵 배경음악(BGM) & 볼륨 설정")
@@ -683,12 +801,11 @@ class WarmupDialog(QDialog):
             chk_item.setCheckState(Qt.CheckState.Checked if mov.get("enabled", True) else Qt.CheckState.Unchecked)
             self.table_moves.setItem(row, 0, chk_item)
 
-            # 1. 명칭
+            # 1. 명칭 (더블클릭 편집 가능)
             name_text, cue_text = WarmupEngine.get_movement_text(mov, lang, mode)
             name_item = QTableWidgetItem(name_text)
-            name_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             tip_text = mov.get("tip", "바른 자세로 동작을 수행합니다.")
-            name_item.setToolTip(f"💡 <b>동작 방법:</b> {tip_text}")
+            name_item.setToolTip(f"더블클릭하여 동작 명칭을 수정할 수 있습니다.\n💡 <b>동작 방법:</b> {tip_text}")
             self.table_moves.setItem(row, 1, name_item)
 
             # 2. 사범 멘트 (더블클릭 편집 가능)
@@ -722,9 +839,10 @@ class WarmupDialog(QDialog):
             self.table_moves.setItem(row, 3, cnt_item)
 
     def save_table_changes_to_memory(self):
-        """테이블에서 사용자가 수정한 체크박스 상태와 멘트 반영"""
+        """테이블에서 사용자가 수정한 체크박스 상태, 동작 명칭, 사범 멘트 반영"""
         lang = self.get_current_lang()
         mode = "detailed" if self.rb_mode_detailed.isChecked() else "quick"
+        lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
 
         for row in range(self.table_moves.rowCount()):
             if row < len(self.current_movements):
@@ -733,14 +851,171 @@ class WarmupDialog(QDialog):
                 if chk_it:
                     mov["enabled"] = (chk_it.checkState() == Qt.CheckState.Checked)
 
+                name_it = self.table_moves.item(row, 1)
+                if name_it:
+                    new_name = compose_hangul_jamo(name_it.text().strip())
+                    if new_name:
+                        mov["name_kr"] = new_name
+                        if lang_key == "en":
+                            mov["name_en"] = new_name
+
                 cue_it = self.table_moves.item(row, 2)
                 if cue_it:
-                    new_txt = cue_it.text().strip()
-                    lang_key = "mix" if lang == "mix_kids" else ("dual" if lang == "dual_step" else ("en" if lang in ("en", "en_advanced") else "kr"))
+                    new_txt = compose_hangul_jamo(cue_it.text().strip())
                     if mode == "detailed":
                         mov[f"instruction_{lang_key}"] = new_txt
+                        mov["instruction_kr"] = new_txt
                     else:
                         mov[f"short_cue_{lang_key}"] = new_txt
+                        mov["short_cue_kr"] = new_txt
+
+    def _set_warmup_ai_buttons_state(self, enabled: bool, busy_text: Optional[str] = None):
+        if hasattr(self, 'btn_ai_warmup_gen'):
+            self.btn_ai_warmup_gen.setEnabled(enabled)
+            if not busy_text:
+                self.btn_ai_warmup_gen.setText("✨ 즉석 템플릿 생성")
+        for btn_attr in ('btn_ai_warmup_refine', 'btn_ai_warmup_refine_bottom'):
+            btn = getattr(self, btn_attr, None)
+            if btn:
+                btn.setEnabled(enabled)
+                btn.setText(busy_text if busy_text else "🔄 표에서 수정한 한글로 영어·설명 다시 생성")
+
+    def _on_open_ai_settings_warmup(self):
+        dlg = GlobalAISettingsDialog(self)
+        if dlg.exec():
+            common = load_common_settings()
+            common_doc = common.get("common_doc_text", "").strip()
+            if common_doc and not getattr(self, '_ai_loaded_doc_text', ''):
+                self._ai_loaded_doc_text = common_doc
+            self.lbl_status.setText("✅ AI 키 및 공통 수련계획표 설정이 반영되었습니다.")
+
+    def _on_ai_load_gdrive_warmup(self):
+        common = load_common_settings()
+        default_url = common.get("gdrive_url", "")
+        url, ok = QInputDialog.getText(
+            self,
+            "🔗 구글 드라이브 / 문서 링크 불러오기",
+            "구글 문서(Docs), 스프레드시트(Sheets), 드라이브 파일 공유 링크를 붙여넣으세요:",
+            QLineEdit.EchoMode.Normal,
+            default_url
+        )
+        if not ok or not url.strip():
+            return
+        self.lbl_status.setText("⏳ 구글 드라이브 링크에서 내용을 불러오는 중...")
+        QApplication.processEvents()
+        ok_fetch, result_text = fetch_text_from_url(url.strip())
+        if not ok_fetch:
+            QMessageBox.warning(self, "링크 불러오기 실패", result_text)
+            return
+        self._ai_loaded_doc_text = result_text
+        if not self.txt_ai_warmup_prompt.toPlainText().strip():
+            self.txt_ai_warmup_prompt.setPlainText("[구글 드라이브 링크] 수련계획표 기반 준비운동·스트레칭")
+        self._on_ai_generate_warmup()
+
+    def _on_ai_load_file_warmup(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "수련계획표 / 준비운동 메모 파일 불러오기",
+            "",
+            "문서 파일 (*.txt *.md *.docx *.csv *.json);;모든 파일 (*)"
+        )
+        if not file_path:
+            return
+        doc_text = extract_text_from_file(file_path)
+        if not doc_text or doc_text.startswith("[파일 읽기 오류"):
+            QMessageBox.warning(self, "파일 읽기 실패", f"파일 내용을 읽을 수 없습니다.\n{doc_text}")
+            return
+        self._ai_loaded_doc_text = doc_text
+        base_name = os.path.basename(file_path)
+        if not self.txt_ai_warmup_prompt.toPlainText().strip():
+            self.txt_ai_warmup_prompt.setPlainText(f"[{base_name}] 파일 기반 준비운동·스트레칭")
+        self._on_ai_generate_warmup()
+
+    def _on_ai_generate_warmup(self):
+        user_prompt = compose_hangul_jamo(self.txt_ai_warmup_prompt.toPlainText().strip())
+        doc_text = getattr(self, '_ai_loaded_doc_text', '')
+        if not doc_text:
+            common = load_common_settings()
+            doc_text = common.get("common_doc_text", "").strip()
+
+        if not user_prompt and not doc_text:
+            QMessageBox.information(
+                self,
+                "준비운동 요구사항 입력 안내",
+                "상단 입력창에 원하는 준비운동이나 스트레칭 구성을 입력해 주세요.\n\n"
+                "💡 입력 예시:\n"
+                "• 발차기 전 고관절·햄스트링 집중 스트레칭 5가지\n"
+                "• 유치부 놀이형 점핑잭, 목, 어깨, 무릎 체조\n"
+                "• 운동 후 요가 및 호흡 쿨다운 스트레칭"
+            )
+            self.txt_ai_warmup_prompt.setFocus()
+            return
+
+        lang_mode = self.get_current_lang()
+        self._set_warmup_ai_buttons_state(False)
+        self.btn_ai_warmup_gen.setText("⏳ 즉석 템플릿 생성 중...")
+        self.lbl_status.setText("🤖 요구사항에 맞는 준비운동·스트레칭 즉석 템플릿을 생성하고 있습니다...")
+
+        self._ai_warmup_worker = AIWarmupWorker(
+            prompt=user_prompt,
+            lang_mode=lang_mode,
+            doc_text=doc_text,
+            refine_mode=False,
+            parent=self
+        )
+        self._ai_warmup_worker.finished_ok.connect(self._on_ai_warmup_finished)
+        self._ai_warmup_worker.failed.connect(self._on_ai_warmup_failed)
+        self._ai_warmup_worker.start()
+
+    def _on_ai_refine_warmup(self):
+        self.save_table_changes_to_memory()
+        active_moves = [m for m in self.current_movements if m.get("enabled", True)]
+        if not active_moves:
+            QMessageBox.information(self, "선택된 동작 없음", "표에서 최소 1개 이상의 동작을 선택하고 수정해 주세요.")
+            return
+
+        user_prompt = compose_hangul_jamo(self.txt_ai_warmup_prompt.toPlainText().strip())
+        lang_mode = self.get_current_lang()
+        self._set_warmup_ai_buttons_state(False, "⏳ 한글 수정본 재작성 중...")
+        self.lbl_status.setText("🔄 표에서 수정하신 한글 동작·설명에 맞춰 현장 영어 구령과 코칭 멘트를 다시 작성 중입니다...")
+
+        self._ai_warmup_worker = AIWarmupWorker(
+            prompt=user_prompt,
+            lang_mode=lang_mode,
+            refine_mode=True,
+            current_movements=active_moves,
+            parent=self
+        )
+        self._ai_warmup_worker.finished_ok.connect(self._on_ai_warmup_finished)
+        self._ai_warmup_worker.failed.connect(self._on_ai_warmup_failed)
+        self._ai_warmup_worker.start()
+
+    def _on_ai_warmup_finished(self, res: dict):
+        self._set_warmup_ai_buttons_state(True)
+        start_cue = res.get("start_cue", "").strip()
+        end_cue = res.get("end_cue", "").strip()
+        movements = res.get("movements", [])
+
+        if start_cue:
+            self.txt_start_cue.setText(start_cue)
+        if end_cue:
+            self.txt_end_cue.setText(end_cue)
+        if movements:
+            self.current_movements = movements
+            custom_idx = self.combo_preset.findData("custom")
+            if custom_idx >= 0:
+                self.combo_preset.blockSignals(True)
+                self.combo_preset.setCurrentIndex(custom_idx)
+                self.combo_preset.blockSignals(False)
+            self.lbl_preset_desc.setText("✨ AI 맞춤형 즉석 준비운동·스트레칭 루틴이 적용되었습니다.")
+            self.refresh_table_display()
+
+        self.lbl_status.setText("✨ 준비운동 템플릿이 완성되었습니다! 표에서 확인·수정한 뒤 아래 [타임라인으로 바로 로드]를 누르세요.")
+
+    def _on_ai_warmup_failed(self, err_msg: str):
+        self._set_warmup_ai_buttons_state(True)
+        self.lbl_status.setText(f"⚠️ AI 생성 오류: {err_msg}")
+        QMessageBox.warning(self, "AI 자동완성 오류", f"준비운동 템플릿 생성 중 오류가 발생했습니다:\n{err_msg}")
 
     def save_custom_template(self):
         """현재 편집 중인 루틴 전체(동작 목록, 순서, 멘트, 템포, 시작/종료멘트)를 JSON 템플릿 파일로 저장"""
