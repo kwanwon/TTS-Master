@@ -25,11 +25,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy soundfile openai huggingface-hub edge-tts
+          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy soundfile openai huggingface-hub Pillow edge-tts aiohttp tabulate certifi openpyxl python-docx pypdf
 
       - name: Build Windows Executable
         run: |
-          pyinstaller main.py --name AIMaster_TTS_Windows --windowed --onedir --clean --add-data "version.json;." --add-data "core;core" --add-data "ui;ui" --add-data "utils;utils" --add-data "assets;assets" --add-data "effects;effects" --icon assets/icon.ico --hidden-import PyQt6 --hidden-import pygame --hidden-import pydub --hidden-import requests --hidden-import numpy --hidden-import soundfile --hidden-import openai --hidden-import huggingface_hub --hidden-import edge_tts --noconfirm
+          pyinstaller main.py --name AIMaster_TTS_Windows --windowed --onedir --clean --add-data "version.json;." --add-data "core;core" --add-data "ui;ui" --add-data "utils;utils" --add-data "assets;assets" --add-data "effects;effects" --icon assets/icon.ico --hidden-import PyQt6 --hidden-import pygame --hidden-import pydub --hidden-import requests --hidden-import numpy --hidden-import soundfile --hidden-import openai --hidden-import huggingface_hub --hidden-import edge_tts --hidden-import PIL --hidden-import aiohttp --hidden-import tabulate --hidden-import certifi --hidden-import openpyxl --hidden-import docx --hidden-import pypdf --noconfirm
         shell: cmd
 
       - name: Copy Extra Resources if exist
@@ -65,7 +65,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy soundfile openai huggingface-hub Pillow edge-tts
+          pip install pyinstaller PyQt6 pygame pydub requests psutil numpy soundfile openai huggingface-hub Pillow edge-tts aiohttp tabulate certifi openpyxl python-docx pypdf
 
       - name: Build macOS App
         run: |
@@ -110,7 +110,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: "AI 마스터 (TTS 컨트롤) ${{ steps.get_version.outputs.VERSION }}"
           body: |
