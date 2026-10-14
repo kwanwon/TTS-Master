@@ -1,6 +1,6 @@
 {
-  "version": "1.9.9",
+  "version": "1.9.10",
   "release_date": "2026-10-14",
   "app_name": "AIMaster_TTS",
-  "description": "훈련 신호음(휘슬/카운트다운) 전 조기 출발 방지(Let's go, Move 등 소거), 이중언어 음성 화자 분리 및 콩글리시 원천 차단"
+  "description": "서킷 인터벌 콤보 개수 사범님 주문 맞춤형 동적 생성(1~3번 콤보 등 원하는 개수 엄격 준수) 및 세트 수 자동 연동"
 }

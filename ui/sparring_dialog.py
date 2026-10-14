@@ -2171,6 +2171,10 @@ class SparringDialog(QDialog):
                 if formatted_moves and hasattr(self, 'txt_circuit_moves'):
                     self.txt_circuit_moves.setPlainText(formatted_moves)
 
+                combos = res.get("combos", [])
+                if combos and hasattr(self, 'sp_circuit_sets'):
+                    self.sp_circuit_sets.setValue(len(combos))
+
                 self._circuit_moves_user_modified = True
                 self._ai_generated_active = True
 

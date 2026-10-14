@@ -130,6 +130,66 @@ def save_common_settings(data: dict):
         pass
 
 
+def extract_requested_circuit_combo_count(text: str) -> Optional[int]:
+    """
+    Extracts explicitly requested combo count from user prompt.
+    E.g.:
+      - "1번부터 3번 콤보까지" -> 3
+      - "1부터 3번까지" -> 3
+      - "1~3번 콤보", "1-3번", "1번 ~ 3번" -> 3
+      - "1번 콤보, 2번 콤보, 3번 콤보" -> 3
+      - "3개 콤보", "3콤보", "3개 세트", "3세트", "총 3개 콤보" -> 3
+      - "콤보 1부터 3까지" -> 3
+    Returns integer between 1 and 10, or None if not explicitly specified.
+    """
+    if not text:
+        return None
+    cleaned = text.strip()
+
+    # 1. "1번부터 3번 콤보까지", "1부터 3번까지", "1~3번", "1 - 3번 콤보", "1번 ~ 3번 콤보", "1번부터 3번까지" 등
+    m = re.search(r"(?:1\s*(?:번)?\s*(?:콤보|세트)?\s*(?:부터|~|-)\s*(\d+)\s*(?:번)?\s*(?:콤보|세트)?)", cleaned)
+    if m:
+        val = int(m.group(1))
+        if 1 <= val <= 10:
+            return val
+
+    # 2. "콤보 1부터 3까지", "세트 1~3"
+    m = re.search(r"(?:콤보|세트)\s*1\s*(?:부터|~|-)\s*(\d+)", cleaned)
+    if m:
+        val = int(m.group(1))
+        if 1 <= val <= 10:
+            return val
+
+    # 3. 나열형: "1번, 2번, 3번", "1번 콤보, 2번 콤보, 3번 콤보"
+    numbered_matches = re.findall(r"(\d+)\s*번\s*(?:콤보|세트)?", cleaned)
+    if len(numbered_matches) >= 2:
+        nums = [int(n) for n in numbered_matches]
+        if nums == list(range(1, max(nums) + 1)) and 1 <= max(nums) <= 10:
+            return max(nums)
+
+    # 4. "3개 콤보", "3콤보", "3개 세트", "3세트", "총 3개 콤보"
+    m = re.search(r"(\d+)\s*(?:개\s*콤보|콤보|개\s*세트|세트)", cleaned)
+    if m:
+        val = int(m.group(1))
+        if 1 <= val <= 10:
+            return val
+
+    return None
+
+
+def count_combos_in_edited_text(text: str) -> int:
+    """
+    Counts the number of combos present in user's edited moves text.
+    """
+    if not text:
+        return 4
+    matches = re.findall(r"(?:^|\n)\s*(?:\[?\d+\s*세트\]?|\d+\s*번\s*(?:콤보|세트)?|콤보\s*\d+)", text)
+    count = len(matches)
+    if 1 <= count <= 10:
+        return count
+    return 4
+
+
 def extract_text_from_file(file_path: str) -> str:
     """
     Extracts plain text from .txt, .md, .csv, .json, or .docx files
@@ -410,6 +470,17 @@ class AIGenerator:
         common_info = common_cfg.get("common_info", "").strip()
         english_guide = self._get_easy_conversational_english_guide(lang_mode)
 
+        req_count = extract_requested_circuit_combo_count(user_prompt)
+        target_count = req_count if req_count is not None else 4
+
+        combo_examples = []
+        for c_i in range(1, target_count + 1):
+            combo_examples.append(f"""    {{
+      "speech": "{c_i}번 콤보 실제 음성 구령 텍스트 (체력운동 + 발차기 조합)",
+      "tip": "사범님 참고용 상세 지도 팁 (➔ 화살표로 체력요소별 코칭 포인트와 연결 순서 명시)"
+    }}""")
+        combo_examples_str = ",\n".join(combo_examples)
+
         system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 현장 코칭 대본 전문가입니다.
 사범님이 입력한 운동 요구사항이나 계획표 내용을 바탕으로, 사범님이 바로 확인하고 입맛대로 수정할 수 있는 [즉석 서킷 인터벌 대본 템플릿]을 JSON으로 생성하세요.
 
@@ -450,7 +521,10 @@ class AIGenerator:
        - 여러 종목이 섞여 있으면 ➔ "순발력과 민첩성, 스피드를 완성하는 실전 복합 서킷"으로 스마트하게 설명하세요.
      * **지도 팁(tip)**:
        - 해당 체력 요소의 핵심 코칭 포인트(예: 순발력=착지 반동과 점프 폭발력, 민첩성=엎드렸다 신속히 일어나기/중심 제어, 스피드=발놀림의 최고 속도 유지)를 화살표(➔)로 명시하세요.
-7. 총 4개의 세트별 콤보를 완성도 높게 구성하세요. 4개 콤보 모두 speech와 tip을 절대로 빈칸 없이 100% 충실히 작성하세요.
+7. [사범님 주문 콤보 개수 엄격 준수 - 정확히 총 {target_count}개 콤보]:
+   - 사범님의 요청({user_prompt})에 명시된 콤보 개수에 따라 **반드시 정확히 총 {target_count}개의 세트별 콤보(1번 콤보부터 {target_count}번 콤보까지)**를 완성도 높게 구성하세요.
+   - 절대로 임의로 콤보를 추가하거나 4개로 강제하지 마세요. combos 배열 길이는 반드시 정확히 {target_count}개여야 합니다.
+   - 모든 콤보의 speech와 tip은 절대로 빈칸 없이 100% 충실히 작성하세요.
 8. 특수기호(&, · 등)는 읽을 때 어색하므로 제목과 구령에 절대 쓰지 마세요.
 9. [조기 출발 방지 - 시작/독려 구령 절대 금지]: speech 내부에는 절대로 'Let's go', 'Keep moving', 'Move', 'Go go go', 'Go', 'Don't stop', '출발', '시작', '가자' 등 행동 개시나 출발을 재촉하는 단어를 일절 넣지 마세요! 수련생들은 설명 후 이어지는 [카운트다운과 시작 휘슬 신호음]에 맞춰 움직여야 하므로, 오직 수행할 동작과 기술만을 객관적으로 명시하세요.
 
@@ -461,22 +535,7 @@ class AIGenerator:
   "theme_title": "입력 종목의 체력 요소에 맞춘 테마 제목 (예: 하체 폭발력과 순발력 강화 서킷)",
   "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [감지된 체력 요소와 동작들]을 연결하여 ...",
   "combos": [
-    {{
-      "speech": "1번 콤보 실제 음성 구령 텍스트 (체력운동 + 발차기 조합)",
-      "tip": "사범님 참고용 상세 지도 팁 (➔ 화살표로 체력요소별 코칭 포인트와 연결 순서 명시)"
-    }},
-    {{
-      "speech": "2번 콤보 실제 음성 구령 텍스트",
-      "tip": "사범님 참고용 상세 지도 팁"
-    }},
-    {{
-      "speech": "3번 콤보 실제 음성 구령 텍스트",
-      "tip": "사범님 참고용 상세 지도 팁"
-    }},
-    {{
-      "speech": "4번 콤보 실제 음성 구령 텍스트",
-      "tip": "사범님 참고용 상세 지도 팁"
-    }}
+{combo_examples_str}
   ]
 }}"""
 
@@ -493,7 +552,7 @@ class AIGenerator:
             temperature=0.45,
             response_format={"type": "json_object"}
         )
-        return self._parse_circuit_json_response(raw_resp)
+        return self._parse_circuit_json_response(raw_resp, expected_count=target_count)
 
     def refine_edited_circuit_routine(
         self,
@@ -511,6 +570,19 @@ class AIGenerator:
         """
         english_guide = self._get_easy_conversational_english_guide(lang_mode)
 
+        # 사범님이 편집창에 작성한 실제 콤보 개수를 우선 감지, 또는 사용자 프롬프트에서 감지
+        detected_count = count_combos_in_edited_text(edited_moves_text)
+        req_count = extract_requested_circuit_combo_count(user_prompt)
+        target_count = req_count if req_count is not None else detected_count
+
+        combo_examples = []
+        for c_i in range(1, target_count + 1):
+            combo_examples.append(f"""    {{
+      "speech": "{c_i}번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
+    }}""")
+        combo_examples_str = ",\n".join(combo_examples)
+
         system_prompt = f"""당신은 무도·체력 체육관의 수석 사범이자 한/영 코칭 대본 전문가입니다.
 사범님이 대본 편집창에서 [한국어 동작이나 횟수]를 직접 수정했습니다.
 사범님이 수정한 각 콤보의 **한국어 동작 내용과 횟수, 구성을 100% 그대로 최우선 기준으로 삼아서**,
@@ -518,8 +590,9 @@ class AIGenerator:
 
 [핵심 규칙 - 절대 준수!]
 1. 사범님이 수정한 각 세트의 한국어 동작과 횟수를 임의로 다른 운동으로 바꾸지 마세요! 사범님이 적은 한국어 동작을 그대로 살리면서 자연스럽게 다듬고, 뒷부분의 영어 구령(`- 영어 구령!`)과 아래 줄의 `➔ [지도 팁]`을 그 한국어 동작에 1:1로 정확히 일치시켜 다시 작성하세요.
-2. [절대 콤보 삭제 금지 - 총 4개 콤보 필수 유지!]:
-   사범님이 제공한 콤보가 4개 미만이거나 1개만 있더라도, 절대로 콤보 개수를 1개로 줄이지 말고, 반드시 총 4개의 콤보(1번 콤보, 2번 콤보, 3번 콤보, 4번 콤보)를 모두 포함하여 combos 배열에 4개 아이템을 반환하세요! (사범님이 수정한 콤보는 그대로 살리고, 나머지 번호는 기존 루틴을 유지하거나 연관된 기능성/발차기 운동으로 알차게 채우세요).
+2. [콤보 개수 엄격 유지 - 총 {target_count}개 콤보]:
+   - 사범님이 편집창에 작성한 콤보 개수(총 {target_count}개)를 100% 동일하게 유지하세요!
+   - 절대로 임의로 콤보 개수를 4개로 강제하거나 늘리지 말고, 정확히 {target_count}개의 콤보(1번 콤보부터 {target_count}번 콤보까지)만 combos 배열에 반환하세요.
 3. '도장'과 '기립' 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서', '빠르게 일어나' 사용).
 4. [JSON 문법 주의]: 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어가 필요할 때는 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
 5. {english_guide}
@@ -536,22 +609,7 @@ class AIGenerator:
   "theme_title": "수정된 운동의 체력 요소에 맞춘 테마 제목 (예: 하체 폭발력과 전신 민첩성 복합 서킷)",
   "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [수정된 핵심 체력 종목들과 발차기]를 연결하여 [해당 체력 효과]를 극대화하는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!",
   "combos": [
-    {{
-      "speech": "1번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령)",
-      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
-    }},
-    {{
-      "speech": "2번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
-      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
-    }},
-    {{
-      "speech": "3번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
-      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
-    }},
-    {{
-      "speech": "4번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
-      "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
-    }}
+{combo_examples_str}
   ]
 }}"""
 
@@ -566,7 +624,7 @@ class AIGenerator:
             temperature=0.4,
             response_format={"type": "json_object"}
         )
-        return self._parse_circuit_json_response(raw_resp)
+        return self._parse_circuit_json_response(raw_resp, expected_count=target_count)
 
     @staticmethod
     def robust_json_loads(raw_resp: str) -> dict:
@@ -670,21 +728,36 @@ class AIGenerator:
         return extracted
 
     @classmethod
-    def _parse_circuit_json_response(cls, raw_resp: str) -> dict:
+    def _parse_circuit_json_response(cls, raw_resp: str, expected_count: Optional[int] = None) -> dict:
         data = cls.robust_json_loads(raw_resp)
         theme_title = data.get("theme_title", "실전 맞춤형 서킷 인터벌 콤보").strip()
         intro_text = data.get("intro_text", "").strip()
         combos = data.get("combos", [])
 
-        # 안전장치: 콤보가 4개 미만인 경우 기본 서킷 루틴으로 보충하여 항상 4개 세트 유지
+        # 목표 콤보 개수 결정: expected_count가 지정되면 최우선, 아니면 응답 길이 (최소 1, 없으면 4)
+        if expected_count is not None and expected_count >= 1:
+            target_n = expected_count
+        else:
+            target_n = len(combos) if len(combos) >= 1 else 4
+
+        # 풍부한 기본 fallback 리스트
         default_fallbacks = [
             {"speech": "팔굽혀펴기 2회 후 빠른 발차기 5회! - Two pushups, five fast kicks! Go!", "tip": "푸시업 후 신속히 일어나서 빠른발 연결"},
             {"speech": "무릎 올려 제자리 점프 3회 후 앞차기! - High knees three times, front kick!", "tip": "무릎을 가슴까지 높게 당겨 점프 후 앞차기 타격"},
             {"speech": "개구리 점프 3회 후 나래차기와 전방낙법! - Three squat jumps, double kicks and front roll!", "tip": "하체 폭발력 점프 후 연속 발차기와 안전한 낙법"},
-            {"speech": "버피 2회 후 뒤차기와 연속 타격! - Two burpees, back kick combo!", "tip": "지치지 않고 전력으로 다음 동작 신속히 연결"}
+            {"speech": "버피 2회 후 뒤차기와 연속 타격! - Two burpees, back kick combo!", "tip": "지치지 않고 전력으로 다음 동작 신속히 연결"},
+            {"speech": "스쿼트 점프 3회 후 돌려차기 양쪽! - Three squat jumps, roundhouse kick both sides!", "tip": "점프 폭발력 후 신속한 좌우 몸통 타격"},
+            {"speech": "마운틴 클라이머 4회 후 빠른 발차기! - Mountain climbers four times, fast kicks!", "tip": "초고속 다리 피치 후 즉시 일어서서 연속 타격"},
+            {"speech": "사이드 스텝 후 옆차기! - Side step, side kick!", "tip": "민첩한 스텝 이동 후 정확한 중심 잡고 타격"},
+            {"speech": "터크 점프 2회 후 점프 뒤차기! - Tuck jump twice, jump back kick!", "tip": "높은 탄력 점프 후 공중에서 몸통 회전 타격"}
         ]
-        while len(combos) < 4:
-            combos.append(default_fallbacks[len(combos)])
+
+        if len(combos) > target_n:
+            combos = combos[:target_n]
+        else:
+            while len(combos) < target_n:
+                fallback_idx = len(combos) % len(default_fallbacks)
+                combos.append(default_fallbacks[fallback_idx])
 
         lines = []
         for idx, c in enumerate(combos, 1):
