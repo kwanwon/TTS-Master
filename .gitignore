@@ -40,8 +40,10 @@ Thumbs.db
 
 # Project temporary audio & output
 projects/
-effects/
+# Built-in sound effects must be bundled
+!effects/
 *.wav
+!effects/*.wav
 *.mp3
 *.m4a
 *.aiff
