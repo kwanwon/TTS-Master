@@ -2011,11 +2011,24 @@ class SparringDialog(QDialog):
         elif tab_mode == "relay":
             intro = self.txt_relay_intro.toPlainText().strip() if hasattr(self, 'txt_relay_intro') else ""
             cue = self.txt_relay_cue.toPlainText().strip() if hasattr(self, 'txt_relay_cue') else ""
+            fighters = 2
+            match_label = "1:1 (플레이어 1명, 1번 보조자 1명)"
+            if hasattr(self, 'rb_relay_11') and self.rb_relay_11.isChecked():
+                fighters = 2
+                match_label = "1:1 (플레이어 1명, 1번 보조자 1명)"
+            elif hasattr(self, 'rb_relay_12') and self.rb_relay_12.isChecked():
+                fighters = 3
+                match_label = "1:2 (플레이어 1명, 1번 보조자, 2번 보조자)"
+            elif hasattr(self, 'rb_relay_13') and self.rb_relay_13.isChecked():
+                fighters = 4
+                match_label = "1:3 (플레이어 1명, 1번 보조자, 2번 보조자, 3번 보조자)"
             return {
                 "intro_text": intro,
                 "relay_intro": intro,
                 "cue_text": cue,
                 "relay_cues": cue,
+                "fighters_count": fighters,
+                "match_label": match_label,
             }
         elif tab_mode == "reaction":
             cues = self.txt_reac_cues.text().strip() if hasattr(self, 'txt_reac_cues') else ""

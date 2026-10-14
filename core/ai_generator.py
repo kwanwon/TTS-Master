@@ -870,18 +870,53 @@ class AIGenerator:
         common_info = common_cfg.get("common_info", "").strip()
         english_guide = self._get_easy_conversational_english_guide(lang_mode)
 
+        relay_special_rules = ""
         if tab_mode == "relay":
-            schema_desc = """{
-  "intro_text": "시작 전 플레이어와 보조자들에게 송출할 종합 훈련 설명 및 미트 착용 행동요령 (정중한 사범님 존댓말, '도장'/'기립'/'선수' 단어 절대 금지, '플레이어'와 '보조자' 명칭 사용)",
-  "cue_text": "플레이어 및 보조자별 기술 구령 (줄바꿈으로 구분, '플레이어: 기술명\\n1번 보조자: 기술명' 형식 또는 순환 기술 목록, 선택된 언어 모드에 맞춰 쉬운 현장 영어 구령 포함)"
-}"""
+            fighters = current_fields.get("fighters_count", 2)
+            match_label = current_fields.get("match_label", "1:1 (플레이어 1명, 1번 보조자 1명)")
+            role_desc = f"{match_label} 릴레이 미트 순환 훈련"
+
             r_intro = current_fields.get('intro_text') or current_fields.get('relay_intro', '')
             r_cue = current_fields.get('cue_text') or current_fields.get('relay_cues', '')
             current_context = (
+                f"[현재 릴레이 인원 모드]: {match_label}\n"
                 f"[현재 화면의 훈련 종합 설명]:\n{r_intro}\n\n"
                 f"[현재 화면의 플레이어/보조자 지시 기술 대본]:\n{r_cue}\n"
             )
-            role_desc = "1:1 / 1:2 / 1:3 플레이어 및 보조자 다자간 릴레이 미트 순환 훈련"
+
+            schema_desc = """{
+  "intro_text": "시작 전 플레이어와 보조자들에게 송출할 종합 훈련 설명 및 미트 착용 행동요령 (정중한 사범님 존댓말, '도장'/'기립'/'선수' 단어 절대 금지, '플레이어'와 '보조자' 명칭 사용, 훈련 특성에 맞는 도입부)",
+  "cue_text": "플레이어 및 보조자별 기술 구령 (줄바꿈으로 구분, '플레이어: 기술명! - 영어 구령!\\n1번 보조자: 기술명! - 영어 구령!')"
+}"""
+            relay_special_rules = f"""
+[릴레이 미트 훈련 대본(cue_text) 구성 엄격 규칙 - 위반 절대 금지!]
+1. 현재 인원 구성: {match_label}
+   - **1:1 모드**: 오직 '플레이어'와 '1번 보조자'만 나와야 합니다! (2번 보조자, 3번 보조자 절대 생성 금지)
+   - **1:2 모드**: '플레이어', '1번 보조자', '2번 보조자'가 순서대로 나와야 합니다.
+   - **1:3 모드**: '플레이어', '1번 보조자', '2번 보조자', '3번 보조자'가 순서대로 나와야 합니다.
+
+2. [양쪽(좌우) 연습 세트 구성 vs 단방향 1세트 구성]:
+   - **사범님이 '양쪽', '좌우', '양발'을 요구했거나 수정한 대본에 양쪽 훈련 의도가 있는 경우**:
+     * 절대로 단순 복사/중복하지 말고, **1회차는 '오른쪽(우측)', 2회차는 '왼쪽(좌측)'**으로 명확히 구분된 2개 세트로 작성하세요!
+     * 1:1 양쪽 훈련 작성 예시:
+       플레이어: 방족술 전진 허리 감아 던지기 오른쪽! - Forward hip throw right side!
+       1번 보조자: 전진 몸통차기 1회 오른쪽! - Forward body kick right side!
+       플레이어: 방족술 전진 허리 감아 던지기 왼쪽! - Forward hip throw left side!
+       1번 보조자: 전진 몸통차기 1회 왼쪽! - Forward body kick left side!
+   - **사범님이 양쪽/좌우를 명시하지 않은 단방향 훈련인 경우**:
+     * **동일 동작 중복 복사 전면 금지**: 1:1이면 플레이어 1줄, 1번 보조자 1줄로 **단 1세트만** 작성하세요! 똑같은 동작을 2번 반복해서 4줄로 늘리지 마세요!
+     * 1:1 단방향 훈련 작성 예시:
+       플레이어: 방족술 전진 허리 감아 던지기 동작 수행! - Forward hip throw, turn and throw!
+       1번 보조자: 전진 몸통차기 1회! - Forward body kick, kick hard!
+
+3. [사범님 지시 횟수 100% 엄격 준수 - 임의 횟수 변경 절대 금지!]:
+   - 사범님이 '전진 몸통차기 1회', '몸통차기(한번)', '1회', '단타' 등으로 지시했으면 **반드시 1회/한번**으로 작성하세요.
+   - 절대로 임의로 '2회!', '3회!' 등으로 횟수를 부풀리거나 바꾸지 마세요. 사범님이 주문한 그대로 작성하세요.
+
+4. [사범님이 수정한 대본 정제(refine) 시 중복 정제 원칙]:
+   - 사범님이 수정한 대본에 똑같은 내용이 2번 반복되어 있고 '양쪽' 요구가 있는 경우 ➔ 첫 번째는 '오른쪽', 두 번째는 '왼쪽' 세트로 명확히 나누어 작성하세요.
+   - '양쪽' 요구가 없다면 ➔ 중복된 2번째 반복을 완전히 삭제하고 1세트만 깔끔하게 남기세요.
+"""
         elif tab_mode == "reaction":
             schema_desc = """{
   "cues": "쉼표(,)로 구분된 4~6개의 실전 반응 타격 기술 구령 (선택된 언어 모드에 맞춰 한국어 동작 및 쉬운 현장 영어 구령 포함. 예: 백스텝 받아차기 상단! - Step back counter kick!, 전진 몸통 2연타! - Double body kicks!)"
@@ -930,6 +965,7 @@ class AIGenerator:
 4. 특수기호(&, · 등)는 사용하지 마세요.
 5. [JSON 문법 주의]: 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어가 필요할 때는 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
 6. {english_guide}
+{relay_special_rules}
 
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {schema_desc}"""
