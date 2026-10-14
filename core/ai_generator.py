@@ -368,26 +368,32 @@ class AIGenerator:
 
         mode_specific = {
             "kr": (
-                "한국어 전용 모드입니다. 영어 없이 힘차고 명확한 한국어 사범 구령으로만 작성하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회, 버피 2회! 신속하게 다음 동작으로 연결! 쉼 없이 반복!'"
+                "한국어 전용 모드입니다. 영어 없이 힘차고 명확한 한국어 사범 동작 지시로만 작성하세요.\n"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회, 버피 2회! 신속하게 다음 동작으로 연결!'"
             ),
             "mix_kids": (
-                "한국어 동작 설명 + 쉽고 신나는 현장 생활 영어 구령(1:1 매칭) 모드입니다.\n"
-                "반드시 '한국어 동작 설명! - 쉬운 현장 영어 구령!' 형식으로 작성하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회와 버피 2회! - Two pushups! Five fast kicks! Two burpees! Let's go!'"
+                "한국어 동작 설명 + 쉽고 명확한 현장 생활 영어 동작 구령(1:1 매칭) 모드입니다.\n"
+                "반드시 '한국어 동작 설명! - 쉬운 현장 영어 동작 구령!' 형식으로 작성하세요.\n"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5회와 버피 2회! - Two pushups! Five fast kicks! Two burpees!'"
             ),
             "dual_step": (
-                "한국어 동작 요약 + 자연스러운 대화형 코칭 영어 연결 모드입니다.\n"
+                "한국어 동작 요약 + 자연스러운 코칭 영어 연결 모드입니다.\n"
                 "반드시 '한국어 동작 요약! - 대화형 코칭 영어!' 형식으로 작성하세요.\n"
-                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5연타, 버피 2회 연결! - Down for two pushups, up fast for five quick kicks, then two burpees! Keep moving!'"
+                "예시: '팔굽혀펴기 2회 후 빠른 발차기 5연타, 버피 2회 연결! - Down for two pushups, up fast for five quick kicks, then two burpees!'"
             ),
             "en_advanced": (
-                "100% 원어민 코치의 자연스러운 대화형 실전 영어(Full English) 모드입니다. 한글 없이 영어로만 작성하세요.\n"
-                "예시: 'Give me two pushups, jump up fast for five quick kicks, and finish with two burpees! Keep moving, let's go!'"
+                "100% 원어민 코치의 자연스러운 실전 영어(Full English) 모드입니다. 한글 없이 영어로만 작성하세요.\n"
+                "예시: 'Give me two pushups, jump up fast for five quick kicks, and finish with two burpees!'"
             ),
         }.get(lang_mode, "")
 
-        return f"{common_vocab_guide}\n\n[선택된 구령 언어 모드 ({lang_mode})]:\n{mode_specific}"
+        return (
+            f"{common_vocab_guide}\n\n[선택된 구령 언어 모드 ({lang_mode})]:\n{mode_specific}\n\n"
+            "[🚨 조기 출발(오발) 방지 - 시작/독려 구령 절대 금지!]:\n"
+            "수련생들은 사전 음성 지시를 듣고 난 후, 시스템의 [카운트다운: 준비 3, 2, 1]과 [시작 휘슬(삐익~)] 신호음에 맞춰 정확히 움직여야 합니다.\n"
+            "따라서 음성 구령(speech) 어디에도 'Let's go', 'Keep moving', 'Move', 'Go go go', 'Go', 'Don't stop', 'Start', '출발', '시작', '가자' 등 행동 개시나 출발을 재촉하는 단어를 일절 포함하지 마세요!\n"
+            "오직 수행할 동작과 기술(예: 'Two burpees, jump up fast for three quick kicks!')만을 명확히 지시하세요."
+        )
 
     def generate_circuit_routine(
         self,
@@ -446,6 +452,7 @@ class AIGenerator:
        - 해당 체력 요소의 핵심 코칭 포인트(예: 순발력=착지 반동과 점프 폭발력, 민첩성=엎드렸다 신속히 일어나기/중심 제어, 스피드=발놀림의 최고 속도 유지)를 화살표(➔)로 명시하세요.
 7. 총 4개의 세트별 콤보를 완성도 높게 구성하세요. 4개 콤보 모두 speech와 tip을 절대로 빈칸 없이 100% 충실히 작성하세요.
 8. 특수기호(&, · 등)는 읽을 때 어색하므로 제목과 구령에 절대 쓰지 마세요.
+9. [조기 출발 방지 - 시작/독려 구령 절대 금지]: speech 내부에는 절대로 'Let's go', 'Keep moving', 'Move', 'Go go go', 'Go', 'Don't stop', '출발', '시작', '가자' 등 행동 개시나 출발을 재촉하는 단어를 일절 넣지 마세요! 수련생들은 설명 후 이어지는 [카운트다운과 시작 휘슬 신호음]에 맞춰 움직여야 하므로, 오직 수행할 동작과 기술만을 객관적으로 명시하세요.
 
 - [JSON 문법 주의]: 모든 문자열 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어 구령을 적을 때도 큰따옴표 대신 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
 
@@ -522,6 +529,7 @@ class AIGenerator:
    - 스쿼트점프/터크점프/점핑런지 포함 시 ➔ '순발력(Power) 및 하체 폭발력' 강조
    - 마운틴클라이머/제자리 발구르기/빠른 피치 포함 시 ➔ '초고속 스피드(Speed) 및 발놀림 빈도' 강조
    - 혼합 시 ➔ '순발력·민첩성·스피드 종합 서킷'으로 설명
+7. [조기 출발 방지]: speech 내부에는 절대로 'Let's go', 'Keep moving', 'Move', 'Go', 'Don't stop', '출발', '시작', '가자' 등 행동 개시 단어를 일절 넣지 마세요! 신호음 전에 선수들이 미리 움직이는 오발을 막아야 합니다.
 
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {{
@@ -529,7 +537,7 @@ class AIGenerator:
   "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 [수정된 핵심 체력 종목들과 발차기]를 연결하여 [해당 체력 효과]를 극대화하는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!",
   "combos": [
     {{
-      "speech": "1번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령!)",
+      "speech": "1번 콤보 실제 음성 구령 텍스트 (한국어 동작! - 쉬운 현장 영어 구령)",
       "tip": "수정된 동작에 맞춘 사범님 참고용 상세 지도 팁"
     }},
     {{

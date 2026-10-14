@@ -666,6 +666,18 @@ class SparringTrainingEngine:
                 # 이모지 및 불필요한 특수기호 완벽 제거
                 clean_name = clean_speech_text(str(ex_name).rstrip(".!? ").strip())
 
+                # ── 조기 출발 방지: 카운트다운/신호음 전에 미리 움직이지 않도록 시작/독려 구령 완전 제거 ──
+                premature_pats = [
+                    r"(?i)\b(?:let's\s*go|lets\s*go|let\s*us\s*go)\b[!.]*",
+                    r"(?i)\b(?:keep\s*moving|don't\s*stop|dont\s*stop|move\s*it|get\s*moving)\b[!.]*",
+                    r"(?i)\b(?:go\s*go\s*go|go\s*go)\b[!.]*",
+                    r"(?i)\b(?:keep\s*it\s*up|you\s*got\s*this|nice\s*and\s*fast)\b[!.]*",
+                    r"(?i)\b(?:go|move|start)\b[!.]*$",
+                    r"\b(?:출발|시작|가자|달려|무빙|렛츠고|레츠고)\b[!.]*",
+                ]
+                for p_pat in premature_pats:
+                    clean_name = re.sub(p_pat, "", clean_name, flags=re.IGNORECASE).strip()
+
                 # 지도 팁(tip)은 지도자가 화면에서 참고하는 가이드이므로 음성에서는 배제하여 운동 템포 극대화
                 if s == 1 and circuit_mode_type == "single":
                     call_text = f"[오늘의 집중 콤보] {clean_name}!"

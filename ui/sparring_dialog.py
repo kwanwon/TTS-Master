@@ -421,8 +421,17 @@ class SparringWorker(QThread):
                     parts = text.split("]", 1)
                     clean_text = parts[1].strip() if len(parts) > 1 and parts[1].strip() else parts[0].strip("[")
 
-                # 혹시라도 포함되었을 수 있는 '출발' 단어 완전 제거
-                clean_text = clean_text.replace("출발!", "").replace("출발", "").strip()
+                # ── 조기 출발(오발) 방지: 신호음(휘슬/카운트다운) 전에 선수들이 미리 움직이지 않도록 시작/독려 구령 완전 제거 ──
+                premature_start_patterns = [
+                    r"(?i)\b(?:let's\s*go|lets\s*go|let\s*us\s*go)\b[!.]*",
+                    r"(?i)\b(?:keep\s*moving|don't\s*stop|dont\s*stop|move\s*it|get\s*moving)\b[!.]*",
+                    r"(?i)\b(?:go\s*go\s*go|go\s*go)\b[!.]*",
+                    r"(?i)\b(?:keep\s*it\s*up|you\s*got\s*this|nice\s*and\s*fast)\b[!.]*",
+                    r"(?i)\b(?:go|move|start)\b[!.]*$",
+                    r"\b(?:출발|시작|가자|달려|무빙|렛츠고|레츠고)\b[!.]*",
+                ]
+                for p_pat in premature_start_patterns:
+                    clean_text = re.sub(p_pat, "", clean_text, flags=re.IGNORECASE).strip()
 
                 # 불필요한 따옴표(' " `) 제거 (TTS 호흡 지연 및 어색한 끊김 방지)
                 clean_text = clean_text.replace("'", "").replace('"', '').replace('`', '').strip()
@@ -531,9 +540,9 @@ class SparringWorker(QThread):
                     if not is_guidance and not re.search(r'[!~]$', synth_text):
                         synth_text += "!"
 
-                    # v9 캐시 키 (숫자 한자어 발음 표준화 및 영문 횟수 통일 반영)
+                    # v10 캐시 키 (조기 출발 방지 및 완벽한 한/영 분리 반영)
                     cue_type_tag = "g" if is_guidance else "c"
-                    safe_cue_name = f"sp_v9_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
+                    safe_cue_name = f"sp_v10_{voice_id}_{en_voice}_{cue_type_tag}_{abs(hash(synth_text))}.wav"
                     cached_cue_path = os.path.join(sparring_cache_dir, safe_cue_name)
 
                     generated = False
@@ -542,45 +551,65 @@ class SparringWorker(QThread):
                         shutil.copy(cached_cue_path, v_path)
                         generated = True
                     else:
-                        for attempt in range(3):
+                        def _split_ko_en(t: str) -> tuple:
+                            # 1) 명시적 구분자 탐색
+                            for delim in [" - ", " – ", " — ", " : ", " | "]:
+                                if delim in t:
+                                    p = t.split(delim, 1)
+                                    if re.search(r'[가-힣]', p[0]) and re.search(r'[a-zA-Z]', p[1]):
+                                        return p[0].strip(), p[1].strip()
+                            # 2) 한글 바로 뒤 하이픈/대시/콜론 연결 형태 탐색 (공백 누락 방어)
+                            m = re.search(r'([가-힣!?.~]+)\s*[-–—:]\s*([a-zA-Z].*)', t)
+                            if m:
+                                return t[:m.end(1)].strip(), m.group(2).strip()
+                            # 3) 한글 문장부호 뒤 영단어 시작 탐색
+                            m2 = re.search(r'([가-힣]+[!?.~]+)\s+([A-Za-z].*)', t)
+                            if m2:
+                                return t[:m2.end(1)].strip(), m2.group(2).strip()
+                            return "", ""
+
+                        for attempt in range(4):
                             try:
                                 import edge_tts
                                 import io
                                 from pydub.effects import compress_dynamic_range, normalize
 
                                 async def _synth_single_segment(t: str, v: str) -> AudioSegment:
-                                    comm = edge_tts.Communicate(t, v, rate=rate_val)
-                                    buf = io.BytesIO()
-                                    async for chunk in comm.stream():
-                                        if chunk['type'] == 'audio':
-                                            buf.write(chunk['data'])
-                                    buf.seek(0)
-                                    raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                    return trim_audio_silence(raw_seg)
+                                    last_err = None
+                                    for sub_try in range(3):
+                                        try:
+                                            comm = edge_tts.Communicate(t, v, rate=rate_val)
+                                            buf = io.BytesIO()
+                                            async for chunk in comm.stream():
+                                                if chunk['type'] == 'audio':
+                                                    buf.write(chunk['data'])
+                                            buf.seek(0)
+                                            raw_seg = AudioSegment.from_file(buf, format="mp3")
+                                            return trim_audio_silence(raw_seg)
+                                        except Exception as sub_ex:
+                                            last_err = sub_ex
+                                            await asyncio.sleep(0.15 * (sub_try + 1))
+                                    raise last_err or RuntimeError(f"EdgeTTS failed for: {t}")
 
                                 async def _synth_hybrid(full_text: str, path: str):
-                                    # 1. 초등부 순차 이중언어 구령 (한국어 설명 - 쉬운 원어민 영어 본토 발음 분리)
-                                    #    예: "[1세트] 쪼그려 점프 3회 후 나래차기! - Three jumps and double kicks! Let's go!"
-                                    if " - " in full_text:
-                                        parts = full_text.split(" - ", 1)
-                                        ko_part = parts[0].strip()
-                                        en_part = parts[1].strip()
+                                    ko_part, en_part = _split_ko_en(full_text)
 
+                                    # 1. 한국어 + 원어민 영어 분리 모드 (콩글리쉬 원천 차단)
+                                    if ko_part and en_part:
                                         seg_ko = await _synth_single_segment(ko_part, voice_id)
+                                        await asyncio.sleep(0.06)
                                         seg_en = await _synth_single_segment(en_part, en_voice)
-
-                                        # 한국어와 원어민 영어 사이에 자연스러운 호흡 텀(150ms)
                                         combined = seg_ko + AudioSegment.silent(duration=150) + seg_en
 
                                     # 2. 순수 영어 문장: 미국 본토 원어민 화자(Guy/Jenny) 100%
                                     elif has_english and not has_korean:
                                         combined = await _synth_single_segment(full_text, en_voice)
 
-                                    # 3. 일반 한국어 및 유치부 한-영 대화형 코칭: 한국어 지도자 화자(인준/선희)가 자연스러운 한 호흡으로 합성
+                                    # 3. 순수 한국어 문장: 한국어 지도자 화자(인준/선희)
                                     else:
                                         combined = await _synth_single_segment(full_text, voice_id)
 
-                                    # ── 도장 보컬 사운드 마스터링 (명료도 & 펀치감) ──
+                                    # ── 보컬 사운드 마스터링 (명료도 & 펀치감) ──
                                     if not is_guidance and len(combined) > 80:
                                         try:
                                             combined = compress_dynamic_range(combined, threshold=-16.0, ratio=2.5, attack=5.0, release=50.0)
@@ -604,21 +633,36 @@ class SparringWorker(QThread):
                             except Exception as e_voice:
                                 print(f"[SparringWorker] TTS attempt {attempt+1} fail for '{clean_text}': {e_voice}")
                                 import time
-                                time.sleep(0.2)
+                                time.sleep(0.3 * (attempt + 1))
 
-                        # macOS 로컬 네이티브 음성 합성 폴백 (오프라인 및 네트워크 오류 완벽 대응)
+                        # macOS 로컬 네이티브 음성 합성 폴백 (네트워크 단절 시에도 콩글리시 100% 방지)
                         if not generated and os.name == 'posix':
                             try:
                                 import subprocess
-                                tmp_aiff = v_path.replace(".wav", ".aiff")
-                                say_voice = "Yuna" if has_korean else "Samantha"
-                                res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, synth_text], check=False, timeout=8)
-                                if res.returncode == 0 and os.path.exists(tmp_aiff):
-                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
-                                    seg.export(v_path, format="wav")
-                                    if os.path.exists(tmp_aiff):
-                                        os.remove(tmp_aiff)
+                                ko_part, en_part = _split_ko_en(synth_text)
+                                if ko_part and en_part:
+                                    tmp_k = v_path.replace(".wav", "_k.aiff")
+                                    tmp_e = v_path.replace(".wav", "_e.aiff")
+                                    subprocess.run(["say", "-v", "Yuna", "-o", tmp_k, ko_part], check=False, timeout=6)
+                                    subprocess.run(["say", "-v", "Samantha", "-o", tmp_e, en_part], check=False, timeout=6)
+                                    seg_k = trim_audio_silence(AudioSegment.from_file(tmp_k)) if os.path.exists(tmp_k) else AudioSegment.silent(duration=200)
+                                    seg_e = trim_audio_silence(AudioSegment.from_file(tmp_e)) if os.path.exists(tmp_e) else AudioSegment.silent(duration=200)
+                                    combined = seg_k + AudioSegment.silent(duration=150) + seg_e
+                                    combined.export(v_path, format="wav")
+                                    for f in (tmp_k, tmp_e):
+                                        if os.path.exists(f): os.remove(f)
                                     generated = True
+                                else:
+                                    tmp_aiff = v_path.replace(".wav", ".aiff")
+                                    say_voice = "Yuna" if has_korean else "Samantha"
+                                    res = subprocess.run(["say", "-v", say_voice, "-o", tmp_aiff, synth_text], check=False, timeout=8)
+                                    if res.returncode == 0 and os.path.exists(tmp_aiff):
+                                        seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
+                                        seg.export(v_path, format="wav")
+                                        if os.path.exists(tmp_aiff):
+                                            os.remove(tmp_aiff)
+                                        generated = True
+                                if generated:
                                     import shutil
                                     shutil.copy(v_path, cached_cue_path)
                             except Exception as e_say:
