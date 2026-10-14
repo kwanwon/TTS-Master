@@ -412,7 +412,6 @@ class SparringTrainingEngine:
         if not text or not text.strip():
             return []
 
-        import re
         lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
         exercises = []
         current_item = None
@@ -948,7 +947,6 @@ class SparringTrainingEngine:
                         if len(kick_list) > 3:
                             kick_desc += f" 외 {len(kick_list)-3}개"
                         clean_kdesc = kick_desc.rstrip(".!? ").strip()
-                        import re
                         if re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_kdesc):
                             intro_text = (
                                 f"지금부터 스텝 콤비네이션 연타 스파링 훈련을 시작합니다. "
@@ -973,7 +971,6 @@ class SparringTrainingEngine:
                     round_type = params.get("round_type", "real")
                     promise_note = params.get("promise_detail", "").strip()
                     clean_note = promise_note.rstrip(".!? ").strip()
-                    import re
                     is_full_sentence = bool(re.search(r'(됩니다|합니다|입니다|습니다|시오|세요|된다|한다|이다|있습니다|없습니다)$', clean_note))
 
                     if clean_note and (clean_note.startswith("지금부터") or "훈련을 시작" in clean_note):

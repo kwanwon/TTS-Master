@@ -10,6 +10,7 @@ Allows full customization of cues, times, BGM playlist, and auto-ducking.
 """
 
 import os
+import re
 import uuid
 import asyncio
 import math
@@ -171,7 +172,6 @@ def make_suggested_filename(mode: str, params: dict, duration_sec: float) -> str
     훈련 모드, 인원, 세트수, 기술명에 맞춰 직관적인 한글 파일명 생성
     예: 1대1_앞차기_10세트.wav, 2대1_앞차기_돌려차기_3세트.wav
     """
-    import re
     dur_m = int(duration_sec // 60)
     dur_s = int(duration_sec % 60)
 
@@ -440,7 +440,6 @@ class SparringWorker(QThread):
                 clean_text = clean_text.replace("->", ", ").replace("➔", ", ").replace("▶", ", ").replace("=>", ", ")
 
                 # 서술어 중복 방어 정규화 (예: '됩니다.입니다' -> '됩니다.', '됩니다 입니다' -> '됩니다.')
-                import re
                 clean_text = re.sub(r'됩니다[\s\.]*입니다', '됩니다.', clean_text)
                 clean_text = re.sub(r'합니다[\s\.]*입니다', '합니다.', clean_text)
                 clean_text = re.sub(r'입니다[\s\.]*입니다', '입니다.', clean_text)
@@ -517,7 +516,6 @@ class SparringWorker(QThread):
                         continue
 
                     v_path = os.path.join("projects", "temp_tts", f"sparring_v_{uuid.uuid4().hex[:6]}.wav")
-                    import re
                     from utils.hangul_composer import compose_hangul_jamo
                     clean_text = clean_speech_text(compose_hangul_jamo(clean_text))
 
