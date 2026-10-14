@@ -1,6 +1,6 @@
 {
-  "version": "1.9.11",
+  "version": "1.9.12",
   "release_date": "2026-10-14",
   "app_name": "AIMaster_TTS",
-  "description": "음원 생성 시 re 모듈 UnboundLocalError 긴급 수정 및 정규식 정제 로직 안정화"
+  "description": "사전 설명 방송(intro_text) 첫 문장 획일화 전면 탈피 및 훈련 종목(플랭크/코어/스피드/인터벌 등) 맞춤형 도입부 동적 생성"
 }

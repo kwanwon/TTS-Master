@@ -614,18 +614,20 @@ class SparringTrainingEngine:
                     intro_text = "Circuit interval training starts now! Connect your jumps, kicks, and techniques with maximum intensity. Push your limits every set! Get ready!"
                 else:
                     if "낙법" in theme_title:
-                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 점프와 발차기, 그리고 낙법 콤보를 연결하여 실전 감각과 신체 협응력을 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
-                    elif "순발력" in theme_title:
-                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 폭발적인 버피와 점프, 연속 발차기를 통해 순발력과 민첩성을 극대화하는 시간입니다. 지시하는 구령에 맞춰 끝까지 빠른 템포로 집중하세요! 모두 준비해 주세요!"
-                    elif "풋워크" in theme_title or "카운터" in theme_title:
-                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 빠른 스텝 풋워크와 번개 같은 카운터 발차기 공방을 익히는 시간입니다. 상대의 빈틈을 노려 빠르고 정확하게 타격하세요! 모두 준비해 주세요!"
-                    elif "근지구력" in theme_title or "파워" in theme_title:
-                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 푸시업과 복근, 그리고 연타 발차기를 묶어 전신 파워와 근지구력을 기르는 시간입니다. 지친 순간에도 바른 자세를 유지하며 한계에 도전하세요! 모두 준비해 주세요!"
-                    elif "전술" in theme_title or "겨루기" in theme_title:
-                        intro_text = "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 앞발 견제와 기습 회전차기 등 실전 겨루기 득점 콤보를 무한 반복하는 시간입니다. 실전 시합의 긴장감을 유지하며 전력으로 꽂아 넣으세요! 모두 준비해 주세요!"
+                        intro_text = "지금부터 실전 대련 감각과 신체 협응력을 기르는 실전 연계 훈련을 시작합니다! 이번 훈련은 점프와 발차기, 그리고 낙법 콤보를 연결하여 위기 대처 능력과 신체 협응력을 기르는 시간입니다. 지시하는 동작에 맞춰 신속하게 다음 동작으로 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+                    elif "순발력" in theme_title or "민첩성" in theme_title:
+                        intro_text = "지금부터 폭발적인 순발력과 민첩성을 극대화하는 고강도 인터벌 트레이닝을 시작합니다! 이번 훈련은 파워풀한 버피와 점프, 연속 발차기를 통해 심폐지구력과 순발력을 기르는 시간입니다. 지시하는 구령에 맞춰 끝까지 빠른 템포로 집중하세요! 모두 준비해 주세요!"
+                    elif "풋워크" in theme_title or "스텝" in theme_title or "카운터" in theme_title:
+                        intro_text = "지금부터 번개 같은 스텝 풋워크와 실전 카운터 반응 훈련을 시작합니다! 이번 훈련은 빠른 발놀림과 기습 카운터 발차기 공방을 익히는 시간입니다. 상대의 빈틈을 노려 빠르고 정확하게 타격하세요! 모두 준비해 주세요!"
+                    elif "플랭크" in theme_title or "코어" in theme_title or "근지구력" in theme_title or "근력" in theme_title or "파워" in theme_title:
+                        intro_text = "지금부터 단단한 코어와 전신 파워를 다지는 근력 및 플랭크 인터벌 훈련을 시작합니다! 이번 훈련은 푸시업과 플랭크, 코어 복근과 연타 발차기를 묶어 전신 파워와 근지구력을 기르는 시간입니다. 지친 순간에도 바른 자세를 유지하며 한계에 도전하세요! 모두 준비해 주세요!"
+                    elif "전술" in theme_title or "겨루기" in theme_title or "스파링" in theme_title:
+                        intro_text = "지금부터 실전 겨루기 득점 감각과 전술 공격 콤보 훈련을 시작합니다! 이번 훈련은 앞발 견제와 기습 회전차기 등 실전 시합의 긴장감을 유지하며 득점 콤보를 무한 반복하는 시간입니다. 실전 시합처럼 전력으로 꽂아 넣으세요! 모두 준비해 주세요!"
+                    elif "스피드" in theme_title:
+                        intro_text = "지금부터 한계 스피드를 돌파하는 초고속 스피드 인터벌 훈련을 시작합니다! 이번 훈련은 빠른 발놀림과 연속 타격 스피드를 극대화하는 시간입니다. 지시하는 구령에 맞춰 끝까지 전력으로 집중하세요! 모두 준비해 주세요!"
                     else:
-                        clean_theme = theme_title if theme_title else "기능성 서킷 인터벌"
-                        intro_text = f"지금부터 기능성 서킷 인터벌 훈련을 시작합니다! 이번 테마는 {clean_theme}입니다. 지시하는 동작에 맞춰 신속하게 다음 동작을 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
+                        clean_theme = theme_title if theme_title else "맞춤형 인터벌"
+                        intro_text = f"지금부터 {clean_theme} 집중 훈련을 시작합니다! 지시하는 동작에 맞춰 신속하게 다음 동작을 연결하며 전력으로 반복하세요! 모두 준비해 주세요!"
             else:
                 # 커스텀 텍스트에서도 언어 관련 메타 설명(한국어, 원어민, 바이링구얼 등) 완전 정제
                 intro_text = re.sub(r'바이링구얼\s*', '', intro_text)
