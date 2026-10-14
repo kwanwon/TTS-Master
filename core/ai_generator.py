@@ -8,6 +8,7 @@ import ssl
 import tempfile
 import xml.etree.ElementTree as ET
 import traceback
+from typing import Optional, Dict, List, Any
 from openai import OpenAI
 
 
@@ -287,7 +288,14 @@ class AIGenerator:
         except Exception as e:
             return False, f"연결 실패: {str(e)}"
 
-    def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 1600, temperature: float = 0.55) -> str:
+    def _call_llm(
+        self,
+        system_prompt: str,
+        user_message: str,
+        max_tokens: int = 1600,
+        temperature: float = 0.55,
+        response_format: Optional[dict] = None
+    ) -> str:
         if not self._ensure_client():
             raise RuntimeError("Gemini API 키가 설정되지 않았습니다. 상단 [⚙️ AI·수련자료 통합 설정]에서 API 키를 입력해 주세요.")
 
@@ -303,19 +311,34 @@ class AIGenerator:
         last_err = None
         for m in unique_models:
             try:
-                response = self.client.chat.completions.create(
-                    model=m,
-                    messages=[
+                kwargs = {
+                    "model": m,
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},
                     ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                if response_format:
+                    kwargs["response_format"] = response_format
+
+                response = self.client.chat.completions.create(**kwargs)
                 content = response.choices[0].message.content
                 if content:
                     return content.strip()
             except Exception as e:
+                # 만약 response_format을 지원하지 않는 에러라면 없이 재시도
+                if response_format:
+                    try:
+                        kwargs.pop("response_format", None)
+                        response = self.client.chat.completions.create(**kwargs)
+                        content = response.choices[0].message.content
+                        if content:
+                            return content.strip()
+                    except Exception as e2:
+                        last_err = e2
+                        continue
                 last_err = e
                 continue
 
@@ -396,9 +419,11 @@ class AIGenerator:
 6. 1번 콤보에는 사범님이 요청한 핵심 동작 루틴을 100% 정확히 반영하고, 총 4개의 세트별 콤보를 구성하세요. (사범님이 세트별 동작을 각각 지정했다면 그 순서대로 구성하세요.)
 7. 특수기호(&, · 등)는 읽을 때 어색하므로 제목과 구령에 절대 쓰지 마세요.
 
+- [JSON 문법 주의]: 모든 문자열 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어 구령을 적을 때도 큰따옴표 대신 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
+
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {{
-  "theme_title": "훈련 테마 제목 (예: 팔굽혀펴기와 빠른 발차기 그리고 버피 실전 서킷)",
+  "theme_title": "훈련 테마 제목 (예: 빠른 발차기와 나래차기 민첩성 서킷)",
   "intro_text": "지금부터 실전 서킷 인터벌 훈련을 시작합니다! 이번 훈련은 ...",
   "combos": [
     {{
@@ -426,7 +451,13 @@ class AIGenerator:
         elif common_info:
             user_msg += f"\n[공통 설정 수련계획표/기본 정보]\n{common_info[:3000]}\n"
 
-        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1600, temperature=0.5)
+        raw_resp = self._call_llm(
+            system_prompt,
+            user_msg,
+            max_tokens=1600,
+            temperature=0.45,
+            response_format={"type": "json_object"}
+        )
         return self._parse_circuit_json_response(raw_resp)
 
     def refine_edited_circuit_routine(
@@ -455,7 +486,8 @@ class AIGenerator:
 2. [절대 콤보 삭제 금지 - 총 4개 콤보 필수 유지!]:
    사범님이 제공한 콤보가 4개 미만이거나 1개만 있더라도, 절대로 콤보 개수를 1개로 줄이지 말고, 반드시 총 4개의 콤보(1번 콤보, 2번 콤보, 3번 콤보, 4번 콤보)를 모두 포함하여 combos 배열에 4개 아이템을 반환하세요! (사범님이 수정한 콤보는 그대로 살리고, 나머지 번호는 기존 루틴을 유지하거나 연관된 기능성/발차기 운동으로 알차게 채우세요).
 3. '도장'과 '기립' 단어는 절대 쓰지 마세요 ('기립' 대신 '신속히 일어나서', '빠르게 일어나' 사용).
-4. {english_guide}
+4. [JSON 문법 주의]: 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어가 필요할 때는 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
+5. {english_guide}
 
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {{
@@ -485,19 +517,119 @@ class AIGenerator:
             f"[사범님이 직접 수정한 대본 템플릿 내용]\n{edited_moves_text.strip()}\n\n"
             f"[추가 요구사항 메모]: {user_prompt.strip() if user_prompt else '없음 (위 수정된 대본의 한글 동작 기준으로 영어와 설명 자동 맞춤)'}\n"
         )
-        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1600, temperature=0.4)
+        raw_resp = self._call_llm(
+            system_prompt,
+            user_msg,
+            max_tokens=1600,
+            temperature=0.4,
+            response_format={"type": "json_object"}
+        )
         return self._parse_circuit_json_response(raw_resp)
 
     @staticmethod
-    def _parse_circuit_json_response(raw_resp: str) -> dict:
+    def robust_json_loads(raw_resp: str) -> dict:
+        """
+        Robust JSON parser that repairs malformed LLM responses
+        (unescaped inner quotes, trailing commas, missing commas, control characters, etc.)
+        and falls back to regex-based key-value extraction if strict parsing fails.
+        """
+        if not raw_resp:
+            return {}
+
         cleaned = re.sub(r"^```(?:json)?\s*", "", raw_resp.strip(), flags=re.IGNORECASE)
         cleaned = re.sub(r"\s*```$", "", cleaned.strip())
-        start_idx = cleaned.find("{")
-        end_idx = cleaned.rfind("}")
-        if start_idx != -1 and end_idx != -1:
-            cleaned = cleaned[start_idx:end_idx + 1]
+        s_idx = cleaned.find("{")
+        e_idx = cleaned.rfind("}")
+        if s_idx != -1 and e_idx != -1 and e_idx > s_idx:
+            cleaned = cleaned[s_idx:e_idx + 1]
 
-        data = json.loads(cleaned)
+        # 1차 시도: 표준 json.loads (strict=False)
+        try:
+            return json.loads(cleaned, strict=False)
+        except Exception:
+            pass
+
+        # 2차 시도: 일반적인 문법 결함 보정
+        try:
+            fixed = cleaned
+            # 후행 쉼표 제거 (, } 또는 , ])
+            fixed = re.sub(r",\s*([\}\]])", r"\1", fixed)
+            # 줄바꿈 직후 쉼표 누락 보정: "value"\n"key": -> "value",\n"key":
+            fixed = re.sub(r'("\s*)\n(\s*"[a-zA-Z0-9_]+"\s*:)', r'\1,\n\2', fixed)
+            # 객체 사이 쉼표 누락: }\n{ -> },\n{
+            fixed = re.sub(r'(\}\s*)\n(\s*\{)', r'\1,\n\2', fixed)
+            return json.loads(fixed, strict=False)
+        except Exception:
+            pass
+
+        # 3차 시도: 정규식 기반 키-값 추출 (Unescaped inner quotes 등 치명적 문법 파손 완벽 대응)
+        extracted = {}
+
+        # 3-1. theme_title
+        m_theme = re.search(r'"theme_title"\s*:\s*"([^"\n\r]*)', cleaned)
+        if m_theme:
+            extracted["theme_title"] = m_theme.group(1).strip()
+
+        # 3-2. intro_text / relay_intro
+        m_intro = re.search(r'"(?:intro_text|relay_intro)"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_intro:
+            extracted["intro_text"] = m_intro.group(1).replace('\\"', '"').strip()
+            extracted["relay_intro"] = extracted["intro_text"]
+
+        # 3-3. cues / reac_cues / cue_text / relay_cues
+        m_cues = re.search(r'"(?:cues|reac_cues|cue_text|relay_cues)"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_cues:
+            val = m_cues.group(1).replace('\\"', '"').strip()
+            extracted["cues"] = val
+            extracted["cue_text"] = val
+            extracted["relay_cues"] = val
+            extracted["reac_cues"] = val
+
+        # 3-4. step_types / combo_steps
+        m_steps = re.search(r'"(?:step_types|combo_steps)"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_steps:
+            val = m_steps.group(1).replace('\\"', '"').strip()
+            extracted["step_types"] = val
+            extracted["combo_steps"] = val
+
+        # 3-5. kick_types / combo_kicks
+        m_kicks = re.search(r'"(?:kick_types|combo_kicks)"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_kicks:
+            val = m_kicks.group(1).replace('\\"', '"').strip()
+            extracted["kick_types"] = val
+            extracted["combo_kicks"] = val
+
+        # 3-6. promise_detail & caution_text
+        m_prom = re.search(r'"promise_detail"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_prom:
+            extracted["promise_detail"] = m_prom.group(1).replace('\\"', '"').strip()
+        m_caut = re.search(r'"caution_text"\s*:\s*"([\s\S]*?)(?=",\s*"\w+"|\s*"\w+"\s*:|\s*\}\s*$)', cleaned)
+        if m_caut:
+            extracted["caution_text"] = m_caut.group(1).replace('\\"', '"').strip()
+
+        # 3-7. combos 배열 정규식 추출
+        combos = []
+        blocks = re.findall(r'\{\s*"speech"\s*:\s*"([\s\S]*?)"\s*,\s*"tip"\s*:\s*"([\s\S]*?)"\s*\}', cleaned)
+        if blocks:
+            for sp, tp in blocks:
+                combos.append({"speech": sp.strip(), "tip": tp.strip()})
+        else:
+            sp_matches = re.findall(r'"speech"\s*:\s*"([\s\S]*?)(?=",\s*"tip"|\s*"tip"\s*:)', cleaned)
+            tp_matches = re.findall(r'"tip"\s*:\s*"([\s\S]*?)(?="\s*\}|\s*\}\s*,|\s*\}\s*\])', cleaned)
+            for idx in range(max(len(sp_matches), len(tp_matches))):
+                sp = sp_matches[idx].replace('\\"', '"').strip() if idx < len(sp_matches) else ""
+                tp = tp_matches[idx].replace('\\"', '"').strip() if idx < len(tp_matches) else ""
+                if sp:
+                    combos.append({"speech": sp, "tip": tp})
+
+        if combos:
+            extracted["combos"] = combos
+
+        return extracted
+
+    @classmethod
+    def _parse_circuit_json_response(cls, raw_resp: str) -> dict:
+        data = cls.robust_json_loads(raw_resp)
         theme_title = data.get("theme_title", "실전 맞춤형 서킷 인터벌 콤보").strip()
         intro_text = data.get("intro_text", "").strip()
         combos = data.get("combos", [])
@@ -672,7 +804,8 @@ class AIGenerator:
 2. 'A선수', 'B선수', '1번 선수' 등 '선수'라는 호칭은 절대 쓰지 마세요! 릴레이 훈련에서는 반드시 **'플레이어'**와 **'보조자'** ('1번 보조자', '2번 보조자') 명칭만 사용하세요.
 3. 반말 금지! 사범님의 절도 있고 정중한 존댓말("~하세요", "~해 주세요")을 사용하세요.
 4. 특수기호(&, · 등)는 사용하지 마세요.
-5. {english_guide}
+5. [JSON 문법 주의]: 값(value) 내부에는 절대로 큰따옴표(")를 중복 사용하지 마세요! 강조나 영어가 필요할 때는 작은따옴표(')를 쓰거나 따옴표 없이 자연스럽게 작성하세요.
+6. {english_guide}
 
 [반드시 아래 JSON 포맷으로만 응답하세요]
 {schema_desc}"""
@@ -685,13 +818,14 @@ class AIGenerator:
         elif common_info:
             user_msg += f"\n[공통 설정 수련계획표]:\n{common_info[:2500]}\n"
 
-        raw_resp = self._call_llm(system_prompt, user_msg, max_tokens=1500, temperature=0.45)
-        cleaned = re.sub(r"^```(?:json)?\s*", "", raw_resp.strip(), flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned.strip())
-        s_idx, e_idx = cleaned.find("{"), cleaned.rfind("}")
-        if s_idx != -1 and e_idx != -1:
-            cleaned = cleaned[s_idx:e_idx + 1]
-        data = json.loads(cleaned)
+        raw_resp = self._call_llm(
+            system_prompt,
+            user_msg,
+            max_tokens=1500,
+            temperature=0.45,
+            response_format={"type": "json_object"}
+        )
+        data = self.robust_json_loads(raw_resp)
         data["tab_mode"] = tab_mode
 
         # 모든 탭 키 양방향 호환 보장
