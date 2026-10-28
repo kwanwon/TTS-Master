@@ -1,0 +1,21 @@
+name: Keep Render License Server Awake
+
+on:
+  schedule:
+    # Trigger every 12 minutes so Render free-tier instance doesn't spin down (15m idle limit)
+    - cron: "*/12 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render /api/health
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://aimaster-serial.onrender.com/api/health)
+          echo "Health check HTTP status: $response"
+          if [ "$response" -eq 200 ]; then
+            echo "Render server is active and healthy!"
+          else
+            echo "Wakeup ping delivered (Status: $response)"
+          fi
