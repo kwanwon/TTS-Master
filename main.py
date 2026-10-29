@@ -15,8 +15,14 @@ if getattr(sys, 'frozen', False):
 else:
     APP_DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# macOS GUI 실행 시 PATH 누락 보정 (/opt/homebrew/bin 등 추가)
+# Windows 및 macOS GUI 실행 시 ffmpeg 및 실행 경로 자동 보정
+app_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+meipass_dir = getattr(sys, '_MEIPASS', '')
 extra_paths = [
+    app_dir,
+    os.path.join(app_dir, "bin"),
+    meipass_dir,
+    os.path.join(meipass_dir, "bin"),
     "/opt/homebrew/bin",
     "/opt/homebrew/sbin",
     "/usr/local/bin",
@@ -28,17 +34,41 @@ extra_paths = [
 ]
 current_path = os.environ.get("PATH", "")
 for p in extra_paths:
-    if os.path.exists(p) and p not in current_path:
-        current_path = f"{p}:{current_path}"
+    if p and os.path.exists(p) and p not in current_path:
+        current_path = f"{p}{os.pathsep}{current_path}"
 os.environ["PATH"] = current_path
 
-# pydub ffmpeg / ffprobe 위치 자동 탐지 및 주입
+# pydub ffmpeg / ffprobe 위치 자동 탐지 및 주입 (번들된 ffmpeg 최우선)
 try:
     import shutil
     import pydub
     from pydub.utils import which
-    ffmpeg_bin = shutil.which("ffmpeg") or which("ffmpeg")
-    ffprobe_bin = shutil.which("ffprobe") or which("ffprobe")
+
+    ffmpeg_bin = None
+    ffprobe_bin = None
+
+    # 1. 앱 번들 디렉토리 우선 탐색
+    for candidate_dir in [app_dir, os.path.join(app_dir, "bin"), meipass_dir]:
+        if candidate_dir and os.path.exists(candidate_dir):
+            for f_name in ["ffmpeg.exe", "ffmpeg"]:
+                fp = os.path.join(candidate_dir, f_name)
+                if os.path.exists(fp):
+                    ffmpeg_bin = fp
+                    break
+            for f_name in ["ffprobe.exe", "ffprobe"]:
+                fp = os.path.join(candidate_dir, f_name)
+                if os.path.exists(fp):
+                    ffprobe_bin = fp
+                    break
+        if ffmpeg_bin and ffprobe_bin:
+            break
+
+    # 2. 시스템 PATH 폴백 탐색
+    if not ffmpeg_bin:
+        ffmpeg_bin = shutil.which("ffmpeg") or which("ffmpeg")
+    if not ffprobe_bin:
+        ffprobe_bin = shutil.which("ffprobe") or which("ffprobe")
+
     if ffmpeg_bin:
         pydub.AudioSegment.converter = ffmpeg_bin
         print(f"[Init] ffmpeg detected: {ffmpeg_bin}")

@@ -1609,6 +1609,21 @@ class MainWindow(QMainWindow):
             f"• 최신 배포: GitHub Releases 연동\n"
         )
 
+    def closeEvent(self, event):
+        """윈도우/맥 닫기(X) 시 pygame 오디오 엔진 및 백그라운드 리소스 완전 정리"""
+        try:
+            import pygame
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.stop()
+                pygame.mixer.quit()
+        except Exception:
+            pass
+        event.accept()
+        QApplication.quit()
+        import os
+        os._exit(0)
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     

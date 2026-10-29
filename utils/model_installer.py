@@ -53,15 +53,27 @@ class ModelInstallerThread(QThread):
                 return
                 
             self.progress.emit(30)
-            self.log.emit("모델 가중치 다운로드 진행 중...")
+            self.log.emit("모델 가중치 다운로드 진행 중... (약 1.5GB~3GB)")
+
+            # Windows 심볼릭 링크 권한(WinError 1314) 에러 방지
+            os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
             
-            # 3. 다운로드 실행 (이미 있는 파일은 resume_download로 건너뜀)
-            model_path = snapshot_download(
-                repo_id=self.repo_id,
-                local_files_only=False,
-                resume_download=True,
-                max_workers=4
-            )
+            # 3. 다운로드 실행 (Windows 비관리자 계정 심볼릭 링크 에러 방지)
+            try:
+                model_path = snapshot_download(
+                    repo_id=self.repo_id,
+                    local_files_only=False,
+                    resume_download=True,
+                    local_dir_use_symlinks=False,
+                    max_workers=4
+                )
+            except TypeError:
+                # 구버전 huggingface_hub 호환
+                model_path = snapshot_download(
+                    repo_id=self.repo_id,
+                    local_files_only=False,
+                    max_workers=4
+                )
             
             self.progress.emit(100)
             self.log.emit("다운로드 완료!")

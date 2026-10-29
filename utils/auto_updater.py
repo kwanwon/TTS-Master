@@ -411,7 +411,9 @@ open "{current_app_bundle}"
 
             bat_path = os.path.join(temp_dir, "relaunch.bat")
             bat_content = f"""@echo off
-timeout /t 2 /nobreak > nul
+timeout /t 1 /nobreak > nul
+taskkill /F /PID {os.getpid()} > nul 2>&1
+timeout /t 1 /nobreak > nul
 xcopy /E /Y /I "{src_dir}" "{current_dir}"
 start "" "{os.path.join(current_dir, exe_name)}"
 exit
@@ -427,7 +429,8 @@ exit
 
             subprocess.Popen(["cmd.exe", "/c", bat_path], shell=False, creationflags=subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, 'CREATE_NEW_CONSOLE') else 0)
             QApplication.quit()
-            sys.exit(0)
+            import os
+            os._exit(0)
             return True, "재시작 중..."
         except Exception as e:
             return False, str(e)

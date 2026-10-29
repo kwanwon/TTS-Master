@@ -38,11 +38,39 @@ jobs:
           if exist effects xcopy /E /I effects dist\AIMaster_TTS_Windows\effects
         shell: cmd
 
+      - name: Bundle ffmpeg and ffprobe
+        run: |
+          $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue).Source
+          if (-not $ffmpeg) {
+              choco install ffmpeg -y --no-progress
+              $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue).Source
+          }
+          if ($ffmpeg) {
+              $fdir = Split-Path $ffmpeg
+              Copy-Item "$fdir\ffmpeg.exe" "dist\AIMaster_TTS_Windows\" -Force
+              Copy-Item "$fdir\ffprobe.exe" "dist\AIMaster_TTS_Windows\" -Force
+              Write-Host "ffmpeg bundled successfully from $fdir"
+          } else {
+              Write-Warning "ffmpeg command not found"
+          }
+        shell: powershell
+
+      - name: Build Windows Installer (Inno Setup)
+        run: |
+          iscc installer_windows.iss
+        shell: cmd
+
       - name: Create Windows ZIP
         run: |
           cd dist
           Compress-Archive -Path "AIMaster_TTS_Windows" -DestinationPath "AIMaster_TTS_Windows.zip"
         shell: powershell
+
+      - name: Upload Windows Setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIMaster-TTS-Windows-Setup
+          path: dist/AIMaster_TTS_Setup.exe
 
       - name: Upload Windows ZIP artifact
         uses: actions/upload-artifact@v4
@@ -99,6 +127,12 @@ jobs:
           name: AIMaster-TTS-Mac
           path: ./release-files/
 
+      - name: Download Windows Setup
+        uses: actions/download-artifact@v4
+        with:
+          name: AIMaster-TTS-Windows-Setup
+          path: ./release-files/
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -117,12 +151,14 @@ jobs:
             ## 🎉 AI 마스터 (TTS 컨트롤) ${{ steps.get_version.outputs.VERSION }} 릴리스
             
             ### 📥 다운로드
-            - **🪟 Windows 사용자**: `AIMaster_TTS_Windows.zip` (압축 해제 후 `AIMaster_TTS_Windows.exe` 실행)
+            - **🪟 Windows 설치 프로그램 (권장)**: `AIMaster_TTS_Setup.exe` (바탕화면 바로가기 자동 생성)
+            - **🪟 Windows 무설치 압축본**: `AIMaster_TTS_Windows.zip` (압축 해제 후 실행)
             - **🍎 macOS 사용자**: `AIMaster_TTS_Mac.zip` (압축 해제 후 `AIMaster_TTS_Mac.app` 실행)
             
             ### 🔐 시리얼 라이선스
             첫 실행 시 라이선스 시리얼 번호를 입력해주세요.
           files: |
+            ./release-files/AIMaster_TTS_Setup.exe
             ./release-files/AIMaster_TTS_Windows.zip
             ./release-files/AIMaster_TTS_Mac.zip
           draft: false
