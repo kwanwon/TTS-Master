@@ -240,6 +240,91 @@
       color: #ffffff;
     }
 
+    .btn-pdf {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #0b0f19 !important;
+      font-weight: 800;
+      border: 1px solid #fbbf24;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+    }
+    .btn-pdf:hover {
+      background: #fbbf24;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+    }
+
+    /* Detail Accordion Styles */
+    .btn-toggle-guide {
+      width: 100%;
+      margin-top: 14px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #93c5fd;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-toggle-guide:hover {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: #3b82f6;
+      color: #ffffff;
+    }
+    .guide-detail-panel {
+      display: none;
+      margin-top: 14px;
+      padding: 16px;
+      background: #0d1322;
+      border-radius: 10px;
+      border: 1px solid #233150;
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    .guide-detail-panel.active {
+      display: block;
+      animation: fadeIn 0.2s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .prompt-box {
+      background: #151d30;
+      border-left: 3px solid var(--accent-gold);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin: 10px 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 0.85rem;
+      color: #fde68a;
+      position: relative;
+      line-height: 1.5;
+    }
+    .btn-copy-prompt {
+      display: inline-block;
+      margin-top: 8px;
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid var(--accent-gold);
+      color: #fde68a;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .btn-copy-prompt:hover {
+      background: var(--accent-gold);
+      color: #0b0f19;
+    }
+
     .btn-primary-os {
       border: 2px solid var(--accent-gold);
       box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
@@ -584,6 +669,7 @@
         <li><a href="#ui-guide">화면 가이드</a></li>
         <li><a href="#workflow">실전 훈련법</a></li>
         <li><a href="#faq">FAQ</a></li>
+        <li><a href="AI_Master_TTS_Manual.pdf" target="_blank" style="color:var(--accent-gold);font-weight:700;">📕 PDF 설명서</a></li>
       </ul>
       <a href="#download" class="nav-cta">최신 버전 다운로드</a>
     </div>
@@ -614,9 +700,15 @@
             🍎 Mac용 다운로드 (.zip)
           </a>
         </div>
-        <div style="margin-top: -8px; margin-bottom: 14px; font-size: 0.86rem;">
+        <div style="margin-top: -8px; margin-bottom: 18px; font-size: 0.86rem;">
           <a href="https://github.com/kwanwon/TTS-Master/releases/latest/download/AIMaster_TTS_Windows.zip" style="color: #94a3b8; text-decoration: underline;">
             📦 Windows 무설치 포터블 압축본이 필요하신가요? (AIMaster_TTS_Windows.zip)
+          </a>
+        </div>
+
+        <div style="margin-bottom: 18px;">
+          <a href="AI_Master_TTS_Manual.pdf" target="_blank" class="btn btn-pdf" style="padding: 14px 28px; font-size: 1rem;">
+            📄 공식 PDF 사용자 매뉴얼 다운로드 (고해상도 일러스트 수록)
           </a>
         </div>
 
@@ -784,6 +876,7 @@
       </p>
 
       <div class="grid">
+        <!-- Card 1: Settings -->
         <div class="feature-card">
           <div class="feature-icon">⚙️</div>
           <span class="feature-badge badge-purple">상단 공통 바</span>
@@ -793,8 +886,18 @@
             • <strong>📖 온라인 설명서:</strong> 웹 매뉴얼 즉시 호출.<br>
             • <strong>🔄 최신 업데이트:</strong> 클릭 한 번으로 새 버전 확인 및 자동 갱신.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-settings', this)">
+            🔍 상세 사용법 & 연동 가이드 보기 ▼
+          </button>
+          <div id="guide-settings" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 상세 설정 & 연동 가이드</h4>
+            <p><strong>1. 무료 Gemini API 키 등록:</strong> 프로그램 상단 [⚙️ AI·수련자료 통합 설정] 클릭 후 발급받은 키를 붙여넣고 저장하세요. 영구적으로 보존됩니다.</p>
+            <p style="margin-top:6px;"><strong>2. 구글 드라이브 수련계획표 연동:</strong> 체육관 월간 수련계획표 링크나 문서를 등록해 두면, AI가 해당 달의 중점 수련 과목(낙법, 발차기, 호신술 등)을 스스로 분석하여 훈련 대본에 즉시 반영합니다.</p>
+            <p style="margin-top:6px;"><strong>3. 원클릭 업데이트:</strong> [🔄 최신 버전 업데이트] 버튼을 누르면 프로그램을 재설치할 필요 없이 자동으로 최신 기능이 무중단 적용됩니다.</p>
+          </div>
         </div>
 
+        <!-- Card 2: Circuit -->
         <div class="feature-card">
           <div class="feature-icon">⏱️</div>
           <span class="feature-badge badge-blue">핵심 훈련 모드 1</span>
@@ -804,8 +907,25 @@
             • "1콤보에서 3콤보까지 해줘"처럼 원하는 콤보 수를 자연어로 주문 가능.<br>
             • 운동 시간, 휴식 시간, 라운드 디지털 카운트다운 타이머 완벽 통제.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-circuit', this)">
+            🔍 상세 사용법 & 추천 프롬프트 보기 ▼
+          </button>
+          <div id="guide-circuit" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 서킷 인터벌 활용법 & 추천 프롬프트</h4>
+            <p>순발력, 민첩성, 스피드, 협응력 중 원하는 영역과 종목, 콤보 개수를 자연어로 적으면 AI가 최적의 훈련 루틴을 구성합니다.</p>
+            
+            <div class="prompt-box">
+              "1콤보에서 4콤보까지 해줘. 협응력과 순발력을 극대화할 수 있도록 버피테스트 5회, 발바꿔 나래차기 4회, 뒤후려차기 분배해줘"
+              <br>
+              <button class="btn-copy-prompt" onclick="copyPrompt(this, '1콤보에서 4콤보까지 해줘. 협응력과 순발력을 극대화할 수 있도록 버피테스트 5회, 발바꿔 나래차기 4회, 뒤후려차기 분배해줘')">📋 프롬프트 복사</button>
+            </div>
+
+            <p><strong>💡 권장 타이머 세팅:</strong></p>
+            <p>• 유소년부: 운동 25초 / 휴식 15초 (3~4라운드)<br>• 중고등·일반부: 운동 35초 / 휴식 10초 (4~5라운드)</p>
+          </div>
         </div>
 
+        <!-- Card 3: Relay -->
         <div class="feature-card">
           <div class="feature-icon">🥊</div>
           <span class="feature-badge badge-gold">핵심 훈련 모드 2</span>
@@ -814,8 +934,23 @@
             • <strong>1:1 모드:</strong> 플레이어 1명과 1번 보조자 집중 미트 훈련 (좌우/양쪽 연습 시 오른쪽/왼쪽 분리 세트 자동 생성).<br>
             • <strong>1:2 / 1:3 모드:</strong> 플레이어가 여러 보조자를 순환 타격하는 고강도 순환 시스템.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-relay', this)">
+            🔍 1:1 좌우 분리 & 추천 프롬프트 보기 ▼
+          </button>
+          <div id="guide-relay" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 1:1 좌우 분리 & 다자간 미트 원리</h4>
+            <p><strong>1:1 모드 좌우 세트 분리:</strong> "양쪽 연습"을 요청하면 한 방향만 반복하지 않고, 1세트는 오른쪽 기술, 2세트는 반대쪽 왼쪽 기술로 완벽히 분리되어 양발 균형 수련이 가능합니다.</p>
+            <p style="margin-top:6px;"><strong>1:2 / 1:3 모드:</strong> 보조자 A(원투), 보조자 B(돌려차기), 보조자 C(뒤차기)를 고속 순환 타격합니다.</p>
+
+            <div class="prompt-box">
+              "1대1 미트 훈련이야. 양쪽 모두 균형 있게 수련해야 하니까 한 번은 오른쪽 돌려차기-뒤차기, 한 번은 왼쪽 돌려차기-뒤차기로 셋트를 나눠줘"
+              <br>
+              <button class="btn-copy-prompt" onclick="copyPrompt(this, '1대1 미트 훈련이야. 양쪽 모두 균형 있게 수련해야 하니까 한 번은 오른쪽 돌려차기-뒤차기, 한 번은 왼쪽 돌려차기-뒤차기로 셋트를 나눠줘')">📋 프롬프트 복사</button>
+            </div>
+          </div>
         </div>
 
+        <!-- Card 4: Sparring -->
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
           <span class="feature-badge badge-green">핵심 훈련 모드 3</span>
@@ -825,8 +960,23 @@
             • 신호음(휘슬/비프) 전에 선수들이 미리 움직이지 않도록 구령 타이밍 완벽 동기화.<br>
             • 실제 대련 득점 콤보 및 받아차기 카운터 자동화.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-sparring', this)">
+            🔍 반응 타격 원리 & 프롬프트 보기 ▼
+          </button>
+          <div id="guide-sparring" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 실전 반응 타격 & 조기 출발 방지 원리</h4>
+            <p><strong>불규칙 랜덤 인터벌 (1.5초~4.5초):</strong> 일정한 박자에 맞춰 타격하는 거짓 반응을 깨고, 불시에 터져 나오는 구령에 반사적으로 튀어나가도록 신경계를 훈련합니다.</p>
+            <p style="margin-top:6px;"><strong>신호음 동기화:</strong> 구령이 끝나기 전 미리 움직이는 것을 방지하기 위해 구령 끝과 비프 신호음이 정밀하게 동기화되어 부정 출발을 원천 차단합니다.</p>
+
+            <div class="prompt-box">
+              "실전 겨루기 득점 콤보로 3가지 기술을 불규칙하게 지시해줘. 페인트 후 앞발 찍기, 카운터 뒤차기, 빠른 원투 후 돌려차기"
+              <br>
+              <button class="btn-copy-prompt" onclick="copyPrompt(this, '실전 겨루기 득점 콤보로 3가지 기술을 불규칙하게 지시해줘. 페인트 후 앞발 찍기, 카운터 뒤차기, 빠른 원투 후 돌려차기')">📋 프롬프트 복사</button>
+            </div>
+          </div>
         </div>
 
+        <!-- Card 5: Shuttle Run -->
         <div class="feature-card">
           <div class="feature-icon">🏃</div>
           <span class="feature-badge badge-blue">보조 훈련 모드 4</span>
@@ -835,8 +985,17 @@
             • 국가대표 체력 평가용 20m 왕복달리기(셔틀런) 레벨별 비프 음원 자동 생성.<br>
             • 수련 시작 전 부상 방지 관절 회전 및 동적 스트레칭 가이드 음성.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-shuttle', this)">
+            🔍 셔틀런 & 스트레칭 가이드 보기 ▼
+          </button>
+          <div id="guide-shuttle" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 20m 왕복달리기 & 부상 방지 웜업</h4>
+            <p><strong>국가대표 20m 셔틀런(Pacer):</strong> 레벨 1부터 단계별로 신호음 간격이 좁아지는 공식 페이서 알고리즘 음원을 실시간 합성하여 체력 측정 수업을 자동으로 진행합니다.</p>
+            <p style="margin-top:6px;"><strong>수련 전 웜업 가이드:</strong> 수업 시작 5분 전 목, 어깨, 무릎, 발목 등 부상 취약 부위를 체계적으로 풀어주는 동적 스트레칭 구령이 자동으로 방송됩니다.</p>
+          </div>
         </div>
 
+        <!-- Card 6: Sound & BGM -->
         <div class="feature-card">
           <div class="feature-icon">🎵</div>
           <span class="feature-badge badge-purple">사운드 엔진</span>
@@ -845,6 +1004,14 @@
             • 훈련 중 신나는 배경음악 자동 재생 및 음악 재생목록 지원.<br>
             • <strong>오디오 덕킹(Ducking):</strong> 사범님 음성이나 신호음이 나올 때 음악 볼륨이 자동으로 줄어들어 목소리가 또렷하게 들림.
           </p>
+          <button class="btn-toggle-guide" onclick="toggleGuide('guide-sound', this)">
+            🔍 스마트 오디오 덕킹 원리 보기 ▼
+          </button>
+          <div id="guide-sound" class="guide-detail-panel">
+            <h4 style="color:#ffffff; margin-bottom:8px;">📌 스마트 오디오 덕킹(Audio Ducking)</h4>
+            <p><strong>전문 방송국 수준의 음향 제어:</strong> 배경음악(BGM)이 체육관 분위기를 신나게 띄우다가, AI 사범님의 지시 음성이나 휘슬/신호음이 출력되는 순간 BGM 볼륨이 자동으로 20%로 페이드다운(Fade-down)됩니다.</p>
+            <p style="margin-top:6px;">음성 전달이 끝나면 다시 원상태로 부드럽게 복귀하므로, 시끄러운 체육관에서도 관원들이 구령을 단 한 글자도 놓치지 않고 명확히 청취할 수 있습니다.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -978,6 +1145,36 @@
         tabWin.classList.remove('active');
         tabMac.classList.add('active');
       }
+    }
+
+    function toggleGuide(id, btn) {
+      const panel = document.getElementById(id);
+      if (panel.classList.contains('active')) {
+        panel.classList.remove('active');
+        btn.innerHTML = btn.getAttribute('data-original-text') || '🔍 상세 사용법 & 프롬프트 보기 ▼';
+      } else {
+        if (!btn.getAttribute('data-original-text')) {
+          btn.setAttribute('data-original-text', btn.innerHTML);
+        }
+        panel.classList.add('active');
+        btn.innerHTML = '▲ 상세 내용 닫기';
+      }
+    }
+
+    function copyPrompt(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = '✅ 복사 완료!';
+        btn.style.background = '#10b981';
+        btn.style.color = '#ffffff';
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.background = '';
+          btn.style.color = '';
+        }, 2000);
+      }).catch(err => {
+        alert('프롬프트 복사에 실패했습니다. 수동으로 복사해 주세요.');
+      });
     }
 
     window.addEventListener("DOMContentLoaded", detectOS);

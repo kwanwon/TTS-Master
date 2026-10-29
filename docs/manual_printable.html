@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>AI 마스터 (TTS 컨트롤) 공식 사용자 매뉴얼</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+      @bottom-right {
+        content: counter(page);
+        font-size: 9pt;
+        color: #64748b;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      color: #0f172a;
+      background: #ffffff;
+      line-height: 1.6;
+      font-size: 10.5pt;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    .no-break {
+      page-break-inside: avoid;
+    }
+
+    /* Cover Page */
+    .cover {
+      height: 90vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      border: 3px double #cbd5e1;
+      padding: 40px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+
+    .cover-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: #f1f5f9;
+      color: #b45309;
+      font-weight: 800;
+      font-size: 10pt;
+      border-radius: 9999px;
+      border: 1px solid #fde68a;
+      margin-bottom: 24px;
+    }
+
+    .cover-logo {
+      width: 90px;
+      height: 90px;
+      margin-bottom: 24px;
+      border-radius: 18px;
+    }
+
+    .cover h1 {
+      font-size: 26pt;
+      font-weight: 900;
+      color: #0f172a;
+      line-height: 1.3;
+      margin-bottom: 16px;
+    }
+
+    .cover-sub {
+      font-size: 13pt;
+      color: #475569;
+      margin-bottom: 40px;
+      max-width: 500px;
+    }
+
+    .cover-meta {
+      border-top: 2px solid #e2e8f0;
+      padding-top: 24px;
+      width: 100%;
+      max-width: 380px;
+      font-size: 10pt;
+      color: #64748b;
+      line-height: 1.8;
+    }
+
+    /* Section Headers */
+    h2 {
+      font-size: 15pt;
+      color: #1e3a8a;
+      border-left: 5px solid #2563eb;
+      padding-left: 10px;
+      margin: 24px 0 12px;
+      page-break-after: avoid;
+    }
+
+    h3 {
+      font-size: 12pt;
+      color: #0f172a;
+      margin: 16px 0 8px;
+      page-break-after: avoid;
+    }
+
+    p {
+      margin-bottom: 8px;
+      color: #334155;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #1e293b;
+      font-weight: 700;
+    }
+
+    /* Highlight Boxes */
+    .box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 12px 0;
+      page-break-inside: avoid;
+    }
+
+    .box-tip {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      border-color: #fde68a;
+      color: #92400e;
+    }
+
+    .box-info {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      border-color: #bfdbfe;
+      color: #1e40af;
+    }
+
+    .prompt-box {
+      background: #0f172a;
+      color: #38bdf8;
+      font-family: monospace;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 9.5pt;
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      color: #334155;
+      margin-right: 4px;
+    }
+
+    ul, ol {
+      margin: 6px 0 10px 20px;
+      color: #334155;
+      font-size: 10pt;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Cover -->
+  <div class="cover">
+    <div class="cover-badge">체육관 무도 훈련 시스템 솔루션</div>
+    <img src="icon.png" class="cover-logo" alt="Lion Logo">
+    <h1>AI 마스터 (TTS 컨트롤)<br>공식 사용자 매뉴얼</h1>
+    <p class="cover-sub">서킷 인터벌 · 릴레이 미트 · 실전 스파링 반응 타격<br>맞춤형 AI 코칭 음원 생성 및 완전 통제 가이드</p>
+    
+    <div class="cover-meta">
+      <p><strong>적용 버전:</strong> v1.9.17 최신 릴리즈</p>
+      <p><strong>지원 환경:</strong> Windows 10/11 & macOS</p>
+      <p><strong>공식 사이트:</strong> https://kwanwon.github.io/TTS-Master/</p>
+      <p><strong>문서 발행일:</strong> 2026년 10월 최신 개정판</p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- Table of Contents -->
+  <h2>📋 목차 (Contents)</h2>
+  <table>
+    <tr><th>장 (Chapter)</th><th>주요 내용</th></tr>
+    <tr><td><strong>제1장. 프로그램 설치 및 시작</strong></td><td>Windows 1초 간편 설치, Mac 보안 통과, 시리얼 정품 인증</td></tr>
+    <tr><td><strong>제2장. Google Gemini 무료 API 연동</strong></td><td>100% 무료 키 발급 4단계, 통합 설정창 등록 방법</td></tr>
+    <tr><td><strong>제3장. 서킷 인터벌 트레이닝 정복</strong></td><td>4대 체력 요소(순발력/민첩성/스피드/협응력) 분배, 자연어 프롬프트</td></tr>
+    <tr><td><strong>제4장. 릴레이 미트 순환 대련 정복</strong></td><td>1:1 좌우 분리 훈련, 1:2 및 1:3 다자간 순환 타격 대본</td></tr>
+    <tr><td><strong>제5장. 실전 스파링 반응 타격 & 셔틀런</strong></td><td>불규칙 반응 타격, 조기 출발 방지 신호음, 20m 왕복달리기</td></tr>
+    <tr><td><strong>제6장. 오디오 & BGM 사운드 제어</strong></td><td>배경음악 재생목록 관리, 음성 송출 시 볼륨 자동 감소(덕킹)</td></tr>
+    <tr><td><strong>제7장. 현장 활용 팁 & FAQ</strong></td><td>지하 도장 오프라인 구동, 블루투스 스피커 세팅, 문제 해결</td></tr>
+  </table>
+
+  <!-- Chapter 1 -->
+  <h2>제1장. 프로그램 설치 및 시작 (1분 가이드)</h2>
+  
+  <h3>1. Windows 사용자 (1초 간편 설치 프로그램)</h3>
+  <ol>
+    <li>공식 웹페이지에서 <code>AIMaster_TTS_Setup.exe</code> 파일을 다운로드합니다.</li>
+    <li>다운로드한 파일을 더블 클릭하여 실행합니다.
+      <div class="box box-tip">
+        <strong>💡 파란색 [Windows의 PC 보호] 창이 뜰 때:</strong><br>
+        창 중간의 <strong>[추가 정보]</strong>를 클릭한 후 나타나는 <strong>[실행]</strong> 버튼을 누르면 정상적으로 설치 마법사가 실행됩니다.
+      </div>
+    </li>
+    <li>설치 마법사에서 <strong>[다음]</strong>을 누르면 1초 만에 설치가 완료되며, <strong>바탕화면에 AI 마스터 사자 로고 아이콘이 자동으로 생성</strong>됩니다.</li>
+    <li>최신 v1.9.17에는 오디오 재생 엔진(ffmpeg)이 완벽 번들링되어 있어 음성이 100% 정상 출력됩니다.</li>
+  </ol>
+
+  <h3>2. macOS 사용자</h3>
+  <ol>
+    <li>공식 웹페이지에서 <code>AIMaster_TTS_Mac.zip</code>을 다운로드하고 압축을 풉니다.</li>
+    <li>압축 해제된 <code>AIMaster_TTS_Mac.app</code> 아이콘 위에서 <strong>마우스 우클릭 ➔ [열기] ➔ [열기]</strong>를 누르면 Gatekeeper 보안이 통과되어 영구 실행됩니다.</li>
+  </ol>
+
+  <h3>3. 시리얼 라이선스 번호 등록</h3>
+  <p>프로그램 첫 실행 시 나타나는 입력창에 본사에서 발급받은 <strong>라이선스 시리얼 번호</strong>를 입력하고 [인증]을 누릅니다. 한 번 인증되면 안전하게 캐시되어 다음 실행부터는 <strong>0.001초 만에 즉시 실행</strong>되며 인터넷이 없는 환경에서도 7일간 오프라인 작동합니다.</p>
+
+  <div class="page-break"></div>
+
+  <!-- Chapter 2 -->
+  <h2>제2장. Google Gemini 무료 API Key 발급 및 연동</h2>
+  <div class="box box-info">
+    <strong>💰 비용 팩트 (완전 무료):</strong><br>
+    구글 AI 스튜디오(Google AI Studio)는 매달 <strong>무료 티어(Free Tier)</strong>를 제공합니다. 하루 1,500회까지 대본을 생성할 수 있어 도장에서 매일 수십 번 대본을 만들어도 <strong>비용이 0원</strong>입니다.
+  </div>
+
+  <h3>무료 API Key 발급 4단계 절차</h3>
+  <ol>
+    <li><strong>Google AI Studio 접속:</strong> 웹 브라우저에서 <code>https://aistudio.google.com/app/apikey</code> 에 접속 후 구글 계정으로 로그인합니다.</li>
+    <li><strong>[Create API key] 클릭:</strong> 화면의 파란색 [Create API key] 버튼을 누르고, 팝업에서 "Create in new project"를 선택합니다.</li>
+    <li><strong>키 복사:</strong> 약 3초 뒤 생성된 긴 키(예: <code>AIzaSy...</code>) 옆의 [Copy] 버튼을 눌러 복사합니다.</li>
+    <li><strong>프로그램에 등록:</strong> AI 마스터 프로그램 상단 <strong>[⚙️ AI·수련자료 통합 설정]</strong> 클릭 ➔ API Key 칸에 붙여넣기 ➔ <strong>[🔍 연결 확인]</strong> ➔ [저장].</li>
+  </ol>
+
+  <!-- Chapter 3 -->
+  <h2>제3장. 서킷 인터벌 트레이닝 완전 정복</h2>
+  <p>스포츠 과학 표준 4대 체력 요소와 태권도/합기도/격투기 실전 발차기 기술을 지능적으로 결합하여 현장 맞춤형 대본을 만듭니다.</p>
+
+  <table>
+    <tr><th>체력 요소</th><th>목적 & 신체 효과</th><th>대표 표준 종목</th><th>연계 타격 기술</th></tr>
+    <tr><td><strong>순발력 (Power)</strong></td><td>순간적인 최대 폭발력</td><td>스쿼트 점프, 터크 점프, 점핑 런지</td><td>점프 뒤차기, 뛰어 찍기</td></tr>
+    <tr><td><strong>민첩성 (Agility)</strong></td><td>신속한 바닥 기립 및 방향 전환</td><td>버피테스트, 앞구르기, 사이드 스텝</td><td>앉아 뒤돌아차기, 나래차기</td></tr>
+    <tr><td><strong>스피드 (Speed)</strong></td><td>초고속 발놀림 및 연속 빈도</td><td>마운틴 클라이머, 빠른 발구르기</td><td>빠른 연속 발차기 3~5연타</td></tr>
+    <tr><td><strong>협응력 (Coordination)</strong></td><td>전신 균형, 중심축 제어 및 평형</td><td>낙법 후 중심잡기, 밸런스 점프, 플랭크 로테이션</td><td>발바꿔 찍어차기, 하단 뒤돌려차기</td></tr>
+  </table>
+
+  <h3>사범님 실전 추천 프롬프트 (그대로 복사 사용 가능)</h3>
+  <div class="prompt-box">
+    "1콤보에서 3콤보까지만 해줘. 협응력을 키울 수 있는 종목에 발바꿔 찍어차기 3회, 나래차기, 하단뒤돌려차기 를 각 콤보에 분배를 해서 부탁할게."
+  </div>
+
+  <div class="box box-tip">
+    <strong>💡 콤보별 균등 분배 원칙 (몰아넣기 방지):</strong><br>
+    여러 발차기를 나열하면 1번 콤보에 다 몰아넣지 않고, 1번 콤보(발바꿔 찍기) ➔ 2번 콤보(나래차기) ➔ 3번 콤보(하단 뒤돌려차기)로 1개씩 나누어 깔끔하게 배치합니다.
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- Chapter 4 -->
+  <h2>제4장. 릴레이 미트 순환 대련 완전 정복</h2>
+  <p>사범님이 미트를 잡아주지 않아도, 플레이어와 보조자들이 일사불란하게 미트를 대주고 타격하도록 통제합니다.</p>
+
+  <h3>1. 1:1 모드 (플레이어 1명 vs 보조자 1명) - 좌우 분리 세트</h3>
+  <ul>
+    <li>사범님이 "양쪽", "좌우", "양발"을 요구하면, 단순 복사가 아니라 <strong>1세트는 '오른쪽', 2세트는 '왼쪽'</strong>으로 분리된 정교한 2개 세트로 자동 완성됩니다.</li>
+  </ul>
+  <div class="prompt-box">
+    "플레이어 방족술 전진 허리 감아 던지기, 1번 보조자 전진 몸통차기 1회, 양쪽 연습할 수 있게 해줘."
+  </div>
+
+  <h3>2. 1:2 및 1:3 다자간 릴레이 모드</h3>
+  <ul>
+    <li><strong>1:2 모드:</strong> 플레이어 1명이 1번 보조자 타격 후, 신속히 2번 보조자로 이동 타격.</li>
+    <li><strong>1:3 모드:</strong> 1번, 2번, 3번 보조자가 순서대로 미트를 잡고 연속 돌파 훈련.</li>
+  </ul>
+
+  <!-- Chapter 5 -->
+  <h2>제5장. 실전 스파링 반응 타격 & 셔틀런</h2>
+
+  <h3>1. 실전 스파링 반응 타격</h3>
+  <ul>
+    <li><strong>불규칙 랜덤 딜레이:</strong> 1.5초~3.5초 사이 예측할 수 없는 타이밍에 구령이 발성되어 실전 대련 반사신경을 극대화합니다.</li>
+    <li><strong>조기 출발 방지 동기화:</strong> 구령 속에 "Let's go" 같은 출발 단어를 배제하여, 선수들이 반드시 카운트다운 신호음(휘슬/비프)을 듣고 움직이도록 통제합니다.</li>
+  </ul>
+
+  <h3>2. 20m 왕복달리기 (셔틀런) & 웜업</h3>
+  <ul>
+    <li>공인 셔틀런 음원 규격에 맞춘 레벨별 음원 및 구간 비프음 지원.</li>
+    <li>수련 시작 전 부상 방지를 위한 도장 맞춤형 관절 스트레칭 음성 지원.</li>
+  </ul>
+
+  <!-- Chapter 6 & 7 -->
+  <h2>제6장. 오디오 & BGM 사운드 제어</h2>
+  <ul>
+    <li><strong>오디오 덕킹(Audio Ducking):</strong> 훈련 중 신나는 음악이 흐르다가, 사범님 음성이나 신호음이 나오는 순간 배경음악 볼륨이 자동으로 -8dB 줄어들어 목소리가 또렷하게 전달됩니다.</li>
+    <li><strong>효과음 선택:</strong> 카운트다운(3, 2, 1 / 영어 / 한국어), 시작 휘슬, 비프, 대북음 자유 선택.</li>
+  </ul>
+
+  <h2>제7장. 현장 활용 팁 & 자주 묻는 질문 (FAQ)</h2>
+  <div class="box">
+    <strong>Q. 지하 도장이라 인터넷 연결이 자주 끊깁니다. 작동하나요?</strong><br>
+    A. 네! 최초 시리얼 인증 후에는 로컬 캐시를 사용하므로 인터넷이 전혀 없어도 7일간 완벽하게 정상 구동됩니다.
+  </div>
+  <div class="box">
+    <strong>Q. 블루투스 앰프 스피커 연결 팁이 있나요?</strong><br>
+    A. 노트북이나 PC에 블루투스 앰프를 연결한 뒤, 훈련 시작 10초 전에 볼륨을 맞춰두시면 현장 전체에 울려 퍼지는 압도적인 수업 분위기가 연출됩니다.
+  </div>
+  <div class="box">
+    <strong>Q. 사범님이 직접 대본 한글을 수정해도 영어가 다시 맞춰지나요?</strong><br>
+    A. 네! 대본 창에서 한글 동작만 편하게 바꾼 뒤 [🔄 수정한 한글로 영어·설명 다시 생성] 버튼을 누르면, 바뀐 한글에 맞춰 영어 구령과 사전 설명이 1초 만에 다시 맞춰집니다.
+  </div>
+
+  <p style="text-align: center; margin-top: 30px; font-size: 9pt; color: #94a3b8;">
+    © 2026 AI Master TTS Controller. All rights reserved.
+  </p>
+
+</body>
+</html>
