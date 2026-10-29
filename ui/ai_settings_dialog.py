@@ -75,6 +75,25 @@ class GlobalAISettingsDialog(QDialog):
         self.lbl_key_status = QLabel("상태: 저장된 API 키를 확인합니다.")
         self.lbl_key_status.setStyleSheet("color: #16a34a; font-size: 12px; font-weight: bold;")
         l_key.addWidget(self.lbl_key_status)
+
+        h_api_helpers = QHBoxLayout()
+        self.btn_open_aistudio = QPushButton("🌐 무료 Gemini API Key 발급받기 (Google AI Studio)")
+        self.btn_open_aistudio.setToolTip("구글 공식 사이트(aistudio.google.com)로 이동하여 무료 API 키를 30초 만에 발급받습니다.")
+        self.btn_open_aistudio.setStyleSheet(
+            "background-color: #059669; color: white; font-weight: bold; padding: 6px 12px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_open_aistudio.clicked.connect(self._on_open_aistudio)
+        h_api_helpers.addWidget(self.btn_open_aistudio)
+
+        self.btn_open_api_manual = QPushButton("📖 API 발급 & 프로그램 설명서 보기")
+        self.btn_open_api_manual.setToolTip("온라인 설명서의 Gemini API 발급 가이드 페이지를 웹 브라우저로 엽니다.")
+        self.btn_open_api_manual.setStyleSheet(
+            "background-color: #f59e0b; color: #0b0f19; font-weight: bold; padding: 6px 12px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_open_api_manual.clicked.connect(self._on_open_api_manual)
+        h_api_helpers.addWidget(self.btn_open_api_manual)
+        l_key.addLayout(h_api_helpers)
+
         layout.addWidget(g_key)
 
         # ------------------------------------------------------------------
@@ -197,6 +216,16 @@ class GlobalAISettingsDialog(QDialog):
         self.txt_gdrive_url.setText(common_cfg.get("gdrive_url", ""))
         self.txt_file_path.setText(common_cfg.get("plan_file_path", ""))
         self.txt_common_info.setPlainText(common_cfg.get("common_info", ""))
+
+    def _on_open_aistudio(self):
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://aistudio.google.com/app/apikey"))
+
+    def _on_open_api_manual(self):
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://kwanwon.github.io/TTS-Master/#api-guide"))
 
     def _on_test_api_key(self):
         key = self.txt_api_key.text().strip()

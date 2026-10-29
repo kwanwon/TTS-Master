@@ -47,7 +47,7 @@ import json
 import os
 import subprocess
 
-_ver = "1.9.14"
+_ver = "1.9.15"
 if os.path.exists("version.json"):
     try:
         with open("version.json", "r", encoding="utf-8") as _vf:

@@ -240,6 +240,25 @@ class MainWindow(QMainWindow):
         top_bar.addWidget(title_lbl)
         top_bar.addStretch()
 
+        self.btn_open_web_manual = QPushButton("📖 온라인 사용 설명서")
+        self.btn_open_web_manual.setToolTip("무료 Gemini API 키 발급법, 1분 설치법, 화면 구성 상세 가이드 웹페이지를 엽니다.")
+        self.btn_open_web_manual.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #0b0f19;
+                font-weight: 800;
+                padding: 4px 12px;
+                border-radius: 4px;
+                border: 1px solid #d97706;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+                color: #ffffff;
+            }
+        """)
+        self.btn_open_web_manual.clicked.connect(self.open_web_manual)
+        top_bar.addWidget(self.btn_open_web_manual)
+
         self.btn_global_ai_settings = QPushButton("⚙️ AI·수련자료 통합 설정")
         self.btn_global_ai_settings.setToolTip("Gemini API Key, 구글 드라이브 공유 링크, 수련계획표 파일, 공통 기본 정보를 한곳에서 설정합니다.")
         self.btn_global_ai_settings.setStyleSheet("""
@@ -1373,6 +1392,12 @@ class MainWindow(QMainWindow):
                 
             QMessageBox.information(self, "성공", f"{title} 목소리가 등록되었습니다!\nQwen3 엔진이 이 파일의 특징을 캐싱(추출)하여 복제합니다.")
             self.refresh_voice_status()
+
+    def open_web_manual(self):
+        """웹 브라우저로 공식 온라인 사용 설명서(설치, Gemini API 발급, 화면 가이드) 열기"""
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://kwanwon.github.io/TTS-Master/"))
 
     def open_global_ai_settings(self):
         """상단 메뉴 및 버튼에서 AI 키·구글 드라이브 링크·공통 수련계획표 통합 설정창 열기"""

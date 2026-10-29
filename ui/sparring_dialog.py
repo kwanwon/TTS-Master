@@ -945,6 +945,15 @@ class SparringDialog(QDialog):
         )
         self.btn_ai_circuit_file.clicked.connect(self._on_ai_load_circuit_file)
         h_ai_row1.addWidget(self.btn_ai_circuit_file)
+
+        self.btn_open_web_manual = QPushButton("📖 설명서")
+        self.btn_open_web_manual.setToolTip("온라인 사용 설명서(설치, Gemini API 발급, 화면 구성 가이드)를 엽니다.")
+        self.btn_open_web_manual.setStyleSheet(
+            "background-color: #f59e0b; color: #0b0f19; font-weight: bold; padding: 5px 10px; border-radius: 5px; font-size: 12px;"
+        )
+        self.btn_open_web_manual.clicked.connect(self._on_open_web_manual)
+        h_ai_row1.addWidget(self.btn_open_web_manual)
+
         l_ai_top.addLayout(h_ai_row1)
         l_ai_top.addWidget(self.lbl_lang_mode_desc)
 
@@ -1925,6 +1934,12 @@ class SparringDialog(QDialog):
                 return
         self._circuit_moves_user_modified = False
         self._update_circuit_moves_text()
+
+    def _on_open_web_manual(self):
+        """온라인 공식 사용 설명서 웹페이지 열기"""
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl("https://kwanwon.github.io/TTS-Master/"))
 
     def _on_open_ai_settings_dialog(self):
         """AI 키·구글 드라이브 링크·공통 수련계획표를 관리하는 통합 설정창 열기"""
