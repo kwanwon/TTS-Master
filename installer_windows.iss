@@ -1,5 +1,5 @@
 #define MyAppName "AI 마스터 (TTS 컨트롤)"
-#define MyAppVersion "1.9.16"
+#define MyAppVersion "1.9.17"
 #define MyAppPublisher "AIMaster"
 #define MyAppURL "https://kwanwon.github.io/TTS-Master/"
 #define MyAppExeName "AIMaster_TTS_Windows.exe"

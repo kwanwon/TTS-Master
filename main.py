@@ -211,6 +211,50 @@ def main():
                 pass
         import threading
         threading.Thread(target=_ensure_mac_bundle_icon, daemon=True).start()
+    elif sys.platform == "win32":
+        def _ensure_windows_desktop_shortcut():
+            try:
+                import subprocess
+                desktop_candidates = [
+                    os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop"),
+                    os.path.join(os.environ.get("ONEDRIVE", ""), "Desktop"),
+                    os.path.join(os.path.expanduser("~"), "바탕 화면"),
+                    os.path.join(os.path.expanduser("~"), "Desktop"),
+                ]
+                desktop = next((d for d in desktop_candidates if d and os.path.exists(d)), None)
+                if not desktop:
+                    return
+
+                shortcut_path = os.path.join(desktop, "AI 마스터 (TTS 컨트롤).lnk")
+                if os.path.exists(shortcut_path):
+                    return
+
+                exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath("main.py")
+                if not exe_path.lower().endswith(".exe"):
+                    return
+
+                app_dir = os.path.dirname(exe_path)
+                icon_path = os.path.join(app_dir, "assets", "icon.ico")
+                if not os.path.exists(icon_path):
+                    icon_path = exe_path
+
+                ps_cmd = (
+                    f"$ws = New-Object -ComObject WScript.Shell; "
+                    f"$s = $ws.CreateShortcut('{shortcut_path}'); "
+                    f"$s.TargetPath = '{exe_path}'; "
+                    f"$s.WorkingDirectory = '{app_dir}'; "
+                    f"$s.IconLocation = '{icon_path},0'; "
+                    f"$s.Save()"
+                )
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                    check=False,
+                    creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                )
+            except Exception:
+                pass
+        import threading
+        threading.Thread(target=_ensure_windows_desktop_shortcut, daemon=True).start()
     
     # 중복 실행 방지: 이미 실행 중인 경우 알림 후 종료
     if not ensure_single_instance():

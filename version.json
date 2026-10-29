@@ -1,6 +1,6 @@
 {
-  "version": "1.9.16",
+  "version": "1.9.17",
   "release_date": "2026-10-29",
   "app_name": "AIMaster_TTS",
-  "description": "윈도우 ffmpeg 오디오 번들링(음성 미출력 해결), 1초 간편 설치 프로그램(AIMaster_TTS_Setup.exe, 바탕화면 바로가기 자동생성), 프로그램 닫기(X) 완전 종료 보장, Qwen3 다운로드 심볼릭링크 호환성 개선"
+  "description": "윈도우 자동 업데이트 시 바탕화면 바로가기 아이콘 자동 생성 로직 탑재 및 ffmpeg 오디오 엔진 완전 지원"
 }
