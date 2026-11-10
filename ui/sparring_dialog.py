@@ -330,6 +330,29 @@ class SparringWorker(QThread):
                                         os.remove(tmp_aiff)
                             except Exception:
                                 pass
+                        elif seg is None and os.name == 'nt':
+                            try:
+                                import subprocess
+                                tmp_wav = os.path.join("projects", "temp_tts", f"sparring_cd_word_{uuid.uuid4().hex[:4]}.wav")
+                                safe_w = w.replace("'", " ")
+                                ps_cmd = (
+                                    f"Add-Type -AssemblyName System.Speech; "
+                                    f"$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                    f"$s.SetOutputToWaveFile('{tmp_wav}'); "
+                                    f"$s.Speak('{safe_w}'); "
+                                    f"$s.Dispose()"
+                                )
+                                res = subprocess.run(
+                                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                    check=False, timeout=6,
+                                    creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                                )
+                                if res.returncode == 0 and os.path.exists(tmp_wav) and os.path.getsize(tmp_wav) > 200:
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_wav))
+                                    if os.path.exists(tmp_wav):
+                                        os.remove(tmp_wav)
+                            except Exception:
+                                pass
                         if seg is None:
                             seg = AudioSegment.silent(duration=400)
                         segs.append(seg)
@@ -586,7 +609,7 @@ class SparringWorker(QThread):
                                             return trim_audio_silence(raw_seg)
                                         except Exception as sub_ex:
                                             last_err = sub_ex
-                                            await asyncio.sleep(0.15 * (sub_try + 1))
+                                            await asyncio.sleep(0.3 * (sub_try + 1))
                                     raise last_err or RuntimeError(f"EdgeTTS failed for: {t}")
 
                                 async def _synth_hybrid(full_text: str, path: str):
@@ -665,6 +688,31 @@ class SparringWorker(QThread):
                                     shutil.copy(v_path, cached_cue_path)
                             except Exception as e_say:
                                 print(f"[SparringWorker] say fallback fail: {e_say}")
+
+                        # Windows 로컬 네이티브 음성 합성 폴백 (SAPI / System.Speech) - 429나 네트워크 단절 시에도 '뚜~' 신호음 대신 한국어 음성 100% 보장
+                        if not generated and os.name == 'nt':
+                            try:
+                                import subprocess
+                                safe_txt = clean_text.replace("'", " ").replace('"', ' ')
+                                ps_cmd = (
+                                    "Add-Type -AssemblyName System.Speech; "
+                                    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                    f"$s.SetOutputToWaveFile('{v_path}'); "
+                                    f"$s.Speak('{safe_txt}'); "
+                                    "$s.Dispose()"
+                                )
+                                res = subprocess.run(
+                                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                    check=False,
+                                    timeout=8,
+                                    creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                                )
+                                if res.returncode == 0 and os.path.exists(v_path) and os.path.getsize(v_path) > 300:
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                            except Exception as e_sapi:
+                                print(f"[SparringWorker] Windows SAPI fallback fail: {e_sapi}")
 
                     if generated and os.path.exists(v_path):
                         v_dur = len(AudioSegment.from_file(v_path)) / 1000.0

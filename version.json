@@ -1,6 +1,6 @@
 {
-  "version": "1.9.17",
-  "release_date": "2026-10-29",
+  "version": "1.9.18",
+  "release_date": "2026-11-10",
   "app_name": "AIMaster_TTS",
-  "description": "윈도우 자동 업데이트 시 바탕화면 바로가기 아이콘 자동 생성 로직 탑재 및 ffmpeg 오디오 엔진 완전 지원"
+  "description": "윈도우 음성 미출력 원천 해결: ffprobe 경로 주입 패치 및 윈도우 내장 SAPI 음성 합성 이중 폴백 탑재"
 }

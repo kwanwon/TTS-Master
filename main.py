@@ -74,7 +74,9 @@ try:
         print(f"[Init] ffmpeg detected: {ffmpeg_bin}")
     if ffprobe_bin:
         pydub.AudioSegment.ffprobe = ffprobe_bin
-        print(f"[Init] ffprobe detected: {ffprobe_bin}")
+        import pydub.utils
+        pydub.utils.get_prober_name = lambda: ffprobe_bin
+        print(f"[Init] ffprobe detected & patched: {ffprobe_bin}")
 except Exception as e:
     print(f"[Init] ffmpeg setup warning: {e}")
 

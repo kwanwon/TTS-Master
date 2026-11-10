@@ -418,6 +418,30 @@ class ShuttleRunWorker(QThread):
                             except Exception as e_say:
                                 print(f"[Shuttle] say fallback fail: {e_say}")
 
+                        # Windows SAPI 음성 합성 폴백
+                        if not generated and os.name == 'nt':
+                            try:
+                                import subprocess
+                                safe_txt = text.replace("'", " ").replace('"', ' ')
+                                ps_cmd = (
+                                    "Add-Type -AssemblyName System.Speech; "
+                                    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                    f"$s.SetOutputToWaveFile('{v_path}'); "
+                                    f"$s.Speak('{safe_txt}'); "
+                                    "$s.Dispose()"
+                                )
+                                res = subprocess.run(
+                                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                    check=False, timeout=6,
+                                    creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                                )
+                                if res.returncode == 0 and os.path.exists(v_path) and os.path.getsize(v_path) > 300:
+                                    generated = True
+                                    import shutil
+                                    shutil.copy(v_path, cached_cue_path)
+                            except Exception as e_sapi:
+                                print(f"[Shuttle] Windows SAPI fallback fail: {e_sapi}")
+
                     if generated and os.path.exists(v_path):
                         v_dur = len(AudioSegment.from_file(v_path)) / 1000.0
                         voice_durations[st] = v_dur
@@ -486,6 +510,30 @@ class ShuttleRunWorker(QThread):
                                 shutil.copy(outro_v_path, cached_outro_path)
                         except Exception as e_say:
                             print(f"[Shuttle] Outro say fallback fail: {e_say}")
+
+                    # Windows SAPI 음성 합성 폴백 (아웃트로)
+                    if not outro_generated and os.name == 'nt':
+                        try:
+                            import subprocess
+                            safe_txt = outro_text.replace("'", " ").replace('"', ' ')
+                            ps_cmd = (
+                                "Add-Type -AssemblyName System.Speech; "
+                                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                f"$s.SetOutputToWaveFile('{outro_v_path}'); "
+                                f"$s.Speak('{safe_txt}'); "
+                                "$s.Dispose()"
+                            )
+                            res = subprocess.run(
+                                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                check=False, timeout=8,
+                                creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                            )
+                            if res.returncode == 0 and os.path.exists(outro_v_path) and os.path.getsize(outro_v_path) > 300:
+                                outro_generated = True
+                                import shutil
+                                shutil.copy(outro_v_path, cached_outro_path)
+                        except Exception as e_sapi:
+                            print(f"[Shuttle] Outro Windows SAPI fallback fail: {e_sapi}")
 
                 if outro_generated and os.path.exists(outro_v_path):
                     outro_voice_file = outro_v_path
