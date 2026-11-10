@@ -1,6 +1,6 @@
 {
-  "version": "1.9.18",
+  "version": "1.9.19",
   "release_date": "2026-11-10",
   "app_name": "AIMaster_TTS",
-  "description": "윈도우 음성 미출력 원천 해결: ffprobe 경로 주입 패치 및 윈도우 내장 SAPI 음성 합성 이중 폴백 탑재"
+  "description": "자동 업데이트 실행 스코프 버그 해결 및 윈도우 바탕화면 사자 바로가기 강제 생성 탑재"
 }

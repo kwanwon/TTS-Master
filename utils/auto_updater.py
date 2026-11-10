@@ -429,7 +429,6 @@ exit
 
             subprocess.Popen(["cmd.exe", "/c", bat_path], shell=False, creationflags=subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, 'CREATE_NEW_CONSOLE') else 0)
             QApplication.quit()
-            import os
             os._exit(0)
             return True, "재시작 중..."
         except Exception as e:
