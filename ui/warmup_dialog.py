@@ -83,6 +83,13 @@ class WarmupSynthThread(QThread):
 
     def run(self):
         try:
+            if sys.platform == "win32":
+                import asyncio
+                try:
+                    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                except Exception:
+                    pass
+
             self.progress.emit(5, "준비운동 타임테이블 계산 및 신호음 점검 중...")
             ensure_default_effects()
 
@@ -116,15 +123,41 @@ class WarmupSynthThread(QThread):
             self.progress.emit(10, f"음성 멘트 및 구령 합성 시작 (총 {total_voice_count}개 구간)...")
 
             async def _synth_voice_text(text: str, path: str, voice: str) -> None:
-                comm = edge_tts.Communicate(text, voice, rate="+5%")
-                buf = io.BytesIO()
-                async for chunk in comm.stream():
-                    if chunk['type'] == 'audio':
-                        buf.write(chunk['data'])
-                buf.seek(0)
-                seg = AudioSegment.from_file(buf, format="mp3")
-                trimmed = trim_audio_silence(seg)
-                trimmed.export(path, format="wav")
+                tmp_mp3 = path.replace(".wav", "_raw.mp3")
+                try:
+                    comm = edge_tts.Communicate(text, voice, rate="+5%")
+                    await comm.save(tmp_mp3)
+                    if os.path.exists(tmp_mp3) and os.path.getsize(tmp_mp3) > 100:
+                        seg = AudioSegment.from_file(tmp_mp3)
+                        trimmed = trim_audio_silence(seg)
+                        trimmed.export(path, format="wav")
+                        if os.path.exists(tmp_mp3):
+                            os.remove(tmp_mp3)
+                        return
+                except Exception as e_wtts:
+                    print(f"[Warmup] Edge-TTS direct fail for '{text}': {e_wtts}")
+
+                # Windows SAPI 폴백
+                if sys.platform == "win32":
+                    try:
+                        import subprocess
+                        num_ko = {'1':'일', '2':'이', '3':'삼', '4':'사', '5':'오', '6':'육', '7':'칠', '8':'팔', '9':'구', '10':'십'}
+                        safe_txt = re.sub(r'(?<!\d)([1-9]|10)동작', lambda m: f"{num_ko.get(m.group(1), m.group(1))}동작", text)
+                        safe_txt = safe_txt.replace("'", " ").replace('"', ' ')
+                        ps_cmd = (
+                            "Add-Type -AssemblyName System.Speech; "
+                            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                            f"$s.SetOutputToWaveFile('{path}'); "
+                            f"$s.Speak('{safe_txt}'); "
+                            "$s.Dispose()"
+                        )
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                            check=False, timeout=15,
+                            creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                        )
+                    except Exception as e_sapi:
+                        print(f"[Warmup] SAPI fallback fail: {e_sapi}")
 
             # 루프 돌며 음성 합성 (캐시 활용으로 중복 카운트 초고속 처리)
             for idx, ev in enumerate(voice_events):

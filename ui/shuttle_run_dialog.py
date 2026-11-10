@@ -88,6 +88,13 @@ class ShuttleRunWorker(QThread):
 
     def run(self):
         try:
+            if sys.platform == "win32":
+                import asyncio
+                try:
+                    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                except Exception:
+                    pass
+
             self.progress.emit(5, "설정값 검증 및 신호음 준비 중...")
             ensure_default_effects()
 
@@ -186,14 +193,14 @@ class ShuttleRunWorker(QThread):
                 try:
                     async def _gen_intro():
                         comm = edge_tts.Communicate(full_prep_text, voice_id, rate="+15%")
-                        buf = io.BytesIO()
-                        async for chunk in comm.stream():
-                            if chunk['type'] == 'audio':
-                                buf.write(chunk['data'])
-                        buf.seek(0)
-                        raw_seg = AudioSegment.from_file(buf, format="mp3")
-                        trimmed_seg = trim_audio_silence(raw_seg)
-                        trimmed_seg.export(intro_path, format="wav")
+                        tmp_intro_mp3 = intro_path.replace(".wav", "_raw.mp3")
+                        await comm.save(tmp_intro_mp3)
+                        if os.path.exists(tmp_intro_mp3) and os.path.getsize(tmp_intro_mp3) > 100:
+                            raw_seg = AudioSegment.from_file(tmp_intro_mp3)
+                            trimmed_seg = trim_audio_silence(raw_seg)
+                            trimmed_seg.export(intro_path, format="wav")
+                            if os.path.exists(tmp_intro_mp3):
+                                os.remove(tmp_intro_mp3)
 
                     asyncio.run(_gen_intro())
                     if os.path.exists(intro_path):
@@ -215,6 +222,27 @@ class ShuttleRunWorker(QThread):
                                 intro_file = intro_path
                         except Exception as e_say_intro:
                             print(f"[Shuttle] Intro say fallback fail: {e_say_intro}")
+                    elif os.name == 'nt':
+                        try:
+                            import subprocess
+                            safe_txt = full_prep_text.replace("'", " ").replace('"', ' ')
+                            ps_cmd = (
+                                "Add-Type -AssemblyName System.Speech; "
+                                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                f"$s.SetOutputToWaveFile('{intro_path}'); "
+                                f"$s.Speak('{safe_txt}'); "
+                                "$s.Dispose()"
+                            )
+                            res = subprocess.run(
+                                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                check=False, timeout=25,
+                                creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                            )
+                            if res.returncode == 0 and os.path.exists(intro_path) and os.path.getsize(intro_path) > 300:
+                                intro_duration = len(AudioSegment.from_file(intro_path)) / 1000.0
+                                intro_file = intro_path
+                        except Exception as e_sapi_intro:
+                            print(f"[Shuttle] Intro Windows SAPI fallback fail: {e_sapi_intro}")
 
             # B. 카운트다운 생성 (템플릿: 영어 321, 비프음, 한국어 준비, 영어 준비, 한국어 321)
             cd_file = ""
@@ -233,14 +261,14 @@ class ShuttleRunWorker(QThread):
                         for attempt in range(2):
                             try:
                                 comm = edge_tts.Communicate(w, voice, rate=rate)
-                                buf = io.BytesIO()
-                                async for chunk in comm.stream():
-                                    if chunk['type'] == 'audio':
-                                        buf.write(chunk['data'])
-                                buf.seek(0)
-                                raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                seg = trim_audio_silence(raw_seg)
-                                break
+                                tmp_w_mp3 = os.path.join("projects", "temp_tts", f"cd_shuttle_w_{uuid.uuid4().hex[:6]}.mp3")
+                                await comm.save(tmp_w_mp3)
+                                if os.path.exists(tmp_w_mp3) and os.path.getsize(tmp_w_mp3) > 100:
+                                    raw_seg = AudioSegment.from_file(tmp_w_mp3)
+                                    seg = trim_audio_silence(raw_seg)
+                                    if os.path.exists(tmp_w_mp3):
+                                        os.remove(tmp_w_mp3)
+                                    break
                             except Exception:
                                 await asyncio.sleep(0.15)
                         if seg is None and os.name == 'posix':
@@ -253,6 +281,29 @@ class ShuttleRunWorker(QThread):
                                     seg = trim_audio_silence(AudioSegment.from_file(tmp_aiff))
                                     if os.path.exists(tmp_aiff):
                                         os.remove(tmp_aiff)
+                            except Exception:
+                                pass
+                        elif seg is None and os.name == 'nt':
+                            try:
+                                import subprocess
+                                tmp_wav = os.path.join("projects", "temp_tts", f"cd_word_{uuid.uuid4().hex[:4]}.wav")
+                                safe_w = w.replace("'", " ")
+                                ps_cmd = (
+                                    "Add-Type -AssemblyName System.Speech; "
+                                    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                    f"$s.SetOutputToWaveFile('{tmp_wav}'); "
+                                    f"$s.Speak('{safe_w}'); "
+                                    "$s.Dispose()"
+                                )
+                                res = subprocess.run(
+                                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                                    check=False, timeout=6,
+                                    creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                                )
+                                if res.returncode == 0 and os.path.exists(tmp_wav) and os.path.getsize(tmp_wav) > 200:
+                                    seg = trim_audio_silence(AudioSegment.from_file(tmp_wav))
+                                    if os.path.exists(tmp_wav):
+                                        os.remove(tmp_wav)
                             except Exception:
                                 pass
                         if seg is None:
@@ -381,14 +432,14 @@ class ShuttleRunWorker(QThread):
                             try:
                                 async def _gen(t, v, p, r):
                                     comm = edge_tts.Communicate(t, v, rate=r)
-                                    buf = io.BytesIO()
-                                    async for chunk in comm.stream():
-                                        if chunk['type'] == 'audio':
-                                            buf.write(chunk['data'])
-                                    buf.seek(0)
-                                    raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                    trimmed_seg = trim_audio_silence(raw_seg)
-                                    trimmed_seg.export(p, format="wav")
+                                    tmp_stage_mp3 = p.replace(".wav", "_raw.mp3")
+                                    await comm.save(tmp_stage_mp3)
+                                    if os.path.exists(tmp_stage_mp3) and os.path.getsize(tmp_stage_mp3) > 100:
+                                        raw_seg = AudioSegment.from_file(tmp_stage_mp3)
+                                        trimmed_seg = trim_audio_silence(raw_seg)
+                                        trimmed_seg.export(p, format="wav")
+                                        if os.path.exists(tmp_stage_mp3):
+                                            os.remove(tmp_stage_mp3)
 
                                 asyncio.run(_gen(text, cue_voice, v_path, cue_rate))
                                 if os.path.exists(v_path) and os.path.getsize(v_path) > 500:
@@ -418,11 +469,14 @@ class ShuttleRunWorker(QThread):
                             except Exception as e_say:
                                 print(f"[Shuttle] say fallback fail: {e_say}")
 
-                        # Windows SAPI 음성 합성 폴백
+                        # Windows SAPI 음성 합성 폴백 (SAPI 고유의 '1단계' -> '하나단계' 어색한 발음 완전 퇴치)
                         if not generated and os.name == 'nt':
                             try:
                                 import subprocess
-                                safe_txt = text.replace("'", " ").replace('"', ' ')
+                                num_ko = {'1':'일', '2':'이', '3':'삼', '4':'사', '5':'오', '6':'육', '7':'칠', '8':'팔', '9':'구', '10':'십'}
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)단계', lambda m: f"{num_ko.get(m.group(1), m.group(1))}단계", text)
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)단', lambda m: f"{num_ko.get(m.group(1), m.group(1))}단", safe_txt)
+                                safe_txt = safe_txt.replace("'", " ").replace('"', ' ')
                                 ps_cmd = (
                                     "Add-Type -AssemblyName System.Speech; "
                                     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
@@ -432,7 +486,7 @@ class ShuttleRunWorker(QThread):
                                 )
                                 res = subprocess.run(
                                     ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
-                                    check=False, timeout=6,
+                                    check=False, timeout=10,
                                     creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
                                 )
                                 if res.returncode == 0 and os.path.exists(v_path) and os.path.getsize(v_path) > 300:
@@ -474,14 +528,14 @@ class ShuttleRunWorker(QThread):
                         try:
                             async def _gen_outro(t, v, p):
                                 comm = edge_tts.Communicate(t, v, rate="+10%")
-                                buf = io.BytesIO()
-                                async for chunk in comm.stream():
-                                    if chunk['type'] == 'audio':
-                                        buf.write(chunk['data'])
-                                buf.seek(0)
-                                raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                trimmed_seg = trim_audio_silence(raw_seg)
-                                trimmed_seg.export(p, format="wav")
+                                tmp_outro_mp3 = p.replace(".wav", "_raw.mp3")
+                                await comm.save(tmp_outro_mp3)
+                                if os.path.exists(tmp_outro_mp3) and os.path.getsize(tmp_outro_mp3) > 100:
+                                    raw_seg = AudioSegment.from_file(tmp_outro_mp3)
+                                    trimmed_seg = trim_audio_silence(raw_seg)
+                                    trimmed_seg.export(p, format="wav")
+                                    if os.path.exists(tmp_outro_mp3):
+                                        os.remove(tmp_outro_mp3)
 
                             asyncio.run(_gen_outro(outro_text, outro_voice, outro_v_path))
                             if os.path.exists(outro_v_path) and os.path.getsize(outro_v_path) > 500:
@@ -515,7 +569,10 @@ class ShuttleRunWorker(QThread):
                     if not outro_generated and os.name == 'nt':
                         try:
                             import subprocess
-                            safe_txt = outro_text.replace("'", " ").replace('"', ' ')
+                            num_ko = {'1':'일', '2':'이', '3':'삼', '4':'사', '5':'오', '6':'육', '7':'칠', '8':'팔', '9':'구', '10':'십'}
+                            safe_txt = re.sub(r'(?<!\d)([1-9]|10)단계', lambda m: f"{num_ko.get(m.group(1), m.group(1))}단계", outro_text)
+                            safe_txt = re.sub(r'(?<!\d)([1-9]|10)단', lambda m: f"{num_ko.get(m.group(1), m.group(1))}단", safe_txt)
+                            safe_txt = safe_txt.replace("'", " ").replace('"', ' ')
                             ps_cmd = (
                                 "Add-Type -AssemblyName System.Speech; "
                                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
@@ -525,7 +582,7 @@ class ShuttleRunWorker(QThread):
                             )
                             res = subprocess.run(
                                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
-                                check=False, timeout=8,
+                                check=False, timeout=30,
                                 creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
                             )
                             if res.returncode == 0 and os.path.exists(outro_v_path) and os.path.getsize(outro_v_path) > 300:

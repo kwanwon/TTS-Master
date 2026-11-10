@@ -265,6 +265,13 @@ class SparringWorker(QThread):
 
     def run(self):
         try:
+            if sys.platform == "win32":
+                import asyncio
+                try:
+                    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+                except Exception:
+                    pass
+
             self.progress.emit(5, "훈련 타임테이블 계산 및 신호음 준비 중...")
             ensure_default_effects()
 
@@ -308,14 +315,14 @@ class SparringWorker(QThread):
                         for attempt in range(3):
                             try:
                                 comm = edge_tts.Communicate(w, voice, rate=rate)
-                                buf = io.BytesIO()
-                                async for chunk in comm.stream():
-                                    if chunk['type'] == 'audio':
-                                        buf.write(chunk['data'])
-                                buf.seek(0)
-                                s = trim_audio_silence(AudioSegment.from_file(buf, format="mp3"))
-                                seg = s
-                                break
+                                tmp_w_mp3 = os.path.join("projects", "temp_tts", f"cd_w_{uuid.uuid4().hex[:6]}.mp3")
+                                await comm.save(tmp_w_mp3)
+                                if os.path.exists(tmp_w_mp3) and os.path.getsize(tmp_w_mp3) > 100:
+                                    s = trim_audio_silence(AudioSegment.from_file(tmp_w_mp3))
+                                    seg = s
+                                    if os.path.exists(tmp_w_mp3):
+                                        os.remove(tmp_w_mp3)
+                                    break
                             except Exception:
                                 await asyncio.sleep(0.15)
                         if seg is None and os.name == 'posix':
@@ -600,13 +607,14 @@ class SparringWorker(QThread):
                                     for sub_try in range(3):
                                         try:
                                             comm = edge_tts.Communicate(t, v, rate=rate_val)
-                                            buf = io.BytesIO()
-                                            async for chunk in comm.stream():
-                                                if chunk['type'] == 'audio':
-                                                    buf.write(chunk['data'])
-                                            buf.seek(0)
-                                            raw_seg = AudioSegment.from_file(buf, format="mp3")
-                                            return trim_audio_silence(raw_seg)
+                                            tmp_seg_mp3 = os.path.join("projects", "temp_tts", f"raw_seg_{uuid.uuid4().hex[:6]}.mp3")
+                                            await comm.save(tmp_seg_mp3)
+                                            if os.path.exists(tmp_seg_mp3) and os.path.getsize(tmp_seg_mp3) > 100:
+                                                raw_seg = AudioSegment.from_file(tmp_seg_mp3)
+                                                trimmed = trim_audio_silence(raw_seg)
+                                                if os.path.exists(tmp_seg_mp3):
+                                                    os.remove(tmp_seg_mp3)
+                                                return trimmed
                                         except Exception as sub_ex:
                                             last_err = sub_ex
                                             await asyncio.sleep(0.3 * (sub_try + 1))
@@ -693,7 +701,13 @@ class SparringWorker(QThread):
                         if not generated and os.name == 'nt':
                             try:
                                 import subprocess
-                                safe_txt = clean_text.replace("'", " ").replace('"', ' ')
+                                # Windows SAPI 고유의 숫자 어색한 발음('1단계'->'하나단계') 한자어 수사로 전수 교정
+                                num_ko = {'1':'일', '2':'이', '3':'삼', '4':'사', '5':'오', '6':'육', '7':'칠', '8':'팔', '9':'구', '10':'십'}
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)단계', lambda m: f"{num_ko.get(m.group(1), m.group(1))}단계", clean_text)
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)세트', lambda m: f"{num_ko.get(m.group(1), m.group(1))}세트", safe_txt)
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)라운드', lambda m: f"{num_ko.get(m.group(1), m.group(1))}라운드", safe_txt)
+                                safe_txt = re.sub(r'(?<!\d)([1-9]|10)콤보', lambda m: f"{num_ko.get(m.group(1), m.group(1))}콤보", safe_txt)
+                                safe_txt = safe_txt.replace("'", " ").replace('"', ' ')
                                 ps_cmd = (
                                     "Add-Type -AssemblyName System.Speech; "
                                     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
@@ -704,7 +718,7 @@ class SparringWorker(QThread):
                                 res = subprocess.run(
                                     ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
                                     check=False,
-                                    timeout=8,
+                                    timeout=30,
                                     creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
                                 )
                                 if res.returncode == 0 and os.path.exists(v_path) and os.path.getsize(v_path) > 300:

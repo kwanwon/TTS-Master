@@ -358,17 +358,17 @@ class EdgeTTSEngine:
                 for attempt in range(4):
                     try:
                         communicate = edge_tts.Communicate(chunk_text, voice, rate=rate_str)
-                        mp3_fp = io.BytesIO()
-                        async for c in communicate.stream():
-                            if c['type'] == 'audio':
-                                mp3_fp.write(c['data'])
-                        if mp3_fp.tell() > 0:
-                            mp3_fp.seek(0)
-                            return AudioSegment.from_file(mp3_fp, format="mp3")
+                        tmp_fp = os.path.join(tempfile.gettempdir(), f"tts_c_{uuid.uuid4().hex[:6]}.mp3")
+                        await communicate.save(tmp_fp)
+                        if os.path.exists(tmp_fp) and os.path.getsize(tmp_fp) > 100:
+                            seg = AudioSegment.from_file(tmp_fp)
+                            if os.path.exists(tmp_fp):
+                                os.remove(tmp_fp)
+                            return seg
                     except Exception as inner_e:
                         print(f"[Edge-TTS] 화자 '{voice}' 시도 {attempt+1}/4 실패 ({inner_e})")
                         if attempt < 3:
-                            await asyncio.sleep(0.5 * (attempt + 1))
+                            await asyncio.sleep(0.4 * (attempt + 1))
 
                 # 2. 기본 화자(선히)로 안전 폴백 (선히 자체가 아닐 때만)
                 if voice != "ko-KR-SunHiNeural":
@@ -377,17 +377,43 @@ class EdgeTTSEngine:
                         try:
                             fallback_voice = "ko-KR-SunHiNeural"
                             communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
-                            mp3_fp = io.BytesIO()
-                            async for c in communicate.stream():
-                                if c['type'] == 'audio':
-                                    mp3_fp.write(c['data'])
-                            if mp3_fp.tell() > 0:
-                                mp3_fp.seek(0)
-                                return AudioSegment.from_file(mp3_fp, format="mp3")
+                            tmp_fp = os.path.join(tempfile.gettempdir(), f"tts_fb_{uuid.uuid4().hex[:6]}.mp3")
+                            await communicate.save(tmp_fp)
+                            if os.path.exists(tmp_fp) and os.path.getsize(tmp_fp) > 100:
+                                seg = AudioSegment.from_file(tmp_fp)
+                                if os.path.exists(tmp_fp):
+                                    os.remove(tmp_fp)
+                                return seg
                         except Exception as fallback_e:
                             print(f"[Edge-TTS] 기본 화자 시도 {attempt+1}/2 실패 ({fallback_e})")
                             if attempt < 1:
                                 await asyncio.sleep(0.4)
+
+                # 3. Windows 로컬 SAPI 오프라인 폴백 (인터넷 단절 시에도 무음 방지)
+                if sys.platform == "win32":
+                    try:
+                        import subprocess
+                        tmp_sapi = os.path.join(tempfile.gettempdir(), f"tts_sapi_{uuid.uuid4().hex[:6]}.wav")
+                        safe_txt = chunk_text.replace("'", " ").replace('"', ' ')
+                        ps_cmd = (
+                            "Add-Type -AssemblyName System.Speech; "
+                            "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                            f"$s.SetOutputToWaveFile('{tmp_sapi}'); "
+                            f"$s.Speak('{safe_txt}'); "
+                            "$s.Dispose()"
+                        )
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                            check=False, timeout=10,
+                            creationflags=0x08000000 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                        )
+                        if os.path.exists(tmp_sapi) and os.path.getsize(tmp_sapi) > 300:
+                            seg = AudioSegment.from_file(tmp_sapi)
+                            if os.path.exists(tmp_sapi):
+                                os.remove(tmp_sapi)
+                            return seg
+                    except Exception as sapi_err:
+                        print(f"[Edge-TTS] SAPI fallback fail: {sapi_err}")
 
                 return AudioSegment.silent(duration=100)
 

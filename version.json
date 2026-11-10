@@ -1,6 +1,6 @@
 {
-  "version": "1.9.19",
+  "version": "1.9.20",
   "release_date": "2026-11-10",
   "app_name": "AIMaster_TTS",
-  "description": "자동 업데이트 실행 스코프 버그 해결 및 윈도우 바탕화면 사자 바로가기 강제 생성 탑재"
+  "description": "Windows TTS 엔진 안정화: 이벤트 루프 정책, 디스크 직접 저장, SAPI 숫자 한글화 및 타임아웃 전면 개선"
 }

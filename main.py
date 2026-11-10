@@ -6,6 +6,14 @@ import multiprocessing
 import platform
 import utils.edge_tts_patch  # Microsoft Edge-TTS 2026 엔드포인트 및 날짜 파싱 전역 패치
 
+# Windows 환경에서 aiohttp / edge-tts 멀티스레드 웹소켓 통신 안정화 정책
+if sys.platform == "win32":
+    import asyncio
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
+
 # 1. 앱 전역 실행 환경 및 작업 디렉토리 초기화 (macOS Finder 실행 시 CWD='/' Read-only 에러 원천 방지)
 if getattr(sys, 'frozen', False):
     if platform.system() == "Windows":
