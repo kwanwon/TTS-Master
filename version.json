@@ -1,6 +1,6 @@
 {
-  "version": "1.9.21",
+  "version": "1.9.22",
   "release_date": "2026-11-12",
   "app_name": "AIMaster_TTS",
-  "description": "Windows TTS 및 셔틀런 음원 생성 시 sys/re/uuid 누락 임포트 해결 긴급 패치"
+  "description": "macOS/Windows 공통: 스코프 충돌 방지를 위한 asyncio 전역 임포트 정리 및 안정화"
 }

@@ -93,7 +93,6 @@ class ShuttleRunWorker(QThread):
     def run(self):
         try:
             if sys.platform == "win32":
-                import asyncio
                 try:
                     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
                 except Exception:
