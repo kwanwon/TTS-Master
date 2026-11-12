@@ -5,9 +5,13 @@ stages, BGM, signal sound, auto-ducking, and stage transition voice cues.
 """
 
 import os
+import sys
+import re
 import uuid
 import asyncio
 import math
+import subprocess
+import shutil
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton,

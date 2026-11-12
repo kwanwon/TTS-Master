@@ -10,10 +10,13 @@ Allows full customization of cues, times, BGM playlist, and auto-ducking.
 """
 
 import os
+import sys
 import re
 import uuid
 import asyncio
 import math
+import subprocess
+import shutil
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QRadioButton,

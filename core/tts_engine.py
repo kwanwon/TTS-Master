@@ -1,4 +1,7 @@
 import os
+import sys
+import uuid
+import subprocess
 import threading
 os.environ["COQUI_TOS_AGREED"] = "1"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"

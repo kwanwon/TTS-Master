@@ -12,6 +12,11 @@ Provides an intuitive UI for dojo masters and fitness trainers:
 """
 
 import os
+import sys
+import re
+import uuid
+import subprocess
+import shutil
 import io
 import math
 import copy

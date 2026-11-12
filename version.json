@@ -1,6 +1,6 @@
 {
-  "version": "1.9.20",
-  "release_date": "2026-11-10",
+  "version": "1.9.21",
+  "release_date": "2026-11-12",
   "app_name": "AIMaster_TTS",
-  "description": "Windows TTS 엔진 안정화: 이벤트 루프 정책, 디스크 직접 저장, SAPI 숫자 한글화 및 타임아웃 전면 개선"
+  "description": "Windows TTS 및 셔틀런 음원 생성 시 sys/re/uuid 누락 임포트 해결 긴급 패치"
 }
