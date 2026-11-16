@@ -85,6 +85,24 @@ try:
         import pydub.utils
         pydub.utils.get_prober_name = lambda: ffprobe_bin
         print(f"[Init] ffprobe detected & patched: {ffprobe_bin}")
+
+    # Windows --windowed 환경에서 pydub의 ffmpeg/ffprobe 호출 시 콘솔 창 깜빡임 및 핸들 오류 방지
+    if sys.platform == "win32":
+        import subprocess
+        import pydub.utils
+        import pydub.audio_segment
+        _orig_popen = subprocess.Popen
+
+        class _SilentPopen(subprocess.Popen):
+            def __init__(self, *args, **kwargs):
+                kwargs.setdefault("creationflags", 0)
+                kwargs["creationflags"] |= 0x08000000  # CREATE_NO_WINDOW
+                if kwargs.get("stdin") is None:
+                    kwargs["stdin"] = subprocess.DEVNULL
+                super().__init__(*args, **kwargs)
+
+        pydub.utils.Popen = _SilentPopen
+        pydub.audio_segment.Popen = _SilentPopen
 except Exception as e:
     print(f"[Init] ffmpeg setup warning: {e}")
 

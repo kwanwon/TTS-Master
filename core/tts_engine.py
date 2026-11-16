@@ -373,12 +373,17 @@ class EdgeTTSEngine:
                         if attempt < 3:
                             await asyncio.sleep(0.4 * (attempt + 1))
 
-                # 2. 기본 화자(선히)로 안전 폴백 (선히 자체가 아닐 때만)
-                if voice != "ko-KR-SunHiNeural":
-                    print(f"[Edge-TTS] 화자 '{voice}' 최종 실패 -> 기본 화자(선히)로 안전 재시도")
+                # 2. 동일 성별 우선 안전 폴백 (남성 화자 실패 시 여성으로 넘어가지 않도록 남성 우선 재시도)
+                is_male_voice = any(k in voice.lower() for k in ["injoon", "hyunsu", "guy", "male"])
+                if is_male_voice:
+                    fallback_voice = "ko-KR-HyunsuMultilingualNeural" if "injoon" in voice.lower() else "ko-KR-InJoonNeural"
+                else:
+                    fallback_voice = "ko-KR-SunHiNeural"
+
+                if voice != fallback_voice:
+                    print(f"[Edge-TTS] 화자 '{voice}' 최종 실패 -> 대체 화자({fallback_voice})로 안전 재시도")
                     for attempt in range(2):
                         try:
-                            fallback_voice = "ko-KR-SunHiNeural"
                             communicate = edge_tts.Communicate(chunk_text, fallback_voice, rate=rate_str)
                             tmp_fp = os.path.join(tempfile.gettempdir(), f"tts_fb_{uuid.uuid4().hex[:6]}.mp3")
                             await communicate.save(tmp_fp)
@@ -388,7 +393,7 @@ class EdgeTTSEngine:
                                     os.remove(tmp_fp)
                                 return seg
                         except Exception as fallback_e:
-                            print(f"[Edge-TTS] 기본 화자 시도 {attempt+1}/2 실패 ({fallback_e})")
+                            print(f"[Edge-TTS] 대체 화자 시도 {attempt+1}/2 실패 ({fallback_e})")
                             if attempt < 1:
                                 await asyncio.sleep(0.4)
 
@@ -398,9 +403,14 @@ class EdgeTTSEngine:
                         import subprocess
                         tmp_sapi = os.path.join(tempfile.gettempdir(), f"tts_sapi_{uuid.uuid4().hex[:6]}.wav")
                         safe_txt = chunk_text.replace("'", " ").replace('"', ' ')
+                        gender_hint = (
+                            "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Male) } catch {}; "
+                            if is_male_voice else ""
+                        )
                         ps_cmd = (
                             "Add-Type -AssemblyName System.Speech; "
                             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                            f"{gender_hint}"
                             f"$s.SetOutputToWaveFile('{tmp_sapi}'); "
                             f"$s.Speak('{safe_txt}'); "
                             "$s.Dispose()"

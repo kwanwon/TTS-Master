@@ -427,6 +427,9 @@ class MainWindow(QMainWindow):
                 self.textChanged.connect(self._on_text_changed)
 
             def _on_text_changed(self):
+                # macOS NFD 자모 분리 현상 전용 보정 (Windows IME 조합 중 커서/글자 깨짐 방지)
+                if sys.platform != "darwin":
+                    return
                 text = self.toPlainText()
                 # 낱개 자모(호환 자모 또는 NFD)가 포함되어 있을 때만 실시간 자동 결합 수행
                 has_jamo = any('\u3131' <= ch <= '\u318e' or '\u1100' <= ch <= '\u11ff' for ch in text)
@@ -668,7 +671,7 @@ class MainWindow(QMainWindow):
         self.api_input_text = CustomTextEdit(layout_ref=self, is_api=True)
         self.api_input_text.setPlaceholderText("실시간 API 텍스트 입력 (예: 다들 조용히 해주세요!) [Enter: 즉시 재생]")
         font_api = self.api_input_text.font()
-        font_api.setFamily("Apple SD Gothic Neo")
+        font_api.setFamily("Apple SD Gothic Neo" if sys.platform == "darwin" else "Malgun Gothic")
         font_api.setPointSize(16) # 좀 더 크게
         self.api_input_text.setFont(font_api)
         api_layout.addWidget(self.api_input_text)
@@ -904,6 +907,13 @@ class MainWindow(QMainWindow):
             if kw in vt:
                 target_keyword = kw
                 break
+        if not target_keyword:
+            male_kws = ["guy", "라이언", "에이든", "딜런", "에릭", "uncle", "남자", "남성"]
+            female_kws = ["jenny", "소희", "안나", "비비안", "세레나", "여자", "여성", "nanami", "xiaoxiao"]
+            if any(k in vt for k in male_kws):
+                target_keyword = "인준"
+            elif any(k in vt for k in female_kws):
+                target_keyword = "선히"
         if target_keyword:
             self.api_voice_combo.blockSignals(True)
             for idx in range(self.api_voice_combo.count()):
@@ -959,11 +969,8 @@ class MainWindow(QMainWindow):
                 ram_gb = int(output.strip()) / (1024**3)
                 return ram_gb
             elif platform.system() == "Windows":
-                # 간단히 Windows 지원 생략 가능하지만 VBS나 wmic로 체크 가능
-                output = subprocess.check_output(['wmic', 'computersystem', 'get', 'TotalPhysicalMemory'])
-                ram_str = output.decode().split('\\n')[1].strip()
-                ram_gb = int(ram_str) / (1024**3)
-                return ram_gb
+                import psutil
+                return psutil.virtual_memory().total / (1024**3)
         except Exception as e:
             return 16 # 확인 불가시 안전한 16GB로 간주
         return 16
@@ -1175,11 +1182,13 @@ class MainWindow(QMainWindow):
             # [무료 모드] Edge-TTS 화자인 경우 API 키 없이 즉시 무료 말하기
             if "[무료]" in current_api_text or "Edge-TTS" in current_api_text:
                 self.tts_engine.switch_engine("Edge-TTS (초고음질 온라인)")
-                # 상단 voice_combo와 일치하는 키워드 우선 적용하여 화자 불일치 원천 차단
+                # 우측 API 콤보박스 선택을 기준으로 하되, 상단 voice_combo가 남성/여성으로 일치하는 경우 우선 반영
                 target_v = current_api_text
                 main_v = self.voice_combo.currentText()
+                if "인준" in current_api_text or "현수" in current_api_text or "선히" in current_api_text:
+                    target_v = current_api_text
                 for kw in ["인준", "현수", "선히"]:
-                    if kw in main_v:
+                    if kw in main_v and kw in current_api_text:
                         target_v = kw
                         break
                 self.tts_engine.set_voice(target_v)
@@ -1373,11 +1382,16 @@ class MainWindow(QMainWindow):
                 # 3. 앞뒤의 침묵 및 미세한 숨소리 쳐내기 (Trim)
                 y_trimmed, _ = librosa.effects.trim(reduced_noise, top_db=25)
                 
-                # 임시 파일로 저장 후 pydub으로 로드
+                # 임시 파일로 저장 후 pydub으로 로드 (Windows 파일 점유 충돌 방지를 위해 close 후 사용)
                 temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                sf.write(temp_wav.name, y_trimmed, sr)
-                audio = AudioSegment.from_file(temp_wav.name)
-                os.remove(temp_wav.name)
+                temp_wav_path = temp_wav.name
+                temp_wav.close()
+                try:
+                    sf.write(temp_wav_path, y_trimmed, sr)
+                    audio = AudioSegment.from_file(temp_wav_path)
+                finally:
+                    if os.path.exists(temp_wav_path):
+                        os.remove(temp_wav_path)
                 
                 # 4. 외계어(Hallucination) 방지: 오디오 길이가 10초(10000ms)를 초과하면 앞부분 8초만 잘라냅니다.
                 if len(audio) > 10000:

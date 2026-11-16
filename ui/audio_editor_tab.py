@@ -36,9 +36,14 @@ class AudioProcessorThread(QThread):
                 track_vols = self.params.get('track_vols', [1.0, 1.0, 1.0])
                 
                 self.progress.emit(10)
-                bgm = AudioSegment.silent(duration=1000) # 기본 캔버스
-                    
                 timeline_data.sort(key=lambda x: x['time'])
+                max_end_ms = 1000
+                for item in timeline_data:
+                    dur_sec = item.get('duration', 0.0)
+                    end_ms = int((item['time'] + max(dur_sec, 0.0)) * 1000)
+                    if end_ms > max_end_ms:
+                        max_end_ms = end_ms
+                bgm = AudioSegment.silent(duration=max_end_ms) # 전체 길이 한 번에 할당
                 self.progress.emit(30)
                 
                 for idx, item in enumerate(timeline_data):
@@ -303,8 +308,9 @@ class AudioEditorTab(QWidget):
         
         # Mac 환경 자소 분리 및 입력 불가 버그 방지를 위해 QFont 객체로 폰트 지정
         from PyQt6.QtGui import QFont
+        import sys
         font = self.insert_text.font()
-        font.setFamily("Apple SD Gothic Neo")
+        font.setFamily("Apple SD Gothic Neo" if sys.platform == "darwin" else "Malgun Gothic")
         font.setPointSize(14)
         self.insert_text.setFont(font)
         self.btn_insert = QPushButton("🎙️ TTS 생성 후 보관함에 추가")
@@ -369,6 +375,20 @@ class AudioEditorTab(QWidget):
     def on_zoom_changed(self, val):
         self.timeline_view._apply_zoom(val)
 
+    def _release_mixer_file(self):
+        """Windows에서 pygame.mixer.music이 파일을 점유해 덮어쓰기/삭제가 실패하는 문제 방지"""
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                if hasattr(pygame.mixer.music, "unload"):
+                    pygame.mixer.music.unload()
+        except Exception:
+            pass
+        self.is_playing = False
+        self.is_paused = False
+        if hasattr(self, "timer") and self.timer.isActive():
+            self.timer.stop()
+
     def trigger_auto_mix(self):
         self.auto_mix_timer.start(500) # 0.5초 디바운스
         
@@ -382,8 +402,12 @@ class AudioEditorTab(QWidget):
             # 타임라인이 비었음
             self.bgm_length = 0
             self.update_ui_time()
+            self._release_mixer_file()
             if os.path.exists(self.auto_mix_path):
-                os.remove(self.auto_mix_path)
+                try:
+                    os.remove(self.auto_mix_path)
+                except Exception:
+                    pass
             return
             
         max_len = 0.0
@@ -394,10 +418,15 @@ class AudioEditorTab(QWidget):
                 
         # 타임라인 UI 상 전체 길이를 max_len으로 설정하되, 최소 10초
         self.bgm_length = max(max_len, 10.0)
+
+        # Windows 파일 락 회피: 임시 파일로 먼저 믹싱 출력 후 교체
+        mix_dir = os.path.dirname(self.auto_mix_path)
+        os.makedirs(mix_dir, exist_ok=True)
+        tmp_mix_path = os.path.join(mix_dir, "auto_mix_tmp.wav")
             
         params = {
             'timeline': timeline_data,
-            'output': self.auto_mix_path,
+            'output': tmp_mix_path,
             'track_vols': [slider.value() / 100.0 for slider in self.track_vol_sliders]
         }
         
@@ -413,12 +442,23 @@ class AudioEditorTab(QWidget):
         if status == "preview_success":
             try:
                 from pydub import AudioSegment
+                import shutil
+                self._release_mixer_file()
+                if msg != self.auto_mix_path and os.path.exists(msg):
+                    try:
+                        os.replace(msg, self.auto_mix_path)
+                    except Exception:
+                        shutil.copy2(msg, self.auto_mix_path)
                 audio = AudioSegment.from_file(self.auto_mix_path)
                 self.bgm_length = len(audio) / 1000.0
                 self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
                 self.update_ui_time()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[AudioEditor] 믹싱 결과 로드 오류: {e}")
+                self.bgm_lbl.setText("⚠️ 오디오 준비 오류 (재시도 필요)")
+        else:
+            print(f"[AudioEditor] 자동 믹싱 실패: {msg}")
+            self.bgm_lbl.setText("❌ 오디오 믹싱 실패 (파일 확인 필요)")
         
         if self.auto_mix_pending:
             self.auto_mix_pending = False
@@ -507,10 +547,7 @@ class AudioEditorTab(QWidget):
             self.timer.stop()
 
     def stop_timeline(self):
-        pygame.mixer.music.stop()
-        self.is_playing = False
-        self.is_paused = False
-        self.timer.stop()
+        self._release_mixer_file()
         self.current_time = 0.0
         self.update_ui_time()
         self.timeline_view.set_playhead_time(-1)
@@ -879,7 +916,8 @@ class AudioEditorTab(QWidget):
                     if r == QMessageBox.StandardButton.Yes:
                         self.timeline_view.clear_all()
 
-                # 클립들을 타임라인에 배치
+                # 클립들을 타임라인에 배치 (불필요한 자동 재믹싱 시그널 차단)
+                self.timeline_view.blockSignals(True)
                 for c in clips:
                     self.timeline_view.add_clip(
                         c["text"],
@@ -888,6 +926,9 @@ class AudioEditorTab(QWidget):
                         c["track"],
                         c["duration"]
                     )
+                self.timeline_view.blockSignals(False)
+                if hasattr(self.timeline_view, "_ensure_duration_for_clips"):
+                    self.timeline_view._ensure_duration_for_clips()
 
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
@@ -895,17 +936,7 @@ class AudioEditorTab(QWidget):
                 self.last_suggested_filename = res.get("suggested_filename", "")
                 self.update_ui_time()
 
-                master_path = res.get("master_audio_path", "")
-                if master_path and os.path.exists(master_path):
-                    import shutil
-                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
-                    try:
-                        shutil.copy(master_path, self.auto_mix_path)
-                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
-                    except Exception:
-                        self.trigger_auto_mix()
-                else:
-                    self.trigger_auto_mix()
+                self._apply_wizard_master_audio(res.get("master_audio_path", ""))
                 
                 layout_info = "트랙 1: 배경음악(BGM) | 트랙 2: 훈련 트랙 (신호음+구령 순차 정렬)" if res.get("track_layout") == "single" else "트랙 1: 배경음악(BGM) | 트랙 2: 신호음 | 트랙 3: 음성 구령"
                 QMessageBox.information(
@@ -967,23 +998,16 @@ class AudioEditorTab(QWidget):
                     )
                 self.timeline_view.blockSignals(False)
 
+                if hasattr(self.timeline_view, "_ensure_duration_for_clips"):
+                    self.timeline_view._ensure_duration_for_clips()
+
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
                 self.last_suggested_filename = res.get("suggested_filename", "")
                 self.update_ui_time()
 
-                master_path = res.get("master_audio_path", "")
-                if master_path and os.path.exists(master_path):
-                    import shutil
-                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
-                    try:
-                        shutil.copy(master_path, self.auto_mix_path)
-                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
-                    except Exception:
-                        self.trigger_auto_mix()
-                else:
-                    self.trigger_auto_mix()
+                self._apply_wizard_master_audio(res.get("master_audio_path", ""))
                 
                 mode_name = res.get("mode_name", "스파링 훈련")
                 QMessageBox.information(
@@ -996,6 +1020,24 @@ class AudioEditorTab(QWidget):
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "마법사 실행 오류", f"스파링 마법사 실행 중 오류가 발생했습니다:\n{e}")
+
+    def _apply_wizard_master_audio(self, master_path: str):
+        """마법사 완성 마스터 오디오를 즉시 재생 파일로 안전하게 복사 (Windows 파일 잠금 해제 포함)"""
+        if hasattr(self, "auto_mix_timer") and self.auto_mix_timer.isActive():
+            self.auto_mix_timer.stop()
+        self.auto_mix_pending = False
+        if master_path and os.path.exists(master_path):
+            import shutil
+            os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
+            self._release_mixer_file()
+            try:
+                shutil.copy2(master_path, self.auto_mix_path)
+                self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
+            except Exception as e:
+                print(f"[AudioEditor] 마스터 오디오 복사 실패 -> 자동 믹싱 전환: {e}")
+                self.trigger_auto_mix()
+        else:
+            self.trigger_auto_mix()
 
     def open_warmup_wizard(self, initial_prompt: str = "", initial_doc_text: str = ""):
         """🧘‍♂️ 준비운동·스트레칭·요가 마법사 열기 및 타임라인 로드"""
@@ -1029,7 +1071,8 @@ class AudioEditorTab(QWidget):
                     if r == QMessageBox.StandardButton.Yes:
                         self.timeline_view.clear_all()
 
-                # 클립들을 타임라인에 배치
+                # 클립들을 타임라인에 배치 (불필요한 자동 재믹싱 시그널 차단)
+                self.timeline_view.blockSignals(True)
                 for c in clips:
                     self.timeline_view.add_clip(
                         c["text"],
@@ -1038,23 +1081,16 @@ class AudioEditorTab(QWidget):
                         c["track"],
                         c["duration"]
                     )
+                self.timeline_view.blockSignals(False)
+                if hasattr(self.timeline_view, "_ensure_duration_for_clips"):
+                    self.timeline_view._ensure_duration_for_clips()
 
                 # 플레이어 길이 설정 및 완성본 마스터 오디오를 auto_mix_path로 즉시 복사 (지연 없는 즉시 재생)
                 self.bgm_length = res.get("total_duration_sec", 60.0)
                 self.current_time = 0.0
                 self.update_ui_time()
 
-                master_path = res.get("master_audio_path", "")
-                if master_path and os.path.exists(master_path):
-                    import shutil
-                    os.makedirs(os.path.dirname(self.auto_mix_path), exist_ok=True)
-                    try:
-                        shutil.copy(master_path, self.auto_mix_path)
-                        self.bgm_lbl.setText("✅ 실시간 재생 준비 완료")
-                    except Exception:
-                        self.trigger_auto_mix()
-                else:
-                    self.trigger_auto_mix()
+                self._apply_wizard_master_audio(res.get("master_audio_path", ""))
 
                 routine_name = res.get("routine_name", "준비운동")
                 QMessageBox.information(
