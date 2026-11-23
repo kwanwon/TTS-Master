@@ -40,19 +40,30 @@ jobs:
 
       - name: Bundle ffmpeg and ffprobe
         run: |
-          $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue).Source
-          if (-not $ffmpeg) {
+          $realFfmpeg = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Recurse -Filter "ffmpeg.exe" -ErrorAction SilentlyContinue |
+                        Where-Object { $_.Length -gt 1MB } | Select-Object -First 1
+          if (-not $realFfmpeg) {
               choco install ffmpeg -y --no-progress
-              $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue).Source
+              $realFfmpeg = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib" -Recurse -Filter "ffmpeg.exe" -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Length -gt 1MB } | Select-Object -First 1
           }
-          if ($ffmpeg) {
-              $fdir = Split-Path $ffmpeg
-              Copy-Item "$fdir\ffmpeg.exe" "dist\AIMaster_TTS_Windows\" -Force
-              Copy-Item "$fdir\ffprobe.exe" "dist\AIMaster_TTS_Windows\" -Force
-              Write-Host "ffmpeg bundled successfully from $fdir"
-          } else {
-              Write-Warning "ffmpeg command not found"
+          if (-not $realFfmpeg) {
+              $cmd = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+              if ($cmd -and (Get-Item $cmd.Source).Length -gt 1MB) {
+                  $realFfmpeg = Get-Item $cmd.Source
+              }
           }
+          if (-not $realFfmpeg) {
+              Write-Error "Real ffmpeg.exe (>1MB) not found! Refusing to bundle Chocolatey shim."
+              exit 1
+          }
+          $fdir = $realFfmpeg.DirectoryName
+          Copy-Item "$fdir\ffmpeg.exe" "dist\AIMaster_TTS_Windows\" -Force
+          Copy-Item "$fdir\ffprobe.exe" "dist\AIMaster_TTS_Windows\" -Force
+          Copy-Item "$fdir\*.dll" "dist\AIMaster_TTS_Windows\" -Force -ErrorAction SilentlyContinue
+          Write-Host "Real ffmpeg bundled successfully from $fdir (size: $($realFfmpeg.Length) bytes)"
+          & "dist\AIMaster_TTS_Windows\ffmpeg.exe" -version | Select-Object -First 2
+          & "dist\AIMaster_TTS_Windows\ffprobe.exe" -version | Select-Object -First 2
         shell: powershell
 
       - name: Build Windows Installer (Inno Setup)

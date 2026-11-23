@@ -55,17 +55,17 @@ try:
     ffmpeg_bin = None
     ffprobe_bin = None
 
-    # 1. 앱 번들 디렉토리 우선 탐색
+    # 1. 앱 번들 디렉토리 우선 탐색 (Chocolatey shim 등 100KB 이하 가짜 바이너리 제외)
     for candidate_dir in [app_dir, os.path.join(app_dir, "bin"), meipass_dir]:
         if candidate_dir and os.path.exists(candidate_dir):
             for f_name in ["ffmpeg.exe", "ffmpeg"]:
                 fp = os.path.join(candidate_dir, f_name)
-                if os.path.exists(fp):
+                if os.path.exists(fp) and os.path.getsize(fp) > 100_000:
                     ffmpeg_bin = fp
                     break
             for f_name in ["ffprobe.exe", "ffprobe"]:
                 fp = os.path.join(candidate_dir, f_name)
-                if os.path.exists(fp):
+                if os.path.exists(fp) and os.path.getsize(fp) > 100_000:
                     ffprobe_bin = fp
                     break
         if ffmpeg_bin and ffprobe_bin:

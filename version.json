@@ -1,6 +1,6 @@
 {
-  "version": "1.9.23",
-  "release_date": "2026-11-16",
+  "version": "1.9.24",
+  "release_date": "2026-11-23",
   "app_name": "AIMaster_TTS",
-  "description": "Windows 셔틀런 BGM 무한 믹싱/파일 잠금 해결, 첫 번째 탭 남성 성우 변경 및 동기화 수정, Windows 실행 안정성 개선"
+  "description": "Windows 빌드 시 Chocolatey shim 대신 실제 ffmpeg/ffprobe 바이너리 번들링 수정 (배경음악 재생 및 Edge-TTS 남녀 성우 정상화)"
 }
