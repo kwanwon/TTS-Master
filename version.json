@@ -1,6 +1,6 @@
 {
-  "version": "1.9.24",
-  "release_date": "2026-11-23",
+  "version": "1.9.25",
+  "release_date": "2026-11-24",
   "app_name": "AIMaster_TTS",
-  "description": "Windows 빌드 시 Chocolatey shim 대신 실제 ffmpeg/ffprobe 바이너리 번들링 수정 (배경음악 재생 및 Edge-TTS 남녀 성우 정상화)"
+  "description": "Windows 빌드 실제 ffmpeg/ffprobe 바이너리 번들링 검증 완료 (배경음악 재생 및 Edge-TTS 남녀 성우 정상화)"
 }

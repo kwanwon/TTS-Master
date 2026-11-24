@@ -62,8 +62,12 @@ jobs:
           Copy-Item "$fdir\ffprobe.exe" "dist\AIMaster_TTS_Windows\" -Force
           Copy-Item "$fdir\*.dll" "dist\AIMaster_TTS_Windows\" -Force -ErrorAction SilentlyContinue
           Write-Host "Real ffmpeg bundled successfully from $fdir (size: $($realFfmpeg.Length) bytes)"
-          & "dist\AIMaster_TTS_Windows\ffmpeg.exe" -version | Select-Object -First 2
-          & "dist\AIMaster_TTS_Windows\ffprobe.exe" -version | Select-Object -First 2
+          $ffOut = & "dist\AIMaster_TTS_Windows\ffmpeg.exe" -version
+          if ($LASTEXITCODE -ne 0) { Write-Error "ffmpeg.exe verification failed"; exit 1 }
+          $ffOut | Select-Object -First 2
+          $fpOut = & "dist\AIMaster_TTS_Windows\ffprobe.exe" -version
+          if ($LASTEXITCODE -ne 0) { Write-Error "ffprobe.exe verification failed"; exit 1 }
+          $fpOut | Select-Object -First 2
         shell: powershell
 
       - name: Build Windows Installer (Inno Setup)
